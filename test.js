@@ -474,6 +474,16 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   await ask('What is 2+2?', { fetch: capture, mood: 'hungry' });
   assert.ok(sent.includes('What is 2+2?'), 'mood suppressed the question');
 
+  // Every call must cap the context window. Left to its own default, phi4-mini
+  // -reasoning asks for 21GB of KV cache for a 3.8B model and the process is
+  // OOM-killed; llama3.1:8b silently runs 74% on the CPU at 3x the latency.
+  assert.strictEqual(JSON.parse(sent).options.num_ctx, 4096, 'context window not capped');
+
+  // Loading the model is 8.35s of a 12.6s cold answer and 0s of a warm one, so
+  // holding it past Ollama's five idle minutes is the difference between a pet
+  // that replies in 1.2s and one that replies in 12.6s every time.
+  assert.strictEqual(JSON.parse(sent).keep_alive, '30m', 'model not kept warm');
+
   // Failure modes return a message, never throw into the pet.
   const down = async () => { throw new Error('ECONNREFUSED'); };
   assert.match(await ask('hi', { fetch: down }), /Ollama/);

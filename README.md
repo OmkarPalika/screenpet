@@ -240,9 +240,18 @@ Default model is `llama3.1:8b`. Pull it if you do not have it:
 ollama pull llama3.1:8b
 ```
 
-A reasoning model like `phi4-mini-reasoning:3.8b` gives better maths but emits
-far more tokens, and on CPU it blew the 120s timeout in testing. Bigger and
-non-reasoning beats smaller and reasoning here.
+**Bigger is not better here, and reasoning beats size.** Five models were given
+the same screenshot of a `map`/`filter` chain and asked what it prints. Only one
+got it right, and it was the smallest: `phi4-mini-reasoning:3.8b` answered `2`.
+`mistral-nemo:12b` said `1`, a 15.9B model said `1`, `llama3.1:8b` said `0` while
+asserting in the same breath that the array had three elements. The reasoning
+model spent 992 characters getting there and `stripThinking` cut it to `2`.
+
+An earlier note here claimed the opposite — that reasoning models were too slow
+to use. That was the `num_ctx` bug below, not the reasoning.
+
+`llama3.1:8b` remains the default because it is the one most people already have
+and it is fine on prose. If you ask the pet about code, pull the reasoning model.
 
 ## Keys
 
@@ -264,6 +273,8 @@ see above. The remaining env vars are development knobs only:
 | Env var | Default | Does |
 | --- | --- | --- |
 | `SCREENPET_TIMEOUT_MS` | `120000` | Text-path timeout. Vision uses 240s. |
+| `SCREENPET_NUM_CTX` | `4096` | Context window. See "Why it is not slow any more". |
+| `SCREENPET_KEEP_ALIVE` | `30m` | How long Ollama holds the model in VRAM. `5m` is Ollama's own default, `0` unloads after every answer. |
 | `SCREENPET_SMOKE` | unset | Answer once, print, exit. |
 | `SCREENPET_MODEL` / `SCREENPET_OLLAMA` | — | Defaults for direct `brain.js` calls in tests. The app reads `settings.json`. |
 
@@ -459,9 +470,36 @@ exits. The one path the other two cannot reach.
 - **No auto-update.** Every new version is a manual download.
 - **`ocr.ps1` needs Windows PowerShell 5.1**, not PowerShell 7 — the WinRT type
   projections it uses do not exist in 7.
-- **Slow on CPU.** Measured end to end at 69s on this machine including Electron
-  start and first model load. Later answers are faster because Ollama keeps the
-  model resident. Warm the model with `ollama run llama3.1:8b ""` before demoing.
+- **The first answer after a cold start is still the slow one.** ~7.6s of model
+  load before the model does any thinking. See below.
+
+## Why it is not slow any more
+
+Two lines in [brain.js](brain.js), both found by measuring rather than guessing,
+on an RTX 5050 Laptop with 8GB:
+
+**`num_ctx`.** Ollama sizes the KV cache from the *model's* default context
+window, not from the prompt. Left alone, `phi4-mini-reasoning:3.8b` asks for
+**21GB** for a 3.8B model — a 131072-token window — spills off the card, and the
+process is OOM-killed outright. Even `llama3.1:8b` was quietly running 74% on the
+CPU. Capping the window at 4096 puts it back on the GPU:
+
+| model | default | capped |
+| --- | --- | --- |
+| `llama3.1:8b` | 35.0s, 74% CPU | **11.5s, 100% GPU** |
+| `mistral-nemo:12b` | 104.8s, 53GB asked for | **18.7s, 9.6GB** |
+| `phi4-mini-reasoning:3.8b` | process killed | runs |
+
+**`keep_alive`.** Once the model is on the GPU, almost none of the remaining time
+is thinking. For a 44-token answer: `load_duration` 8.35s, `prompt_eval` 0.21s,
+`eval` 1.17s. Ollama unloads after five idle minutes, so a pet asked twice an
+hour paid that load every time — 12.6s cold against 1.2s warm. Holding the model
+for 30 minutes of idle costs ~5.3GB of VRAM while you are using it and makes
+every answer after the first feel instant.
+
+Neither of these is a quantization problem. The models were already quantized
+(`q4_K_M`, `q5_K_M`, and llama3.1:8b is `Q4_0`) and Ollama was already using the
+GPU. It was allocating a 128k-token cache for a 400-character prompt.
 
 ## Not for exams
 
