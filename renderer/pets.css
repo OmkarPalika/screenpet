@@ -3,7 +3,7 @@
    is exactly one place a shape is defined.
 
    Every species keeps the same face rig - same classes, same coordinates - and
-   varies only ears, extras and body outline. That is what lets all nine
+   varies only ears, extras and body outline. That is what lets all fifteen
    expressions work on all six pets without a single extra rule. */
 
 /* ---- skins: one palette swap, so moods stay filters rather than 4x5 rules ---- */
