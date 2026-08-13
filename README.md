@@ -3,10 +3,50 @@
 A desktop pet that reads your screen and answers the question on it. Nothing
 leaves your machine.
 
-Phase 0 — the spike. One pet, one hotkey, one answer. No feeding, no stats, no
-wandering. Those come in Phase 1, and only if this turns out to be worth it.
+Phase 1. The pet now has a care loop — it gets hungry, bored and tired, naps when
+you walk away, wanders along the bottom of the screen, and remembers you between
+sessions.
 
-## How it works
+## The one rule
+
+**Pet state never gates answering.** A starving, exhausted pet still answers your
+question, and still answers it correctly. Mood changes the wording and nothing
+else. Gating usefulness on pet care is charming for a day and infuriating after
+that, so there is a test asserting the pet can never be told to decline.
+
+## The care loop
+
+Four stats, all 0..100, all higher-is-better: **fullness**, **happiness**,
+**energy**, **bond**.
+
+Decay is a pure function of elapsed wall-clock time, so closing the app for eight
+hours gives exactly the same result as leaving it open for eight hours. It is
+capped at 24 hours of decay however long you were away — come back from holiday
+to a hungry pet, not a dead one. Bond never decays; it is the relationship, not
+a need.
+
+| You do | It does |
+| --- | --- |
+| Click the pet | Headpat. Happiness and bond up, hearts. |
+| Right-click | Menu: Feed, Play, Read screen, Quit. |
+| Hover | Shows the three need bars under the pet. |
+| Walk away 5 minutes | Naps. Energy regenerates instead of draining. |
+
+A full pet refuses food and a tired pet refuses to play, and the menu greys those
+out rather than letting you find out by clicking. Every action has a cooldown so
+you cannot spam a stat to 100.
+
+Mood is derived from the stats, never stored, and drives both the sprite and the
+tone of answers: `sleepy`, `hungry`, `sad`, `happy`, `neutral`.
+
+Unprompted nagging is throttled to once every three hours. A pet that talks more
+than that gets uninstalled.
+
+State lives in `pet.json` in Electron's `userData` directory. It is validated on
+load, so a corrupted or hand-edited file degrades to a fresh pet instead of
+crashing.
+
+## How answering works
 
 1. You press `Ctrl+Shift+Space`.
 2. The pet hides itself and grabs one frame of the primary screen.
@@ -54,6 +94,11 @@ non-reasoning beats smaller and reasoning here.
 | `Ctrl+Shift+Space` | Read the screen and answer |
 | `Ctrl+Shift+Q` | Quit |
 
+The window spans the bottom strip of the screen but stays click-through; the
+renderer hit-tests the pet and tells the main process when clicks should land, so
+everything outside the pet keeps working normally. It never takes focus from what
+you are doing.
+
 ## Config
 
 | Env var | Default |
@@ -87,11 +132,17 @@ of the model call. No framework.
 npm run verify:ui
 ```
 
-Renders the real UI, pushes a state through the real preload bridge, and fails on
-any console error or on the bubble not appearing. Writes `pet-preview.png` to
-look at. This exists because a name collision between a `const` in `renderer.js`
-and the `contextBridge` global killed the whole renderer script at parse time —
-invisible to unit tests, obvious the moment you render it.
+Drives the real UI over real IPC — speech, all five moods, stat bars, hover
+hit-testing, headpat, and every menu item — and fails on any console error.
+Writes `pet-preview.png`, `pet-hungry.png` and `pet-menu.png` to look at.
+
+It earns its place. It has already caught three bugs that unit tests cannot see:
+a `const pet` in `renderer.js` colliding with the `contextBridge` global and
+killing the whole script at parse time; Chromium's auto-dark-mode inverting the
+bubble to grey; and `.menu { display: flex }` overriding the UA `[hidden]` rule
+so the context menu was permanently on screen. That last one passed a
+`.hidden`-property assertion while being plainly visible in the capture — assert
+computed style, not the property.
 
 ```bash
 npm run smoke
@@ -108,6 +159,12 @@ exits. The one path the other two cannot reach.
 - **Text only.** OCR cannot see diagrams, geometry or charts. That needs a vision
   model, which is Phase 2 and GPU-gated.
 - **The pet hides for the capture**, which is a visible flicker.
+- **Wandering is a CSS transform, not a window move.** The window is a fixed
+  full-width strip along the bottom of the primary display and the pet slides
+  inside it. Moving a transparent always-on-top window at 60fps is janky and
+  burns CPU on an app that is idle almost all the time.
+- **No drag-to-feed, no evolution stages, no skins, no minigames.** The base loop
+  has to be pleasant before any of that is worth adding.
 - **`ocr.ps1` needs Windows PowerShell 5.1**, not PowerShell 7 — the WinRT type
   projections it uses do not exist in 7.
 - **Slow on CPU.** Measured end to end at 69s on this machine including Electron

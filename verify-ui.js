@@ -1,28 +1,38 @@
 'use strict';
 
-// Renderer check: loads the real UI, pushes a state through the real preload
-// bridge, asserts nothing threw and the bubble actually appeared, and drops a
-// PNG next to it so you can look at the pet.
-// Run: npx electron verify-ui.js
+// Renderer check: loads the real UI, drives it through the real preload bridge,
+// and asserts what came back over real IPC. Writes PNGs so you can look at it.
+// Run: npm run verify:ui
 //
 // This exists because a top-level `const pet` in renderer.js silently collided
 // with the contextBridge global and killed the whole script at parse time. Unit
 // tests cannot see that; only rendering it can.
 
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-const OUT = path.join(__dirname, 'pet-preview.png');
+const problems = [];
+const check = (cond, msg) => { if (!cond) problems.push(msg); };
 
 app.whenReady().then(async () => {
   const errors = [];
+  const ipc = { act: [], interactive: [], ask: 0 };
+  ipcMain.on('pet:act', (_e, name) => ipc.act.push(name));
+  ipcMain.on('pet:interactive', (_e, v) => ipc.interactive.push(v));
+  ipcMain.on('pet:ask', () => { ipc.ask += 1; });
+
   const win = new BrowserWindow({
-    width: 360,
-    height: 280,
-    show: false,
-    backgroundColor: '#1b1b1f', // opaque here so capturePage has something to composite
-    webPreferences: { preload: path.join(__dirname, 'preload.js') },
+    width: 520,
+    height: 300,
+    // Must be shown: a hidden window throttles compositing and capturePage then
+    // hands back a stale frame, which makes the PNGs quietly lie.
+    show: true,
+    backgroundColor: '#1b1b1f', // opaque so capturePage has something to composite
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      backgroundThrottling: false,
+    },
   });
 
   win.webContents.on('console-message', (e) => {
@@ -31,30 +41,114 @@ app.whenReady().then(async () => {
   win.webContents.on('preload-error', (_e, p, err) => errors.push(`preload ${p}: ${err.message}`));
 
   await win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
-
-  win.webContents.send('pet:state', {
-    status: 'answer',
-    text: '17 x 23 = 391, so the answer is A.',
-  });
-  await new Promise((r) => setTimeout(r, 500));
-
-  const shown = await win.webContents.executeJavaScript(
-    `(() => { const b = document.getElementById('bubble');
-       return { hidden: b.hidden, text: b.innerText.trim() }; })()`
+  const js = (src) => win.webContents.executeJavaScript(src);
+  const shot = async (name) => fs.writeFileSync(
+    path.join(__dirname, name), (await win.webContents.capturePage()).toPNG()
   );
+  const settle = () => new Promise((r) => setTimeout(r, 250));
+  const shownOnScreen = async (id) =>
+    (await js(`getComputedStyle(document.getElementById('${id}')).display`)) !== 'none';
 
-  fs.writeFileSync(OUT, (await win.webContents.capturePage()).toPNG());
+  // Rendered state, not the .hidden property: an author `display` rule overrides
+  // the UA [hidden] stylesheet, and the element stays on screen regardless.
+  check(!(await shownOnScreen('menu')), 'menu is visible before anyone opened it');
+  check(!(await shownOnScreen('bubble')), 'bubble is visible before the pet said anything');
 
-  const problems = [
-    ...errors,
-    shown.hidden ? 'bubble stayed hidden - the renderer never handled pet:state' : null,
-    shown.text.includes('391') ? null : `bubble text wrong: ${JSON.stringify(shown.text)}`,
-  ].filter(Boolean);
+  // --- speech -------------------------------------------------------------
+  win.webContents.send('pet:say', { text: '17 x 23 = 391, so the answer is A.', kind: 'answer' });
+  await settle();
+  const bubble = await js(
+    `(() => { const b = document.getElementById('bubble');
+      return { hidden: b.hidden, text: b.innerText.trim() }; })()`
+  );
+  check(!bubble.hidden, 'bubble stayed hidden - renderer never handled pet:say');
+  check(bubble.text.includes('391'), `bubble text wrong: ${JSON.stringify(bubble.text)}`);
+  await shot('pet-preview.png');
 
-  if (problems.length) {
-    console.error('FAIL\n - ' + problems.join('\n - '));
-    app.exit(1);
+  // --- stats drive mood and bars -----------------------------------------
+  for (const [mood, stats] of Object.entries({
+    happy: { fullness: 90, happiness: 90, energy: 80 },
+    hungry: { fullness: 12, happiness: 60, energy: 70 },
+    sad: { fullness: 60, happiness: 10, energy: 70 },
+    sleepy: { fullness: 60, happiness: 60, energy: 10 },
+    neutral: { fullness: 50, happiness: 50, energy: 50 },
+  })) {
+    win.webContents.send('pet:stats', { ...stats, bond: 10, mood });
+    await settle();
+    const got = await js(
+      `(() => ({ mood: document.getElementById('pet').dataset.mood,
+                 bar: document.querySelector('[data-bar="fullness"]').style.width,
+                 bodyFill: getComputedStyle(document.querySelector('.body')).fill }))()`
+    );
+    check(got.mood === mood, `mood not applied: wanted ${mood}, got ${got.mood}`);
+    check(
+      got.bar === `${stats.fullness}%`,
+      `fullness bar wrong for ${mood}: ${got.bar}`
+    );
+    if (mood === 'hungry') await shot('pet-hungry.png');
   }
-  console.log(`ok - bubble rendered, no console errors. wrote ${OUT}`);
+
+  // Sleepy must actually close the eyes, not just recolour.
+  win.webContents.send('pet:stats', { fullness: 60, happiness: 60, energy: 10, bond: 0, mood: 'sleepy' });
+  await settle();
+  const lids = await js(
+    `(() => ({ eyes: getComputedStyle(document.querySelector('.eyes')).display,
+               lids: getComputedStyle(document.querySelector('.lids')).display }))()`
+  );
+  check(lids.eyes === 'none' && lids.lids === 'block', 'sleepy pet did not close its eyes');
+
+  // --- interaction wiring, asserted over real IPC -------------------------
+  await js(
+    `(() => { const r = document.getElementById('pet').getBoundingClientRect();
+       document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true,
+         clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); })()`
+  );
+  await settle();
+  check(ipc.interactive.at(-1) === true, 'hovering the pet did not make the window clickable');
+
+  await js(`document.getElementById('pet').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
+  await settle();
+  check(ipc.act.includes('pet'), 'clicking the pet did not send a headpat');
+
+  await js(
+    `document.getElementById('pet').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))`
+  );
+  await settle();
+  check(await shownOnScreen('menu'), 'right-click did not open the menu');
+  check(
+    !(await shownOnScreen('bubble')),
+    'menu and bubble are both showing - they occupy the same space'
+  );
+  await shot('pet-menu.png');
+
+  await js(`document.querySelector('[data-act="feed"]').click()`);
+  await settle();
+  check(ipc.act.includes('feed'), 'Feed menu item did not send an action');
+
+  await js(
+    `document.getElementById('pet').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
+     document.querySelector('[data-ask]').click()`
+  );
+  await settle();
+  check(ipc.ask === 1, 'Read screen menu item did not request an answer');
+
+  // Menu disables what the pet would refuse anyway.
+  win.webContents.send('pet:stats', { fullness: 98, happiness: 60, energy: 10, bond: 0, mood: 'sleepy' });
+  await settle();
+  const disabled = await js(
+    `(() => ({ feed: document.querySelector('[data-act="feed"]').disabled,
+               play: document.querySelector('[data-act="play"]').disabled }))()`
+  );
+  check(disabled.feed, 'Feed stayed enabled on a full pet');
+  check(disabled.play, 'Play stayed enabled on an exhausted pet');
+
+  // --- report -------------------------------------------------------------
+  const all = [...errors, ...problems];
+  if (all.length) {
+    console.error('FAIL\n - ' + all.join('\n - '));
+    return app.exit(1);
+  }
+  console.log('ok - speech, moods, bars, hover, headpat, menu and IPC all good.');
+  console.log('wrote pet-preview.png, pet-hungry.png, pet-menu.png');
   app.exit(0);
 });
