@@ -268,10 +268,15 @@ Rebuilds `demo/screenpet-demo.gif` and a still for store listings.
 
 The recorder does not touch your actual screen — it renders a mock quiz page in
 its own window, so nothing personal ends up in the clip. Everything else is real:
-the pet, the bubble and the animations are the app's own stylesheet, and the
-answer comes from capturing that page, running it through Windows OCR and asking
-the local model, exactly as the app does. If the model is unreachable the
-recorder fails rather than writing a hard-coded answer.
+the pet, the bubble and the animations are the app's own stylesheet, the idle
+quirk is the same `is-idling` class the renderer toggles, and the answer comes
+from capturing that page, running it through Windows OCR and asking the local
+model, exactly as the app does. If the model is unreachable the recorder fails
+rather than writing a hard-coded answer.
+
+Beats: idle → stretch and tail flick → hotkey → thinking → answer → headpat.
+Whatever the model says that run is what goes in the clip, including the run
+where it answered on two lines.
 
 ## Build
 
@@ -420,7 +425,8 @@ exits. The one path the other two cannot reach.
 - **Species differ in voice and idle movement, not in rules.** They all eat, play
   and decay identically — the cat is not fussier about food than the pup. Per
   species stats would be the obvious next thing, and are not there.
-- **The demo GIF records the blob**, whichever pet you have chosen.
+- **The demo GIF records the cat**, whichever pet you have chosen. It is one
+  species in the clip and one skin, not a showcase of the picker.
 - **Autostart is wired but not exercised end to end.** It is gated on
   `app.isPackaged` and only reachable from the settings window of a built app.
 - **No auto-update.** Every new version is a manual download.

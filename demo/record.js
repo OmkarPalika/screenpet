@@ -49,6 +49,10 @@ app.whenReady().then(async () => {
     return app.exit(1);
   }
 
+  // The cat rather than the blob: at 720x480 an idle quirk needs a tail and
+  // some ears to be visible at all, and the point of the opening beat is to
+  // show the pet doing something before it is asked anything.
+  await js(`demo.pet('cat')`);
   await js('demo.showPet()');
   await sleep(300);
 
@@ -76,7 +80,9 @@ app.whenReady().then(async () => {
     for (let i = 0; i < count; i++) await frame(minDelay);
   }
 
-  await beat(18);                               // idle: bobbing, blinking
+  await beat(5);                                // idle: bobbing, blinking
+  await js('demo.quirk()');
+  await beat(22);                               // stretch, tail flick, glance
   await js('demo.badge(true)');
   await beat(6);                                // hotkey pressed
   await js(`demo.thinking(); demo.expr('hmm')`);
