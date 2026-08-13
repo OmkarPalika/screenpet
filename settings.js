@@ -9,7 +9,13 @@ const SKINS = ['butter', 'mint', 'blossom', 'slate'];
 const PETS = ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon'];
 
 const DEFAULTS = {
-  model: 'llama3.1:8b',
+  // Reasoning, and slower than llama3.1:8b for it - 6-12s against 1-3s warm.
+  // Bought with that: it is the only model of eight benchmarked that noticed
+  // when OCR had eaten half the code it was asked about, instead of confidently
+  // answering a question about data it had never seen. On a tool whose whole job
+  // is answering what is on your screen, that trade is worth making. See the
+  // model table in the README.
+  model: 'deepseek-r1:8b',
   // 'auto' picks a vision-capable model if Ollama has one, 'off' forces the OCR
   // path, anything else is treated as an explicit model name.
   vision: 'auto',

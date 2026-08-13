@@ -4,9 +4,13 @@
 // take a `fetch` so test.js can exercise them without a server.
 
 const OLLAMA = process.env.SCREENPET_OLLAMA || 'http://127.0.0.1:11434';
-// Non-reasoning on purpose: reasoning models emit far more tokens and blow the
-// timeout on CPU, which is the machine this has to run on. See README.
-const MODEL = process.env.SCREENPET_MODEL || 'llama3.1:8b';
+// Reasoning on purpose, which reverses what this comment used to say. The old
+// claim - that reasoning models blow the timeout - turned out to be the num_ctx
+// bug below rather than anything about reasoning. With the context capped, this
+// answers in 6-12s warm, and it is the only model of eight benchmarked that
+// says so when OCR has mangled the thing it was asked about. stripThinking
+// removes the <think> block before the pet says anything.
+const MODEL = process.env.SCREENPET_MODEL || 'deepseek-r1:8b';
 const TIMEOUT_MS = Number(process.env.SCREENPET_TIMEOUT_MS || 120000);
 
 // Screen text can contain secrets the user never meant to hand to a model.
@@ -207,6 +211,12 @@ async function generate(body, opts = {}) {
       }),
       signal: controller.signal,
     });
+    // Ollama is up and answering; it just has not got this model. Worth its own
+    // message - "is Ollama running?" sends you to check a service that is fine,
+    // and the default model is one plenty of people will not have pulled yet.
+    if (res.status === 404) {
+      return `I do not have "${body.model}" yet.\nRun: ollama pull ${body.model}`;
+    }
     if (!res.ok) throw new Error(`Ollama returned ${res.status}`);
     const data = await res.json();
     const answer = stripEcho(stripThinking(String(data.response || '')));

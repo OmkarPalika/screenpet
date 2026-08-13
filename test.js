@@ -543,6 +543,14 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   const http500 = async () => ({ ok: false, status: 500 });
   assert.match(await ask('hi', { fetch: http500 }), /Ollama/);
 
+  // A missing model is not a missing Ollama, and the default is one plenty of
+  // people will not have pulled. Sending them to check a service that is running
+  // fine is the wrong instruction.
+  const http404 = async () => ({ ok: false, status: 404 });
+  const missing = await ask('hi', { fetch: http404, model: 'deepseek-r1:8b' });
+  assert.match(missing, /ollama pull deepseek-r1:8b/);
+  assert.ok(!/is Ollama running/i.test(missing), 'a missing model blamed the server');
+
   const slow = async () => { const e = new Error('aborted'); e.name = 'AbortError'; throw e; };
   assert.match(await ask('hi', { fetch: slow }), /too long/);
 
