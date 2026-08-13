@@ -37,6 +37,10 @@
    behind it, which is the only reason they read as attached rather than stuck on. */
 .tail, .crest { fill: var(--ear); display: none; }
 
+/* Tails rotate about where they meet the body, not about their own centre. */
+.tail { transform-origin: 90px 92px; }
+
+
 .whiskers {
   display: none;
   fill: none;
@@ -51,11 +55,49 @@
    blob is the default and needs no rules at all - it is the shape in the
    markup. Everything else is a `d:` swap, same trick the expressions use. */
 
+/* ---- idle quirks --------------------------------------------------------
+
+   Fired by the renderer every 9-23 seconds while nothing is happening, then
+   cleared. A species rule on .pet replaces the bob outright for its duration,
+   which is what makes the quirk read as a movement rather than a wobble on top
+   of one. The glance is shared: every pet looks around, they just do it while
+   doing their own thing. */
+
+.pet.is-idling .gaze { animation: glance 2.4s ease-in-out; }
+.pet.is-idling { animation: squish 900ms ease-in-out 2; }
+
+@keyframes glance {
+  0%, 100% { transform: translate(0, 0); }
+  25%      { transform: translate(-2.5px, 0.5px); }
+  60%      { transform: translate(2.5px, 0.5px); }
+}
+
+@keyframes squish {
+  0%, 100% { transform: scale(1, 1); }
+  40%      { transform: scale(1.07, 0.93); }
+  70%      { transform: scale(0.97, 1.04); }
+}
+
+@keyframes stretch {
+  0%, 100% { transform: scaleX(1) translateY(0); }
+  45%      { transform: scaleX(1.09) translateY(2px); }
+}
+
+@keyframes flick  { 0%, 100% { transform: rotate(0deg); } 40% { transform: rotate(-16deg); } 70% { transform: rotate(7deg); } }
+@keyframes wag    { 0%, 100% { transform: rotate(-13deg); } 50% { transform: rotate(13deg); } }
+@keyframes sway   { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-9deg); } }
+@keyframes hop-idle { 0%, 100% { transform: translateY(0); } 35% { transform: translateY(-13px); } 60% { transform: translateY(0) scaleY(0.94); } }
+@keyframes peck   { 0%, 100% { transform: translateY(0) rotate(0deg); } 45% { transform: translateY(6px) rotate(9deg); } }
+@keyframes rumble { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
+@keyframes twitch { 0%, 100% { transform: rotate(0deg); } 30% { transform: rotate(-7deg); } 55% { transform: rotate(4deg); } }
+
 /* cat: tall pointed ears, whiskers, and a tail curled up behind it */
 [data-pet="cat"] .ear-l    { d: path("M26 34l6-27 19 19z"); }
 [data-pet="cat"] .ear-r    { d: path("M94 34l-6-27-19 19z"); }
 [data-pet="cat"] .whiskers { display: block; d: path("M10 58q12 -2 22 3M10 68q12 3 21 -2M110 58q-12 -2 -22 3M110 68q-12 3 -21 -2"); }
 [data-pet="cat"] .tail     { display: block; d: path("M88 94c20 2 26-10 24-22-1-7-9-9-11-3 4 1 6 4 5 9-2 9-9 12-18 11z"); }
+[data-pet="cat"] .pet.is-idling       { animation: stretch 1.6s ease-in-out; }
+[data-pet="cat"] .pet.is-idling .tail { animation: flick 900ms ease-in-out 2; }
 
 /* pup: ears hanging down the sides, and a tail mid-wag.
    They have to hang outside the body outline - kept inside it, the ears read as
@@ -63,18 +105,31 @@
 [data-pet="pup"] .ear-l { d: path("M32 24c-15 5-22 27-15 44 11 0 18-20 15-44z"); }
 [data-pet="pup"] .ear-r { d: path("M88 24c15 5 22 27 15 44-11 0-18-20-15-44z"); }
 [data-pet="pup"] .tail  { display: block; d: path("M90 92c14-1 21-9 20-19-3 8-9 13-20 13z"); }
+[data-pet="pup"] .pet.is-idling       { animation: hop-idle 620ms ease-in-out; }
+[data-pet="pup"] .pet.is-idling .tail { animation: wag 220ms ease-in-out 9; }
 
 /* bun: the ears are the whole personality */
 [data-pet="bun"] .ear-l { d: path("M44 24c-7-22-3-30 3-26 5 4 6 16 4 26-1 5-6 4-7 0z"); }
 [data-pet="bun"] .ear-r { d: path("M76 24c7-22 3-30-3-26-5 4-6 16-4 26 1 5 6 4 7 0z"); }
+[data-pet="bun"] .ear-l, [data-pet="bun"] .ear-r { transform-origin: 60px 30px; }
+[data-pet="bun"] .pet.is-idling        { animation: hop-idle 700ms ease-in-out 2; }
+[data-pet="bun"] .pet.is-idling .ear-l { animation: twitch 800ms ease-in-out 2; }
 
 /* bird: no ears at all, a tuft instead */
 [data-pet="bird"] .ear   { display: none; }
 [data-pet="bird"] .crest { display: block; d: path("M52 20q-2-16 6-14 2 8 0 14zM60 18q0-18 8-14 0 9-4 14zM68 20q4-14 9-8 0 6-5 10z"); }
 [data-pet="bird"] .tail  { display: block; d: path("M94 90c14 2 20-2 24-10-8 2-12 2-16 0z"); }
+[data-pet="bird"] .pet.is-idling        { animation: peck 600ms ease-in-out 3; }
+[data-pet="bird"] .pet.is-idling .crest { animation: twitch 500ms ease-in-out 3; }
 
 /* dragon: horns, a back ridge, and a tail with a barb */
 [data-pet="dragon"] .ear-l { d: path("M32 28l1-19 12 15z"); }
 [data-pet="dragon"] .ear-r { d: path("M88 28l-1-19-12 15z"); }
 [data-pet="dragon"] .crest { display: block; d: path("M54 16l6-9 6 9z"); }
 [data-pet="dragon"] .tail  { display: block; d: path("M88 94c16 0 22-8 22-18l6 4-2-11-9 7c1 8-5 14-17 14z"); }
+[data-pet="dragon"] .pet.is-idling       { animation: rumble 260ms ease-in-out 6; }
+[data-pet="dragon"] .pet.is-idling .tail { animation: sway 1.3s ease-in-out 2; }
+
+/* blob has no shape rules of its own, but it does get an idle of its own so the
+   default squish is a fallback rather than "the pet nobody wrote a quirk for". */
+[data-pet="blob"] .pet.is-idling { animation: squish 900ms ease-in-out 2; }

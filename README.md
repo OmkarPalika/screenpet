@@ -73,6 +73,25 @@ loads — a shape hiding in there would render correctly and preview as a blob.
 
 `npm run verify:ui` writes `pet-species.png`: every pet in every skin.
 
+### They each behave a bit differently
+
+**Voices.** Each species has its own lines for the things it says most — idling,
+being fed, patted, played with. Everything else falls through to the shared bank,
+so a seventh pet means writing the lines it actually has an opinion about rather
+than filling in a 15-cell grid. The cat says `you may continue`; the pup says
+`again again again`.
+
+**Idle quirks.** Every 9–23 seconds of nothing happening, the pet does something:
+the cat stretches and flicks its tail, the pup hops and wags, the bun twitches an
+ear, the bird pecks, the dragon rumbles and sways, the blob squishes. They all
+glance around while doing it.
+
+The renderer only decides *when* — which movement is entirely `pets.css`'s
+business. A species rule replaces the resting bob for the quirk's duration, which
+is what makes it read as a movement rather than a wobble on top of one. Tails
+rotate about where they meet the body, not their own centre; get that wrong and
+the tail detaches mid-wag.
+
 ## Faces
 
 Mood is the long run; an expression is the reaction to something that just
@@ -337,6 +356,11 @@ It also fails loudly on an unhandled rejection. A selector that matches nothing
 rejects `executeJavaScript`, which used to abort the run silently and leave the
 app sitting there with a window open — a hang tells you nothing.
 
+The two contact sheets each build in their own window. Resizing and reloading
+the window under test to make them worked until it did not: the second capture
+started failing with `UnknownVizError`, and it had been leaving every later check
+running against a window with its `#stage` torn out.
+
 It earns its place. It has already caught three bugs that unit tests cannot see:
 a `const pet` in `renderer.js` colliding with the `contextBridge` global and
 killing the whole script at parse time; Chromium's auto-dark-mode inverting the
@@ -393,9 +417,9 @@ exits. The one path the other two cannot reach.
   behind the pet, and the settings previews have a third. A test asserts all
   three carry the same face and species slots, so drift fails loudly rather than
   quietly showing an older pet.
-- **Species are shape only, not behaviour.** The cat does not act any more like a
-  cat than the blob does. Per-species lines and idle animations would be the
-  obvious next thing, and are not there.
+- **Species differ in voice and idle movement, not in rules.** They all eat, play
+  and decay identically — the cat is not fussier about food than the pup. Per
+  species stats would be the obvious next thing, and are not there.
 - **The demo GIF records the blob**, whichever pet you have chosen.
 - **Autostart is wired but not exercised end to end.** It is gated on
   `app.isPackaged` and only reachable from the settings window of a built app.
