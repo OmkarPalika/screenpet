@@ -1,0 +1,110 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  /* Without this Chromium auto-dark-mode inverts the bubble to grey. */
+  color-scheme: only light;
+  background: transparent;
+  overflow: hidden;
+  font: 13px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  cursor: default;
+  user-select: none;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 8px;
+  gap: 6px;
+}
+
+/* ---- speech bubble ---- */
+
+.bubble {
+  position: relative;
+  max-width: 100%;
+  padding: 10px 13px;
+  border-radius: 14px;
+  background: #fffdf7;
+  color: #2b2622;
+  border: 1.5px solid #e6ddc9;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.22);
+  animation: pop 160ms ease-out;
+}
+
+/* Scrolling lives on the inner element: the tail below is absolutely positioned
+   outside the box, and an overflow:auto parent both clips it and scrollbars. */
+#bubble-text {
+  display: block;
+  max-height: 148px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
+}
+
+.bubble::after {
+  content: "";
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: #fffdf7;
+  border-right: 1.5px solid #e6ddc9;
+  border-bottom: 1.5px solid #e6ddc9;
+  transform: rotate(45deg);
+}
+
+.bubble.is-error { background: #fff4f2; border-color: #f0c9c0; color: #6d2b1c; }
+.bubble.is-error::after { background: #fff4f2; border-color: #f0c9c0; }
+
+@keyframes pop {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ---- pet ---- */
+
+.pet { animation: bob 3.2s ease-in-out infinite; }
+
+.body   { fill: #f2b45c; }
+.ear    { fill: #e09c3e; }
+.eye    { fill: #3a2c1e; }
+.glint  { fill: #fff; }
+.cheek  { fill: #f08a7a; opacity: 0.55; }
+.shadow { fill: #000; opacity: 0.16; }
+.mouth  { fill: none; stroke: #3a2c1e; stroke-width: 2.6; stroke-linecap: round; }
+
+.eyes { animation: blink 5.4s infinite; transform-origin: center 54px; }
+
+@keyframes blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95%           { transform: scaleY(0.08); }
+}
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-5px); }
+}
+
+/* ---- thinking ---- */
+
+.pet.is-thinking { animation: bob 0.9s ease-in-out infinite; }
+.pet.is-thinking .mouth { d: path("M53 72q7 -5 14 0"); }
+
+.dots::after {
+  content: "";
+  animation: dots 1.1s steps(4, end) infinite;
+}
+
+@keyframes dots {
+  0%   { content: ""; }
+  25%  { content: "."; }
+  50%  { content: ".."; }
+  75%  { content: "..."; }
+}
