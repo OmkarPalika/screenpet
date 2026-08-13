@@ -7,7 +7,7 @@ const {
 const path = require('path');
 const fs = require('fs');
 const { recognise } = require('./ocr');
-const { ask, askVision, detectVisionModel, listModels, hasEnoughText } = require('./brain');
+const { ask, askVision, chat, detectVisionModel, listModels, hasEnoughText } = require('./brain');
 const pets = require('./pet-state');
 const config = require('./settings');
 
@@ -24,9 +24,15 @@ let settings = null;
 let visionModel = null; // resolved model name, or null for the OCR path
 let busy = false;
 let lastPath = 'ocr'; // which tier actually answered, for the smoke check
-let nagIndex = 0;
+let lineIndex = 0;
 let saveTimer = null;
 let quitting = false;
+let wasAsleep = false;
+
+// Conversation context, in memory only and never written anywhere. A desktop
+// pet that keeps a transcript of your evening on disk is a liability.
+const HISTORY_TURNS = 3;
+const history = [];
 
 const filePath = (name) => path.join(app.getPath('userData'), name);
 
@@ -139,14 +145,35 @@ function pushState(extra = {}) {
   });
 }
 
-function tick() {
-  const napping = asleep();
-  state = pets.tick(state, Date.now(), { asleep: napping });
+/**
+ * One door for everything the pet says off its own bat, so the line bank and the
+ * face that goes with it can never drift apart.
+ */
+function talk(kind, { event = null, text = null, tone = 'chat' } = {}) {
+  // The smoke check exits on the first thing the pet says, and it is checking
+  // the answer, not the small talk.
+  if (process.env.SCREENPET_SMOKE) return;
+  const said = text || pets.line(kind, lineIndex++);
+  if (!said) return;
+  send('pet:say', { text: said, kind: tone, expr: pets.expressionFor(event) });
+}
 
-  if (!busy && pets.shouldNag(state, Date.now(), { asleep: napping })) {
-    const m = pets.mood(state, { asleep: napping });
-    state.lastNagAt = Date.now();
-    send('pet:say', { text: pets.nagLine(m, nagIndex++), kind: 'nag' });
+function tick() {
+  const now = Date.now();
+  const napping = asleep();
+  state = pets.tick(state, now, { asleep: napping });
+
+  if (wasAsleep && !napping) talk('woke', { event: 'wake' });
+  wasAsleep = napping;
+
+  if (!busy && !napping) {
+    if (pets.shouldNag(state, now, { asleep: napping })) {
+      state.lastNagAt = now;
+      talk(pets.mood(state, { asleep: napping }), { tone: 'nag' });
+    } else if (pets.shouldChatter(state, now, { asleep: napping })) {
+      state.lastChatAt = now;
+      talk('idle');
+    }
   }
 
   pushState();
@@ -203,9 +230,9 @@ async function answerScreen() {
           mood, model: visionModel, endpoint: endpoint(), timeoutMs: VISION_TIMEOUT_MS,
         })
       : await ask(ocrText, { mood, model: settings.model, endpoint: endpoint() });
-    send('pet:say', { text: answer, kind: 'answer' });
+    send('pet:say', { text: answer, kind: 'answer', expr: pets.expressionFor('answer') });
   } catch (err) {
-    send('pet:say', { text: err.message, kind: 'error' });
+    send('pet:say', { text: err.message, kind: 'error', expr: pets.expressionFor('refuse') });
   } finally {
     busy = false;
   }
@@ -249,8 +276,12 @@ app.whenReady().then(async () => {
 
   win.webContents.once('did-finish-load', () => {
     send('pet:skin', settings.skin);
+    // Launching counts as small talk, otherwise a fresh pet greets you and then
+    // immediately chatters because lastChatAt is still zero.
+    state.lastChatAt = Date.now();
     tick();
     setInterval(tick, TICK_MS);
+    talk(pets.greetKind(new Date().getHours()), { event: 'greet' });
   });
 
   await applySettings();
@@ -271,11 +302,57 @@ app.whenReady().then(async () => {
   });
 });
 
+// What the pet says about each action, and about turning one down. A cooldown
+// ('not yet') says nothing at all - the pet ignoring a fourth headpat in a row
+// is better manners than complaining about it.
+const SAID = { feed: 'fed', pet: 'patted', play: 'played', tickle: 'tickled' };
+const REFUSED = { feed: 'full', play: 'tired' };
+
 ipcMain.on('pet:act', (_e, name) => {
+  const before = state.bond;
   const result = pets.act(state, name, Date.now());
   state = result.state;
-  pushState({ acted: result.ok ? name : null, refused: result.ok ? null : result.reason });
+  pushState({ acted: result.ok ? name : null });
+
+  if (result.ok) {
+    // A bond milestone outranks the usual line - it only happens four times.
+    talk(SAID[name], { event: name, text: pets.milestone(before, state.bond) });
+  } else if (REFUSED[name] && result.reason !== 'not yet') {
+    talk(REFUSED[name], { event: 'refuse', tone: 'nag' });
+  }
   savePet();
+});
+
+ipcMain.on('pet:react', (_e, event) => {
+  if (event === 'drag') talk('dragged', { event: 'drag' });
+});
+
+ipcMain.on('pet:chat-open', (_e, open) => {
+  if (!win || win.isDestroyed()) return;
+  // Normally focusable:false so the pet can never steal focus from real work.
+  // Typing needs focus, so it is granted for exactly as long as the box is open.
+  win.setFocusable(!!open);
+  if (open) win.focus();
+});
+
+ipcMain.on('pet:chat', async (_e, text) => {
+  const message = String(text || '').trim();
+  if (!message || busy) return;
+  busy = true;
+  send('pet:say', { text: 'thinking', kind: 'thinking' });
+  try {
+    const reply = await chat(message, {
+      mood: pets.mood(state, { asleep: asleep() }),
+      history,
+      model: settings.model,
+      endpoint: endpoint(),
+    });
+    history.push({ you: message, pet: reply });
+    if (history.length > HISTORY_TURNS) history.shift();
+    talk(null, { text: reply, event: 'chat' });
+  } finally {
+    busy = false;
+  }
 });
 
 // The renderer owns hit-testing because only it knows where the pet is standing.

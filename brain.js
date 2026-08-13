@@ -114,6 +114,36 @@ function buildVisionPrompt(mood = 'neutral') {
   return `${VISION_MOOD[mood] || VISION_MOOD.neutral} ${VISION_TASK}`;
 }
 
+// Typed conversation, which is a different job from answering the screen: no
+// OCR, no screenshot, and the model is told plainly that it cannot see anything.
+// Without that line a small model happily invents what is on your monitor.
+const PERSONA =
+  'You are a small friendly desktop pet, talking to the person whose computer you live on.';
+
+function buildChatPrompt(message, { mood = 'neutral', history = [] } = {}) {
+  const tone = TONE[mood] || '';
+  return [
+    PERSONA,
+    'Reply in at most two short sentences. Be warm and plain-spoken.',
+    'You cannot see their screen right now, so never claim to know what is on it.',
+    ...(tone ? [tone] : []),
+    '',
+    ...history.flatMap((h) => [`Them: ${h.you}`, `You: ${h.pet}`]),
+    `Them: ${message}`,
+    'You:',
+  ].join('\n');
+}
+
+/**
+ * Talk to the pet. History is passed in and lives in memory only - a desktop
+ * pet that keeps a transcript of your evening on disk is a liability.
+ */
+async function chat(message, opts = {}) {
+  const text = String(message || '').trim().slice(0, 500);
+  if (!text) return '';
+  return generate({ model: opts.model || MODEL, prompt: buildChatPrompt(text, opts) }, opts);
+}
+
 const EMPTY_SCREEN = 'I could not read any text on screen.';
 
 // Below this many characters, the screen is probably a diagram, a photo or a
@@ -237,7 +267,8 @@ async function listModels(opts = {}) {
 }
 
 module.exports = {
-  redact, stripThinking, stripEcho, cleanOcr, hasEnoughText, buildPrompt, buildVisionPrompt,
-  ask, askVision, detectVisionModel, listModels,
+  redact, stripThinking, stripEcho, cleanOcr, hasEnoughText,
+  buildPrompt, buildVisionPrompt, buildChatPrompt,
+  ask, askVision, chat, detectVisionModel, listModels,
   MODEL, EMPTY_SCREEN, MIN_SCREEN_TEXT,
 };

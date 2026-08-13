@@ -17,9 +17,12 @@ const check = (cond, msg) => { if (!cond) problems.push(msg); };
 
 app.whenReady().then(async () => {
   const errors = [];
-  const ipc = { act: [], interactive: [], ask: 0 };
+  const ipc = { act: [], interactive: [], react: [], chat: [], chatOpen: [], ask: 0 };
   ipcMain.on('pet:act', (_e, name) => ipc.act.push(name));
   ipcMain.on('pet:interactive', (_e, v) => ipc.interactive.push(v));
+  ipcMain.on('pet:react', (_e, v) => ipc.react.push(v));
+  ipcMain.on('pet:chat', (_e, v) => ipc.chat.push(v));
+  ipcMain.on('pet:chat-open', (_e, v) => ipc.chatOpen.push(v));
   ipcMain.on('pet:ask', () => { ipc.ask += 1; });
 
   const win = new BrowserWindow({
@@ -162,6 +165,171 @@ app.whenReady().then(async () => {
   check(disabled.feed, 'Feed stayed enabled on a full pet');
   check(disabled.play, 'Play stayed enabled on an exhausted pet');
 
+  // --- expressions --------------------------------------------------------
+  // The whole expression system rests on CSS `d: path(...)` swapping the mouth.
+  // If that ever stops resolving, every face silently becomes the default one
+  // and nothing else here would notice, so check the geometry actually moved.
+  const mouthD = () => js(`getComputedStyle(document.querySelector('.mouth')).d`);
+  win.webContents.send('pet:stats', { fullness: 60, happiness: 60, energy: 60, bond: 0, mood: 'neutral' });
+  await settle();
+  const restingMouth = await mouthD();
+  check(/path\(/.test(restingMouth), `CSS d: path() is not supported here: ${restingMouth}`);
+
+  win.webContents.send('pet:stats', { fullness: 60, happiness: 10, energy: 60, bond: 0, mood: 'sad' });
+  await settle();
+  check(await mouthD() !== restingMouth, 'a sad pet wears the same mouth as a content one');
+
+  for (const [expr, expected] of Object.entries({
+    love: { sel: '.eyes-love', prop: 'display', want: 'block' },
+    yum: { sel: '.tongue', prop: 'display', want: 'block' },
+    sulk: { sel: '.sweat', prop: 'display', want: 'block' },
+    oh: { sel: '.brows', prop: 'display', want: 'block' },
+    giggle: { sel: '.lids', prop: 'display', want: 'block' },
+  })) {
+    win.webContents.send('pet:say', { text: 'hello', kind: 'chat', expr });
+    await settle();
+    const got = await js(
+      `(() => ({ expr: document.getElementById('pet').dataset.expr,
+                 value: getComputedStyle(document.querySelector('${expected.sel}')).${expected.prop} }))()`
+    );
+    check(got.expr === expr, `expression not applied: wanted ${expr}, got ${got.expr}`);
+    check(got.value === expected.want, `${expr} did not show ${expected.sel} (${got.value})`);
+    if (expr === 'love') await shot('pet-love.png');
+  }
+
+  // An expression must beat the mood it is laid over - same specificity, so this
+  // is only true while the expression rules sit below the mood rules.
+  win.webContents.send('pet:stats', { fullness: 60, happiness: 60, energy: 10, bond: 0, mood: 'sleepy' });
+  win.webContents.send('pet:say', { text: 'oh!', kind: 'chat', expr: 'oh' });
+  await settle();
+  check(
+    (await js(`getComputedStyle(document.querySelector('.eyes')).display`)) !== 'none',
+    'a sleepy pet stayed asleep through a reaction - mood is winning the cascade'
+  );
+
+  // Thinking holds its face until the answer lands rather than timing out.
+  win.webContents.send('pet:say', { text: 'thinking', kind: 'thinking' });
+  await settle();
+  check(await js(`document.getElementById('pet').dataset.expr`) === 'hmm', 'thinking has no face');
+  win.webContents.send('pet:say', { text: '391.', kind: 'answer', expr: 'smile' });
+  await settle();
+  check(await js(`document.getElementById('pet').dataset.expr`) === 'smile', 'answer face never arrived');
+
+  // --- gaze ---------------------------------------------------------------
+  const eyeX = () => js(`document.getElementById('pet').style.getPropertyValue('--eye-x')`);
+  await js(`document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 0, clientY: 0 }))`);
+  await settle();
+  const left = await eyeX();
+  await js(`document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 500, clientY: 0 }))`);
+  await settle();
+  check(left !== (await eyeX()), 'the eyes do not follow the cursor');
+
+  // --- tickle and drag ----------------------------------------------------
+  await js(`document.getElementById('pet').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
+  await settle();
+  check(ipc.act.includes('tickle'), 'double-click did not tickle the pet');
+
+  await js(
+    `(() => { const p = document.getElementById('pet');
+       const r = p.getBoundingClientRect(), y = r.top + r.height / 2;
+       const at = (t, x) => document.dispatchEvent(new MouseEvent(t, { bubbles: true, clientX: x, clientY: y }));
+       p.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0,
+         clientX: r.left + r.width / 2, clientY: y }));
+       at('mousemove', r.left + r.width / 2 + 80);
+       at('mouseup', r.left + r.width / 2 + 80); })()`
+  );
+  await settle();
+  check(ipc.react.includes('drag'), 'dragging the pet sent no reaction');
+  check(
+    (await js(`document.getElementById('stage').style.transform`)) !== '',
+    'dragging did not move the pet'
+  );
+
+  // A drag ends in a click event, which must not also register as a headpat.
+  const patsBefore = ipc.act.filter((a) => a === 'pet').length;
+  await js(
+    `(() => { const p = document.getElementById('pet'), r = p.getBoundingClientRect();
+       p.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: r.left + 10, clientY: r.top + 10 }));
+       document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: r.left + 90, clientY: r.top + 10 }));
+       document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: r.left + 90, clientY: r.top + 10 }));
+       p.dispatchEvent(new MouseEvent('click', { bubbles: true })); })()`
+  );
+  await settle();
+  check(
+    ipc.act.filter((a) => a === 'pet').length === patsBefore,
+    'dropping the pet counted as a headpat'
+  );
+
+  // --- chat ---------------------------------------------------------------
+  await js(
+    `document.getElementById('pet').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
+     document.querySelector('[data-talk]').click()`
+  );
+  await settle();
+  check(await shownOnScreen('chat'), 'Talk did not open the chat box');
+  check(ipc.chatOpen.at(-1) === true, 'chat opened without asking main for focus');
+  check(!(await shownOnScreen('menu')), 'the menu stayed open behind the chat box');
+  await shot('pet-chat.png');
+
+  await js(
+    `(() => { const i = document.getElementById('chat-input');
+       i.value = 'how are you?';
+       document.getElementById('chat').dispatchEvent(new Event('submit', { cancelable: true })); })()`
+  );
+  await settle();
+  check(ipc.chat.at(-1) === 'how are you?', `chat message never sent: ${ipc.chat.at(-1)}`);
+  check(!(await shownOnScreen('chat')), 'chat box stayed open after sending');
+  check(ipc.chatOpen.at(-1) === false, 'chat closed without handing focus back');
+  check(
+    (await js(`document.getElementById('chat-input').value`)) === '',
+    'chat box kept the last message in it'
+  );
+
+  // --- the whole face sheet, in one image ---------------------------------
+  // Assertions above prove each expression changes something. This is here so a
+  // human can see whether the something looks like a feeling or like a glitch.
+  const faces = ['blank', 'smile', 'grin', 'love', 'yum', 'giggle', 'oh', 'hmm', 'sulk', 'dizzy'];
+  win.setContentSize(660, 460); // the whole sheet, or it silently crops
+  // Built with cloneNode and individual style setters, never innerHTML or
+  // cssText: the CSP forbids style attributes, and the live pet carries one
+  // (the gaze offset), so cloning its markup as text trips the policy.
+  await js(
+    `(() => {
+       const source = document.getElementById('pet');
+       const row = document.createElement('div');
+       row.style.display = 'flex';
+       row.style.flexWrap = 'wrap';
+       for (const f of ${JSON.stringify(faces)}) {
+         const cell = document.createElement('div');
+         cell.style.width = '124px';
+         cell.style.textAlign = 'center';
+         const p = source.cloneNode(true);
+         p.removeAttribute('id');
+         p.removeAttribute('style');
+         p.style.animation = 'none';
+         // Descendants too, or the sheet catches each face at a random frame of
+         // its own animation and the geometry cannot be judged.
+         for (const el of p.querySelectorAll('*')) el.style.animation = 'none';
+         p.dataset.mood = 'neutral';
+         if (f === 'blank') delete p.dataset.expr; else p.dataset.expr = f;
+         const label = document.createElement('div');
+         label.textContent = f;
+         label.style.fontSize = '11px';
+         label.style.color = '#8a7f6d';
+         label.style.marginTop = '-8px';
+         cell.append(p, label);
+         row.append(cell);
+       }
+       document.getElementById('stage').remove();
+       document.body.style.background = '#fffdf7';
+       document.body.append(row);
+     })()`
+  );
+  await settle();
+  await shot('pet-faces.png');
+  await win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  await settle();
+
   // --- settings window ----------------------------------------------------
   let saved = null;
   ipcMain.handle('config:get', async () => ({
@@ -243,7 +411,10 @@ app.whenReady().then(async () => {
     console.error('FAIL\n - ' + all.join('\n - '));
     return app.exit(1);
   }
-  console.log('ok - speech, moods, skins, bars, hover, headpat, menu, settings and IPC all good.');
-  console.log('wrote pet-preview.png, pet-hungry.png, pet-menu.png, pet-settings.png');
+  console.log(
+    'ok - speech, moods, expressions, gaze, skins, bars, hover, headpat, tickle,\n'
+    + '     drag, chat, menu, settings and IPC all good.'
+  );
+  console.log('wrote pet-preview.png, pet-hungry.png, pet-menu.png, pet-love.png, pet-chat.png, pet-settings.png');
   app.exit(0);
 });

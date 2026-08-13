@@ -183,8 +183,110 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(pets.shouldNag({ ...hungry, lastNagAt: t - 1000 }, t), false);
   // A content pet never speaks unprompted.
   assert.strictEqual(pets.shouldNag(pets.fresh(0), t), false);
-  assert.ok(pets.nagLine('hungry', 0).length > 0);
-  assert.strictEqual(pets.nagLine('neutral', 0), '');
+  assert.ok(pets.line('hungry', 0).length > 0);
+  assert.strictEqual(pets.line('neutral', 0), '');
+}
+
+// --- small talk is rarer than nagging, and never on top of it ---
+{
+  const t = pets.CHATTER_INTERVAL_MS + 1;
+  const content = pets.fresh(0);
+  assert.strictEqual(pets.shouldChatter(content, t), true);
+  assert.strictEqual(pets.shouldChatter({ ...content, lastChatAt: t - 1000 }, t), false);
+
+  // A pet with something to complain about nags instead - one mouth, one queue.
+  for (const s of [{ fullness: 10 }, { happiness: 10 }, { energy: 10 }]) {
+    assert.strictEqual(pets.shouldChatter({ ...content, ...s }, t), false);
+  }
+  assert.strictEqual(pets.shouldChatter(content, t, { asleep: true }), false);
+  assert.ok(pets.CHATTER_INTERVAL_MS < pets.NAG_INTERVAL_MS);
+
+  // lastChatAt survives a round trip through a file that does not have it yet.
+  assert.strictEqual(pets.load({ fullness: 50 }, 0).lastChatAt, 0);
+  assert.strictEqual(pets.load({ lastChatAt: 42 }, 0).lastChatAt, 42);
+}
+
+// --- lines: indexed, not random, so the caller stays deterministic ---
+{
+  const bank = pets.LINES.idle;
+  assert.strictEqual(pets.line('idle', 0), bank[0]);
+  assert.strictEqual(pets.line('idle', bank.length), bank[0], 'index must wrap');
+  assert.strictEqual(pets.line('nothing-like-this', 0), '');
+
+  // Every bank main.js reaches for by name has to exist, or the pet goes mute
+  // in exactly the situation the line was written for.
+  for (const kind of [
+    'hungry', 'sad', 'morning', 'afternoon', 'evening', 'night',
+    'fed', 'full', 'patted', 'played', 'tired', 'tickled', 'dragged',
+    'woke', 'idle',
+  ]) {
+    assert.ok(pets.line(kind, 0).length > 0, `no lines for ${kind}`);
+  }
+}
+
+// --- greetings cover the whole clock, with no gap at midnight ---
+{
+  const seen = new Set();
+  for (let h = 0; h < 24; h++) {
+    const kind = pets.greetKind(h);
+    assert.ok(pets.line(kind, 0).length > 0, `hour ${h} greets with nothing`);
+    seen.add(kind);
+  }
+  assert.deepStrictEqual([...seen].sort(), ['afternoon', 'evening', 'morning', 'night']);
+  assert.strictEqual(pets.greetKind(0), 'night');
+  assert.strictEqual(pets.greetKind(23), 'night');
+}
+
+// --- expressions are a closed set the stylesheet actually implements ---
+{
+  const css = require('fs').readFileSync('./renderer/style.css', 'utf8');
+  for (const expr of new Set(Object.values(pets.EXPRESSIONS))) {
+    assert.ok(
+      css.includes(`[data-expr="${expr}"]`),
+      `expression "${expr}" has no rule in style.css - the pet would just sit there`
+    );
+  }
+  // Expression rules must come after the mood rules they override: same
+  // specificity, so source order is the only thing making the reaction win.
+  assert.ok(
+    css.indexOf('[data-expr=') > css.lastIndexOf('[data-mood='),
+    'mood rules sit below the expression rules and would win the cascade'
+  );
+  assert.strictEqual(pets.expressionFor('nothing-like-this'), null);
+}
+
+// --- the demo stage draws the same pet the app does ---
+{
+  const fs = require('fs');
+  const app = fs.readFileSync('./renderer/index.html', 'utf8');
+  const stage = fs.readFileSync('./demo/stage.html', 'utf8');
+  // Two copies of the SVG is the price of the demo rendering a page behind the
+  // pet. Cheap to keep honest, and a drifted demo is a demo of the wrong app.
+  for (const part of ['gaze', 'eyes-love', 'brows', 'tongue', 'tear', 'sweat', 'zzz', 'spark']) {
+    assert.ok(app.includes(`"${part}"`), `renderer lost the ${part} face part`);
+    assert.ok(stage.includes(`"${part}"`), `demo stage is missing the ${part} face part`);
+  }
+}
+
+// --- bond milestones fire once, on the way up ---
+{
+  assert.strictEqual(pets.milestone(0, 10), null);
+  assert.ok(pets.milestone(24, 26));
+  assert.strictEqual(pets.milestone(26, 30), null, 'a crossed tier must not fire twice');
+  assert.ok(pets.milestone(99, 100));
+  // Bond never falls, but a hand-edited file could; going down says nothing.
+  assert.strictEqual(pets.milestone(60, 10), null);
+}
+
+// --- tickling is a real action, not just a face ---
+{
+  const t = 100000; // clear of the cooldown measured from a zero lastAction
+  const before = pets.fresh(t);
+  const { state, ok } = pets.act(before, 'tickle', t);
+  assert.strictEqual(ok, true);
+  assert.ok(state.happiness > before.happiness && state.bond > before.bond);
+  assert.ok(state.energy < before.energy, 'tickling should cost a little energy');
+  assert.strictEqual(pets.act(state, 'tickle', t + 1000).ok, false, 'no cooldown on tickle');
 }
 
 // ===== settings ============================================================
@@ -343,6 +445,39 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.ok(p.startsWith('You are a'), `mood must prefix the vision task (${m})`);
     assert.ok(p.indexOf('screenshot') > p.indexOf('pet'), `mood must precede the task (${m})`);
   }
+
+  // --- chat ----------------------------------------------------------------
+  const { chat, buildChatPrompt } = require('./brain');
+
+  let cbody = null;
+  const cgrab = async (_url, init) => {
+    cbody = JSON.parse(init.body);
+    return { ok: true, json: async () => ({ response: 'I am a pet.' }) };
+  };
+
+  assert.strictEqual(
+    await chat('what are you?', {
+      fetch: cgrab, model: 'm', mood: 'happy', history: [{ you: 'hi', pet: 'hello' }],
+    }),
+    'I am a pet.'
+  );
+  assert.ok(cbody.prompt.includes('what are you?'), 'chat prompt lost the message');
+  assert.ok(cbody.prompt.includes('Them: hi'), 'chat prompt dropped the history');
+  assert.strictEqual(cbody.images, undefined, 'chat must not send a screenshot');
+
+  // The whole point of this path is that nothing was captured, and a small model
+  // will happily invent a screen if it is not told otherwise.
+  assert.ok(/cannot see/i.test(buildChatPrompt('hi')), 'chat prompt lets the pet pretend it can see');
+
+  // Empty input must not wake the model up at all.
+  let chatCalled = false;
+  const cspy = async () => { chatCalled = true; return cgrab(); };
+  assert.strictEqual(await chat('   ', { fetch: cspy }), '');
+  assert.strictEqual(chatCalled, false);
+
+  // A pasted wall of text is a prompt blowout, not a conversation.
+  await chat('x'.repeat(9000), { fetch: cgrab, model: 'm' });
+  assert.ok(cbody.prompt.length < 1200, `chat prompt not capped: ${cbody.prompt.length} chars`);
 
   console.log('all checks passed');
 })();

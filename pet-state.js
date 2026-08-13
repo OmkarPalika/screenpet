@@ -21,6 +21,11 @@ const MAX_DECAY_HOURS = 24;
 
 const NAG_INTERVAL_MS = 3 * HOUR;
 
+// Unprompted small talk, separate from nagging and much rarer than it feels
+// like it should be. Roughly a dozen lines a day is the ceiling before a pet
+// stops being company and starts being a notification.
+const CHATTER_INTERVAL_MS = 45 * 60000;
+
 const ACTIONS = {
   feed: {
     cooldownMs: 60000,
@@ -37,6 +42,11 @@ const ACTIONS = {
     blocked: (s) => (s.energy < 20 ? 'too tired' : null),
     effect: { happiness: +20, energy: -15, bond: +4 },
   },
+  tickle: {
+    cooldownMs: 8000,
+    blocked: () => null,
+    effect: { happiness: +8, energy: -3, bond: +2 },
+  },
 };
 
 function fresh(now = 0) {
@@ -47,6 +57,7 @@ function fresh(now = 0) {
     bond: 0,
     updatedAt: now,
     lastNagAt: 0,
+    lastChatAt: 0,
     lastAction: {},
   };
 }
@@ -65,6 +76,7 @@ function load(raw, now) {
     bond: num(raw.bond, base.bond),
     updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
     lastNagAt: Number.isFinite(raw.lastNagAt) ? raw.lastNagAt : 0,
+    lastChatAt: Number.isFinite(raw.lastChatAt) ? raw.lastChatAt : 0,
     lastAction: raw.lastAction && typeof raw.lastAction === 'object' ? raw.lastAction : {},
   };
 }
@@ -124,18 +136,93 @@ function shouldNag(state, now, opts) {
   return now - state.lastNagAt >= NAG_INTERVAL_MS;
 }
 
-const NAGS = {
+/** Small talk, and only when the pet has nothing to complain about. */
+function shouldChatter(state, now, opts) {
+  const m = mood(state, opts);
+  if (m === 'hungry' || m === 'sad' || m === 'sleepy') return false;
+  return now - (state.lastChatAt || 0) >= CHATTER_INTERVAL_MS;
+}
+
+// Everything the pet says on its own. Keeping it here rather than in the
+// renderer means one bank, no duplication between the window and the tray, and
+// it stays assertable from a unit test.
+const LINES = {
   hungry: ['getting a bit hungry', 'is it snack time?', 'tummy rumbling'],
   sad: ['could use some company', 'a bit bored over here', 'play with me?'],
+
+  morning: ['morning. what are we working on?', 'coffee first, questions after', 'up early, are we?'],
+  afternoon: ['afternoon. still going strong?', 'halfway there', 'need a hand with anything?'],
+  evening: ['evening. good day?', 'winding down, or just getting started?', 'nice to see you'],
+  night: ['still up? me too', 'the screen is very bright at this hour', 'one more question, then bed'],
+
+  fed: ['mmm, thank you', 'that hit the spot', 'more later?'],
+  full: ['could not eat another bite', 'genuinely stuffed', 'saving room, thanks'],
+  patted: ['*happy wiggle*', 'again, please', 'best part of my day'],
+  played: ['that was fun', 'again! again!', 'okay, one more round'],
+  tired: ['too sleepy to play', 'my legs are made of jelly', 'nap first, play after'],
+  tickled: ['hehe, stop', 'that tickles', 'no fair'],
+  dragged: ['wheee', 'put me down gently', 'I liked it over there'],
+
+  woke: ['oh, you are back', 'I was resting my eyes', 'hello again'],
+  idle: [
+    'poke me if you need an answer',
+    'I am watching the screen, not judging it',
+    'we could take a break, you know',
+    'nice weather in here',
+  ],
 };
 
 /** Index is passed in rather than random so the caller stays deterministic. */
-function nagLine(m, index = 0) {
-  const lines = NAGS[m] || [];
+function line(kind, index = 0) {
+  const lines = LINES[kind] || [];
   return lines.length ? lines[index % lines.length] : '';
 }
 
+/** Local hour in, greeting bank out. Pure, so it is testable at 3am. */
+function greetKind(hour) {
+  if (hour < 5) return 'night';
+  if (hour < 12) return 'morning';
+  if (hour < 18) return 'afternoon';
+  if (hour < 22) return 'evening';
+  return 'night';
+}
+
+// A transient face laid on top of the mood. Mood is the long-run state; this is
+// the reaction to something that just happened, and it clears itself.
+const EXPRESSIONS = {
+  feed: 'yum',
+  pet: 'love',
+  play: 'grin',
+  tickle: 'giggle',
+  drag: 'dizzy',
+  refuse: 'sulk',
+  answer: 'smile',
+  think: 'hmm',
+  chat: 'smile',
+  greet: 'grin',
+  wake: 'oh',
+};
+
+const expressionFor = (event) => EXPRESSIONS[event] || null;
+
+// Bond is the only stat that never falls, so it is the only one that can carry
+// a milestone worth saying out loud.
+const BOND_TIERS = [
+  { at: 25, line: 'I think we are getting along' },
+  { at: 50, line: 'you are my favourite person on this desktop' },
+  { at: 75, line: 'we make a good team' },
+  { at: 100, line: 'best friends. official. no takebacks' },
+];
+
+/** The line for a tier crossed between two bond values, or null. */
+function milestone(before, after) {
+  const tier = BOND_TIERS.find((t) => before < t.at && after >= t.at);
+  return tier ? tier.line : null;
+}
+
 module.exports = {
-  fresh, load, tick, act, mood, shouldNag, nagLine,
-  ACTIONS, DECAY, SLEEP_ENERGY_GAIN, MAX_DECAY_HOURS, NAG_INTERVAL_MS,
+  fresh, load, tick, act, mood, shouldNag, shouldChatter,
+  line, greetKind, expressionFor, milestone,
+  ACTIONS, DECAY, SLEEP_ENERGY_GAIN, MAX_DECAY_HOURS, NAG_INTERVAL_MS, CHATTER_INTERVAL_MS,
+  LINES, EXPRESSIONS, BOND_TIERS,
 };
