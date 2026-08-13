@@ -266,6 +266,43 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.ok(app.includes(`"${part}"`), `renderer lost the ${part} face part`);
     assert.ok(stage.includes(`"${part}"`), `demo stage is missing the ${part} face part`);
   }
+  // Species parts must exist in the settings previews too, or the picker shows
+  // six identical buttons while the real pet changes shape.
+  const settingsHtml = fs.readFileSync('./renderer/settings.html', 'utf8');
+  for (const part of ['tail', 'crest', 'whiskers', 'ear-l', 'ear-r']) {
+    for (const [name, html] of [['renderer', app], ['demo stage', stage], ['settings', settingsHtml]]) {
+      assert.ok(html.includes(`"${part}"`) || html.includes(` ${part}"`), `${name} has no ${part} slot`);
+    }
+  }
+  // The tail and crest have to be drawn before the body or they sit on top of it.
+  for (const [name, html] of [['renderer', app], ['demo stage', stage], ['settings', settingsHtml]]) {
+    assert.ok(
+      html.indexOf('class="tail"') < html.indexOf('class="body"'),
+      `${name} draws the tail in front of the body`
+    );
+  }
+}
+
+// --- every species is actually drawn, and only from one place ---
+{
+  const fs = require('fs');
+  const cfg = require('./settings');
+  const css = fs.readFileSync('./renderer/pets.css', 'utf8');
+
+  for (const pet of cfg.PETS) {
+    // blob is the shape already in the markup, so it needs no rules of its own.
+    if (pet === 'blob') continue;
+    assert.ok(css.includes(`[data-pet="${pet}"]`), `species "${pet}" has no rules in pets.css`);
+  }
+  // Shapes must live in pets.css alone - style.css is loaded by the pet window
+  // only, so a species rule hiding in there would not reach the settings previews.
+  assert.ok(
+    !fs.readFileSync('./renderer/style.css', 'utf8').includes('[data-pet='),
+    'a species rule is in style.css, where the settings previews cannot see it'
+  );
+  for (const html of ['./renderer/index.html', './renderer/settings.html', './demo/stage.html']) {
+    assert.ok(fs.readFileSync(html, 'utf8').includes('pets.css'), `${html} does not load pets.css`);
+  }
 }
 
 // --- bond milestones fire once, on the way up ---
@@ -296,6 +333,11 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 
   assert.deepStrictEqual(cfg.load(null), cfg.DEFAULTS);
   assert.deepStrictEqual(cfg.load('nonsense'), cfg.DEFAULTS);
+
+  // A species that does not exist would leave the pet drawn as nothing at all.
+  assert.strictEqual(cfg.load({ pet: 'griffin' }).pet, cfg.DEFAULTS.pet);
+  assert.strictEqual(cfg.load({ pet: 'dragon' }).pet, 'dragon');
+  assert.ok(cfg.PETS.includes(cfg.DEFAULTS.pet), 'the default pet is not in the list');
 
   // A malformed accelerator would throw inside globalShortcut.register and take
   // the app down on launch, so it must never survive validation.

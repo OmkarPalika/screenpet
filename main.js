@@ -92,7 +92,7 @@ function openSettings() {
   if (settingsWin && !settingsWin.isDestroyed()) return settingsWin.focus();
   settingsWin = new BrowserWindow({
     width: 460,
-    height: 660,
+    height: 730,
     resizable: false,
     title: 'screenpet',
     icon: path.join(__dirname, 'icon.png'),
@@ -261,7 +261,7 @@ function applyAutostart() {
 async function applySettings() {
   applyHotkey();
   applyAutostart();
-  send('pet:skin', settings.skin);
+  send('pet:look', { pet: settings.pet, skin: settings.skin });
   visionModel = await resolveVision();
 }
 
@@ -275,7 +275,7 @@ app.whenReady().then(async () => {
   createTray();
 
   win.webContents.once('did-finish-load', () => {
-    send('pet:skin', settings.skin);
+    send('pet:look', { pet: settings.pet, skin: settings.skin });
     // Launching counts as small talk, otherwise a fresh pet greets you and then
     // immediately chatters because lastChatAt is still zero.
     state.lastChatAt = Date.now();
@@ -367,6 +367,7 @@ ipcMain.on('pet:quit', () => { quitting = true; app.quit(); });
 ipcMain.handle('config:get', async () => ({
   settings,
   skins: config.SKINS,
+  pets: config.PETS,
   models: await listModels({ endpoint: endpoint() }),
   visionModel,
   packaged: app.isPackaged,

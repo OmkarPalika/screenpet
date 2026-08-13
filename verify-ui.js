@@ -15,6 +15,14 @@ const fs = require('fs');
 const problems = [];
 const check = (cond, msg) => { if (!cond) problems.push(msg); };
 
+// A rejected executeJavaScript - a selector that matched nothing, usually -
+// otherwise aborts the run silently and the app just sits there forever with a
+// window open. Fail loudly instead; a hang tells you nothing.
+process.on('unhandledRejection', (err) => {
+  console.error(`FAIL - ${err && err.message ? err.message : err}`);
+  app.exit(1);
+});
+
 app.whenReady().then(async () => {
   const errors = [];
   const ipc = { act: [], interactive: [], react: [], chat: [], chatOpen: [], ask: 0 };
@@ -103,7 +111,7 @@ app.whenReady().then(async () => {
   // --- skins repaint the pet, and moods stay filters so they compose --------
   const fill = () => js(`getComputedStyle(document.querySelector('.body')).fill`);
   const butter = await fill();
-  win.webContents.send('pet:skin', 'mint');
+  win.webContents.send('pet:look', { pet: 'blob', skin: 'mint' });
   await settle();
   const mint = await fill();
   check(mint !== butter, 'skin change did not repaint the pet');
@@ -117,7 +125,50 @@ app.whenReady().then(async () => {
     (await js(`getComputedStyle(document.querySelector('.pet svg')).filter`)) !== 'none',
     'sad mood applied no filter'
   );
-  win.webContents.send('pet:skin', 'butter');
+  win.webContents.send('pet:look', { pet: 'blob', skin: 'butter' });
+  await settle();
+
+  // --- species -------------------------------------------------------------
+  // Each pet is ear and extra geometry over one shared face rig, so the check
+  // is that the geometry actually differs - not that an attribute was set.
+  const earD = () => js(`getComputedStyle(document.querySelector('.ear-l')).d`);
+  const blobEars = await earD();
+  for (const [species, part] of Object.entries({
+    cat: '.whiskers', pup: '.tail', bun: '.ear-l', bird: '.crest', dragon: '.crest',
+  })) {
+    win.webContents.send('pet:look', { pet: species, skin: 'butter' });
+    await settle();
+    const got = await js(
+      `(() => ({ pet: document.documentElement.dataset.pet,
+                 shown: getComputedStyle(document.querySelector('${part}')).display,
+                 d: getComputedStyle(document.querySelector('${part}')).d }))()`
+    );
+    check(got.pet === species, `species not applied: wanted ${species}, got ${got.pet}`);
+    check(got.shown !== 'none', `${species} did not show ${part}`);
+    check(/path\(/.test(got.d), `${species} left ${part} with no shape (${got.d})`);
+    // The bird is the exception: it has no ears to reshape, it just loses them.
+    if (species !== 'bird') {
+      check(await earD() !== blobEars, `${species} wears the default ears`);
+    }
+  }
+
+  // A bird has no ears at all - the rule that hides them must reach both.
+  win.webContents.send('pet:look', { pet: 'bird', skin: 'butter' });
+  await settle();
+  check(
+    (await js(`getComputedStyle(document.querySelector('.ear-r')).display`)) === 'none',
+    'the bird kept its ears'
+  );
+
+  // Species and skin are orthogonal: every pet has to work in every palette.
+  win.webContents.send('pet:look', { pet: 'dragon', skin: 'slate' });
+  await settle();
+  check(
+    (await js(`getComputedStyle(document.querySelector('.tail')).fill`)) === 'rgb(125, 139, 159)',
+    'the tail did not follow the skin palette'
+  );
+
+  win.webContents.send('pet:look', { pet: 'blob', skin: 'butter' });
   await settle();
 
   // --- interaction wiring, asserted over real IPC -------------------------
@@ -330,14 +381,51 @@ app.whenReady().then(async () => {
   await win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   await settle();
 
+  // --- and every species, in every skin ------------------------------------
+  const species = ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon'];
+  const skins = ['butter', 'mint', 'blossom', 'slate'];
+  await js(
+    `(() => {
+       const source = document.getElementById('pet');
+       const grid = document.createElement('div');
+       grid.style.display = 'grid';
+       grid.style.gridTemplateColumns = 'repeat(${species.length}, 124px)';
+       for (const skin of ${JSON.stringify(skins)}) {
+         for (const s of ${JSON.stringify(species)}) {
+           const cell = document.createElement('div');
+           cell.dataset.pet = s;
+           cell.dataset.skin = skin;
+           cell.style.textAlign = 'center';
+           const p = source.cloneNode(true);
+           p.removeAttribute('id');
+           p.removeAttribute('style');
+           p.style.animation = 'none';
+           for (const el of p.querySelectorAll('*')) el.style.animation = 'none';
+           p.dataset.mood = 'neutral';
+           cell.append(p);
+           grid.append(cell);
+         }
+       }
+       document.getElementById('stage').remove();
+       document.body.style.background = '#fffdf7';
+       document.body.append(grid);
+     })()`
+  );
+  win.setContentSize(760, 480);
+  await settle();
+  await shot('pet-species.png');
+  await win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  await settle();
+
   // --- settings window ----------------------------------------------------
   let saved = null;
   ipcMain.handle('config:get', async () => ({
     settings: {
       model: 'llama3.1:8b', vision: 'auto', hotkey: 'CommandOrControl+Shift+Space',
-      skin: 'butter', autostart: false, ollama: 'http://127.0.0.1:11434',
+      pet: 'cat', skin: 'butter', autostart: false, ollama: 'http://127.0.0.1:11434',
     },
     skins: ['butter', 'mint', 'blossom', 'slate'],
+    pets: ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon'],
     models: ['llama3.1:8b', 'mistral:7b'],
     visionModel: null,
     packaged: false,
@@ -348,7 +436,7 @@ app.whenReady().then(async () => {
   });
 
   const sw = new BrowserWindow({
-    width: 460, height: 660, show: true, // must match openSettings() in main.js
+    width: 460, height: 730, show: true, // must match openSettings() in main.js
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       backgroundThrottling: false,
@@ -368,6 +456,29 @@ app.whenReady().then(async () => {
   check(
     (await sjs(`document.querySelectorAll('#skins .swatch').length`)) === 4,
     'settings did not render the skin swatches'
+  );
+  check(
+    (await sjs(`document.querySelectorAll('#pets .pet-pick svg').length`)) === 6,
+    'settings did not draw a preview for every pet'
+  );
+  check(
+    await sjs(`document.querySelector('#pets [data-pet="cat"]').getAttribute('aria-pressed') === 'true'`),
+    'settings did not preselect the saved pet'
+  );
+  // The previews are drawn by pets.css, so a species must actually differ there
+  // too - otherwise you are picking between six identical buttons.
+  check(
+    (await sjs(
+      `getComputedStyle(document.querySelector('#pets [data-pet="cat"] .whiskers')).display`
+    )) !== 'none',
+    'the cat preview has no whiskers - pets.css is not reaching the settings window'
+  );
+  // Picking a skin must repaint them, or the preview lies about what you get.
+  await sjs(`document.querySelector('[data-skin="mint"]').click()`);
+  await settle();
+  check(
+    (await sjs(`getComputedStyle(document.querySelector('#pets .body')).fill`)) === 'rgb(127, 209, 176)',
+    'skin choice did not repaint the pet previews'
   );
   check(
     (await sjs(`document.getElementById('vision-hint').classList.contains('warn')`)),
@@ -398,12 +509,14 @@ app.whenReady().then(async () => {
     `(() => { const h = document.getElementById('hotkey');
        h.value = 'Alt+Shift+P'; h.dispatchEvent(new Event('input'));
        document.querySelector('[data-skin="blossom"]').click();
+       document.querySelector('#pets [data-pet="dragon"]').click();
        document.getElementById('save').click(); })()`
   );
   await settle();
   check(saved !== null, 'Save sent nothing to the main process');
   check(saved && saved.hotkey === 'Alt+Shift+P', `hotkey not saved: ${saved && saved.hotkey}`);
   check(saved && saved.skin === 'blossom', `skin not saved: ${saved && saved.skin}`);
+  check(saved && saved.pet === 'dragon', `pet not saved: ${saved && saved.pet}`);
 
   // --- report -------------------------------------------------------------
   const all = [...errors, ...problems];
@@ -412,9 +525,12 @@ app.whenReady().then(async () => {
     return app.exit(1);
   }
   console.log(
-    'ok - speech, moods, expressions, gaze, skins, bars, hover, headpat, tickle,\n'
-    + '     drag, chat, menu, settings and IPC all good.'
+    'ok - speech, moods, expressions, gaze, species, skins, bars, hover, headpat,\n'
+    + '     tickle, drag, chat, menu, settings and IPC all good.'
   );
-  console.log('wrote pet-preview.png, pet-hungry.png, pet-menu.png, pet-love.png, pet-chat.png, pet-settings.png');
+  console.log(
+    'wrote pet-preview.png, pet-hungry.png, pet-menu.png, pet-love.png, pet-chat.png,\n'
+    + '      pet-faces.png, pet-species.png, pet-settings.png'
+  );
   app.exit(0);
 });

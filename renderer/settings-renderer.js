@@ -15,6 +15,34 @@ const ACCELERATOR = /^([A-Za-z0-9]+\+)*[A-Za-z0-9]+$/;
 
 let current = null;
 let skin = 'butter';
+let species = 'blob';
+
+// The previews are drawn by the same stylesheet as the real pet, so they follow
+// the selected skin live and can never disagree with what you actually get.
+function fillPets(pets) {
+  const box = el('pets');
+  box.replaceChildren();
+  for (const name of pets) {
+    const b = document.createElement('button');
+    b.className = 'pet-pick';
+    b.dataset.pet = name;
+    b.title = name;
+    b.setAttribute('aria-pressed', String(name === species));
+    b.append(el('pet-preview').content.cloneNode(true));
+    const label = document.createElement('span');
+    label.textContent = name;
+    b.append(label);
+    b.addEventListener('click', () => {
+      species = name;
+      for (const p of box.children) p.setAttribute('aria-pressed', String(p.dataset.pet === name));
+    });
+    box.append(b);
+  }
+}
+
+function paintPreviews() {
+  el('pets').dataset.skin = skin;
+}
 
 function fillModels(models, selected) {
   modelSel.replaceChildren();
@@ -45,6 +73,7 @@ function fillSkins(skins) {
       for (const s of skinsBox.children) {
         s.setAttribute('aria-pressed', String(s.dataset.skin === name));
       }
+      paintPreviews();
     });
     skinsBox.append(b);
   }
@@ -78,6 +107,7 @@ saveBtn.addEventListener('click', async () => {
     model: modelSel.value,
     vision: visionSel.value,
     hotkey: hotkeyInput.value.trim(),
+    pet: species,
     skin,
     autostart: autostart.checked,
   });
@@ -95,9 +125,12 @@ el('close').addEventListener('click', () => window.config.close());
   const data = await window.config.get();
   current = data.settings;
   skin = current.skin;
+  species = current.pet;
 
   fillModels(data.models, current.model);
+  fillPets(data.pets);
   fillSkins(data.skins);
+  paintPreviews();
   showVision(data.visionModel);
 
   // 'auto' and 'off' are the two built-in options; an explicit model name that

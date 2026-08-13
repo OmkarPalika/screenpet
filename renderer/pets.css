@@ -1,0 +1,80 @@
+/* How the pet is drawn: palette, ink, and one block per species.
+   Shared by the pet window, the settings previews and the demo stage, so there
+   is exactly one place a shape is defined.
+
+   Every species keeps the same face rig - same classes, same coordinates - and
+   varies only ears, extras and body outline. That is what lets all nine
+   expressions work on all six pets without a single extra rule. */
+
+/* ---- skins: one palette swap, so moods stay filters rather than 4x5 rules ---- */
+
+:root                    { --body: #f2b45c; --ear: #e09c3e; --cheek: #f08a7a; }
+[data-skin="mint"]       { --body: #7fd1b0; --ear: #5fb896; --cheek: #ef9a8e; }
+[data-skin="blossom"]    { --body: #f3a3bd; --ear: #dd88a6; --cheek: #dd5f7f; }
+[data-skin="slate"]      { --body: #9aa8bd; --ear: #7d8b9f; --cheek: #e28a7a; }
+
+/* ---- ink ---- */
+
+.body   { fill: var(--body); }
+.ear    { fill: var(--ear); }
+.eye    { fill: #3a2c1e; }
+.glint  { fill: #fff; }
+.cheek  { fill: var(--cheek); opacity: 0.55; }
+.shadow { fill: #000; opacity: 0.16; }
+.mouth  { fill: none; stroke: #3a2c1e; stroke-width: 2.6; stroke-linecap: round; }
+.lids   { display: none; stroke: #3a2c1e; stroke-width: 2.6; stroke-linecap: round; }
+
+.tongue { fill: #e2707f; display: none; }
+.brows  { display: none; stroke: #3a2c1e; stroke-width: 2.4; stroke-linecap: round; fill: none; }
+.eyes-love { display: none; fill: #f0708a; }
+.tear   { display: none; fill: #7fc7ea; }
+.sweat  { display: none; fill: #9fd4ee; }
+.spark  { display: none; fill: #ffd45e; }
+.zzz    { display: none; fill: #6c7a8c; font: 600 15px "Segoe UI", system-ui, sans-serif; }
+
+/* Species parts. Empty and hidden by default; each species fills in what it
+   needs. The tail and crest are drawn before the body in the markup so they sit
+   behind it, which is the only reason they read as attached rather than stuck on. */
+.tail, .crest { fill: var(--ear); display: none; }
+
+.whiskers {
+  display: none;
+  fill: none;
+  stroke: #6b5a45;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+
+/* ---- species ------------------------------------------------------------
+
+   blob is the default and needs no rules at all - it is the shape in the
+   markup. Everything else is a `d:` swap, same trick the expressions use. */
+
+/* cat: tall pointed ears, whiskers, and a tail curled up behind it */
+[data-pet="cat"] .ear-l    { d: path("M26 34l6-27 19 19z"); }
+[data-pet="cat"] .ear-r    { d: path("M94 34l-6-27-19 19z"); }
+[data-pet="cat"] .whiskers { display: block; d: path("M10 58q12 -2 22 3M10 68q12 3 21 -2M110 58q-12 -2 -22 3M110 68q-12 3 -21 -2"); }
+[data-pet="cat"] .tail     { display: block; d: path("M88 94c20 2 26-10 24-22-1-7-9-9-11-3 4 1 6 4 5 9-2 9-9 12-18 11z"); }
+
+/* pup: ears hanging down the sides, and a tail mid-wag.
+   They have to hang outside the body outline - kept inside it, the ears read as
+   two faint bulges and the pup is indistinguishable from the blob. */
+[data-pet="pup"] .ear-l { d: path("M32 24c-15 5-22 27-15 44 11 0 18-20 15-44z"); }
+[data-pet="pup"] .ear-r { d: path("M88 24c15 5 22 27 15 44-11 0-18-20-15-44z"); }
+[data-pet="pup"] .tail  { display: block; d: path("M90 92c14-1 21-9 20-19-3 8-9 13-20 13z"); }
+
+/* bun: the ears are the whole personality */
+[data-pet="bun"] .ear-l { d: path("M44 24c-7-22-3-30 3-26 5 4 6 16 4 26-1 5-6 4-7 0z"); }
+[data-pet="bun"] .ear-r { d: path("M76 24c7-22 3-30-3-26-5 4-6 16-4 26 1 5 6 4 7 0z"); }
+
+/* bird: no ears at all, a tuft instead */
+[data-pet="bird"] .ear   { display: none; }
+[data-pet="bird"] .crest { display: block; d: path("M52 20q-2-16 6-14 2 8 0 14zM60 18q0-18 8-14 0 9-4 14zM68 20q4-14 9-8 0 6-5 10z"); }
+[data-pet="bird"] .tail  { display: block; d: path("M94 90c14 2 20-2 24-10-8 2-12 2-16 0z"); }
+
+/* dragon: horns, a back ridge, and a tail with a barb */
+[data-pet="dragon"] .ear-l { d: path("M32 28l1-19 12 15z"); }
+[data-pet="dragon"] .ear-r { d: path("M88 28l-1-19-12 15z"); }
+[data-pet="dragon"] .crest { display: block; d: path("M54 16l6-9 6 9z"); }
+[data-pet="dragon"] .tail  { display: block; d: path("M88 94c16 0 22-8 22-18l6 4-2-11-9 7c1 8-5 14-17 14z"); }

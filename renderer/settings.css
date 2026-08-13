@@ -56,6 +56,32 @@ input[type="text"].bad { border-color: #d1604a; }
 .hint.warn { color: #b8632a; }
 code { font-family: Consolas, ui-monospace, monospace; font-size: 11px; }
 
+/* ---- pets ---- */
+
+.pets {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+  margin-bottom: 14px;
+}
+
+.pet-pick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 0 3px;
+  border: 2px solid transparent;
+  outline: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+  cursor: pointer;
+}
+
+.pet-pick span { color: var(--muted); font-size: 10px; }
+.pet-pick[aria-pressed="true"] { border-color: var(--accent); outline-color: var(--accent); }
+.pet-pick[aria-pressed="true"] span { color: var(--fg); }
+
 /* ---- skins ---- */
 
 .skins { display: flex; gap: 9px; margin-bottom: 14px; }

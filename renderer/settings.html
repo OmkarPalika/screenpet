@@ -7,6 +7,7 @@
       content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:"
     />
     <title>screenpet settings</title>
+    <link rel="stylesheet" href="pets.css" />
     <link rel="stylesheet" href="settings.css" />
   </head>
   <body>
@@ -28,8 +29,31 @@
     <input id="hotkey" type="text" spellcheck="false" />
     <p class="hint">For example <code>CommandOrControl+Shift+Space</code>.</p>
 
+    <label for="pets">Pet</label>
+    <div class="pets" id="pets"></div>
+
     <label for="skin">Skin</label>
     <div class="skins" id="skins"></div>
+
+    <!-- Cloned once per species by settings-renderer.js. The shapes come from
+         pets.css, so this is only the rig the species rules hang off - there is
+         no second definition of any pet in here. -->
+    <template id="pet-preview">
+      <svg viewBox="0 0 120 110" width="40" height="37" aria-hidden="true">
+        <path class="tail" d="" />
+        <path class="crest" d="" />
+        <path
+          class="body"
+          d="M60 14c26 0 42 18 42 42 0 24-16 40-42 40S18 80 18 56c0-24 16-42 42-42z"
+        />
+        <path class="ear ear-l" d="M28 26c6-10 16-12 20-4-8 2-15 8-20 12z" />
+        <path class="ear ear-r" d="M92 26c-6-10-16-12-20-4 8 2 15 8 20 12z" />
+        <ellipse class="eye" cx="45" cy="54" rx="6" ry="7" />
+        <ellipse class="eye" cx="75" cy="54" rx="6" ry="7" />
+        <path class="mouth" d="M53 70q7 7 14 0" />
+        <path class="whiskers" d="" />
+      </svg>
+    </template>
 
     <label class="check">
       <input id="autostart" type="checkbox" />
