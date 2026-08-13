@@ -36,6 +36,9 @@ html, body {
 
 .bubble {
   position: relative;
+  /* Above the pet, so the emoji rain falls behind the answer rather than across
+     it. The drops start above the pet's head, which is exactly where this sits. */
+  z-index: 1;
   max-width: 100%;
   padding: 10px 13px;
   border-radius: 14px;
