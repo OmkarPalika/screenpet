@@ -29,8 +29,8 @@ a need.
 
 | You do | It does |
 | --- | --- |
-| Click the pet | Headpat. Heart eyes, happiness and bond up. |
-| Double-click | Tickle. Wiggles and giggles. |
+| Click the pet | Headpat. Heart eyes, a shower of 💕, happiness and bond up. |
+| Double-click | Tickle. Wiggles and giggles — and see below if you keep going. |
 | Drag it | Picks it up and moves it. Goes dizzy, complains mildly. |
 | Move the mouse | Its eyes follow the cursor. |
 | Right-click | Menu: Feed, Play, Tickle, Talk, Read screen, Settings, Quit. |
@@ -43,6 +43,29 @@ out rather than letting you find out by clicking. Every action has a cooldown so
 you cannot spam a stat to 100. Being on cooldown says nothing at all — a pet that
 ignores a fourth headpat in a row has better manners than one that complains
 about it.
+
+### Keep poking it
+
+Tickling is the one thing you can do over and over, so it is the one that
+escalates:
+
+> giggle → giggle → **shy** → **annoyed** → **RAGE** → **crying**
+
+Each rung has its own bank of lines, and there is a floor at the bottom — nothing
+comes after crying. An escalation with an end reads as a creature with feelings;
+one that giggles forever reads as a button.
+
+Cooldown refusals count as pokes here, unlike everywhere else. A pet that
+silently ignores your fourth poke feels broken rather than patient.
+
+Bouts expire after twelve seconds, so coming back from a meeting does not resume
+mid-tantrum, and the counter lives in memory only — forgiveness on relaunch is
+the right default for something that lives on your taskbar.
+
+The pet also **praises you**, every other bit of small talk, and is immediately
+embarrassed about having done it. The compliments are vague on purpose: it cannot
+see what you are working on, and a specific compliment about work it has not seen
+is a lie with a smiley face on it.
 
 Mood is derived from the stats, never stored, and drives both the sprite and the
 tone of answers: `sleepy`, `hungry`, `sad`, `happy`, `neutral`.
@@ -62,7 +85,7 @@ every palette, so it is 24 combinations, not six.
 
 Every species keeps the **same face rig**: same classes, same coordinates. Only
 ears, body outline and extras (tail, crest, whiskers) change. That is the whole
-trick — all nine expressions work on all six pets without a single extra rule,
+trick — all fifteen expressions work on all six pets without a single extra rule,
 and a seventh pet is one CSS block, not a new sprite sheet.
 
 Shapes live in `renderer/pets.css`, which the pet window, the settings previews
@@ -98,10 +121,30 @@ Mood is the long run; an expression is the reaction to something that just
 happened, laid over the top and cleared after a couple of seconds.
 
 `smile` `grin` `love` `yum` `giggle` `oh` `hmm` `sulk` `dizzy`
+`shy` `proud` `joy` `annoyed` `rage` `cry`
 
 They are CSS, not sprites — the mouth is a `d: path(...)` swap and the extras
-(brows, tongue, tear, sweat, sparkle, `z`s) are `display` toggles. So they cost
-no images, and they compose with all four skins for free.
+(brows, tongue, tears, sweat, sparkle, anger mark, `z`s) are `display` toggles.
+So they cost no images, and they compose with all four skins for free.
+
+`rage` is deliberately the `annoyed` face turned up — steeper brows, angrier
+mouth, a shake and a hue shift — rather than a face of its own. That is what
+makes it read as the same pet getting angrier instead of a different pet turning
+up.
+
+**The bow** is an accessory on the shared rig, not part of any body, so all six
+species wear it with no per-species rules. It appears for the cute half of the
+range only — `love` `shy` `giggle` `proud` `joy` — and a test asserts `rage` and
+`cry` never get one. A pet in tears wearing a party bow is a different feeling
+entirely.
+
+**Emoji rain.** Each feeling drops a handful of emoji in from above the head:
+💕 for love, 🌸 for shy, 💢🔥 for rage, 💧💔 for crying. One mechanism for all of
+them — the renderer picks the characters, fall depth and stagger, the stylesheet
+says only how a falling thing moves, and a new feeling clears whatever is still
+in the air. `smile`, `hmm` and `oh` deliberately drop nothing: they fire on
+hover, and confetti on every mouse move would be unbearable. There is a test for
+that specifically.
 
 Expression rules must stay **below** the mood rules in `style.css`. Both are
 `.pet[data-*]`, so they have identical specificity and source order is the only
