@@ -77,6 +77,30 @@
     </p>
 
     <label class="check">
+      <input id="wake" type="checkbox" />
+      <span>Answer to “hey pet”</span>
+    </label>
+    <p class="hint" id="wake-hint">
+      Needs the setting above. <strong>This holds the microphone open for as long as it
+      is on</strong> — that is what a wake word costs, and there is no version of it that
+      does not. Windows does the listening, on this machine, with a grammar containing
+      only the wake phrases: it is not a transcriber looking for a word, it is incapable
+      of recognising anything else. The only thing that ever comes back from it is the
+      fact that you said it.
+    </p>
+
+    <label class="check">
+      <input id="bop" type="checkbox" />
+      <span>Bop along to music</span>
+    </label>
+    <p class="hint">
+      Needs the microphone too, and holds it open. The pet listens for a beat and moves
+      on it. The audio is turned into one number — how loud, right now — and thrown away;
+      nothing is recognised, recorded or sent. Off, it still dances when you ask, and
+      opens the microphone only for the length of the dance.
+    </p>
+
+    <label class="check">
       <input id="camera" type="checkbox" />
       <span>Notice when I am at the desk</span>
     </label>
@@ -88,6 +112,32 @@
       that one frame, in your Pictures folder — the only frame it ever writes down,
       and still nothing it sends anywhere.
     </p>
+
+    <label class="check">
+      <input id="faces" type="checkbox" />
+      <span>Tell a face from a curtain</span>
+    </label>
+    <p class="hint" id="faces-hint">
+      Needs the camera. Uses the face detector built into Windows, so the pet can tell
+      the difference between a person sitting down and a door opening. It answers
+      <em>how many faces</em> and nothing else — no name, no identity, no template kept.
+      The frame is handed to Windows in memory and never written to disk.
+    </p>
+
+    <label class="check">
+      <input id="weather" type="checkbox" />
+      <span>Let it ask about the weather</span>
+    </label>
+    <p class="hint" id="weather-hint">
+      <strong>The only setting that sends anything off this machine.</strong> With it on,
+      asking about the weather sends the town below to open-meteo.com — no account, no
+      key, nothing from your screen, camera or microphone, and no location lookup. Off,
+      the pet says it cannot see outside, which is the truth.
+    </p>
+
+    <label for="city">Town</label>
+    <input id="city" type="text" spellcheck="false" placeholder="Abu Dhabi" />
+    <p class="hint">The only thing that ever leaves. You can put the next town over.</p>
 
     <div class="row">
       <span class="status" id="status"></span>

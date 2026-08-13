@@ -794,6 +794,55 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     );
   }
 
+  // --- the opt-in features ---
+  // Each of these opens something. Every one of them must need a literal true,
+  // and the two that use a device must need that device as well - a wake word
+  // with no microphone is a setting that silently does nothing.
+  for (const key of ['wake', 'bop', 'weather', 'faces']) {
+    assert.strictEqual(cfg.DEFAULTS[key], false, `${key} ships switched on`);
+    for (const truthy of ['yes', 1, 'true', {}, []]) {
+      assert.strictEqual(cfg.load({ [key]: truthy, mic: true, camera: true })[key], false,
+        `${key} opened for ${JSON.stringify(truthy)}`);
+    }
+  }
+  assert.strictEqual(cfg.load({ wake: true }).wake, false, 'the wake word opened with no microphone');
+  assert.strictEqual(cfg.load({ bop: true }).bop, false, 'bop opened with no microphone');
+  assert.strictEqual(cfg.load({ faces: true }).faces, false, 'face detection opened with no camera');
+  assert.strictEqual(cfg.load({ wake: true, mic: true }).wake, true);
+  assert.strictEqual(cfg.load({ bop: true, mic: true }).bop, true);
+  assert.strictEqual(cfg.load({ faces: true, camera: true }).faces, true);
+  // Switching the device back off takes its dependants with it.
+  assert.strictEqual(cfg.merge(cfg.load({ wake: true, mic: true }), { mic: false }).wake, false);
+  assert.strictEqual(cfg.merge(cfg.load({ faces: true, camera: true }), { camera: false }).faces, false);
+
+  // The town is the only user-typed string in the app that reaches a server.
+  assert.strictEqual(cfg.load({ city: 'Abu Dhabi' }).city, 'Abu Dhabi');
+  assert.strictEqual(cfg.load({ city: "Stratford-upon-Avon" }).city, 'Stratford-upon-Avon');
+  assert.strictEqual(cfg.load({ city: 'x' }).city, '', 'a one-character town was accepted');
+  assert.strictEqual(cfg.load({ city: 42 }).city, '');
+  // Rejected rather than truncated: half a town name is a different town.
+  assert.strictEqual(cfg.load({ city: 'a'.repeat(200) }).city, '');
+  // Anything that is not part of a place name is stripped before it can be a URL.
+  assert.strictEqual(cfg.load({ city: 'Paris?lat=1&lon=2' }).city, 'Paris lat lon');
+  assert.ok(!/[?&=/:]/.test(cfg.load({ city: 'a/b?c=d&e' }).city), 'URL punctuation survived');
+
+  // --- audio through the permission gate ---
+  // Audio became reachable when the pet learned to move to a beat. It is gated
+  // on the microphone setting, exactly as video is gated on the camera.
+  const micOn = cfg.load({ mic: true });
+  const both = cfg.load({ mic: true, camera: true });
+  assert.strictEqual(cfg.allowPermission(micOn, 'media', { mediaTypes: ['audio'] }), true);
+  assert.strictEqual(cfg.allowPermission(micOn, 'media', { mediaType: 'audio' }), true);
+  assert.strictEqual(cfg.allowPermission(micOn, 'media', { mediaTypes: ['video'] }), false,
+    'the camera opened on the microphone setting');
+  assert.strictEqual(cfg.allowPermission(both, 'media', { mediaTypes: ['video', 'audio'] }), true);
+  assert.strictEqual(cfg.allowPermission(on, 'media', { mediaTypes: ['video', 'audio'] }), false,
+    'audio rode in alongside video with the microphone off');
+  assert.strictEqual(cfg.allowPermission(both, 'media', { mediaTypes: [] }), false);
+  assert.strictEqual(cfg.allowPermission(both, 'media', { mediaTypes: ['video', 'midi'] }), false,
+    'an unknown media type rode in alongside an allowed one');
+  assert.strictEqual(cfg.allowPermission(both, 'geolocation', { mediaTypes: ['video'] }), false);
+
   // merge keeps what it is not told about, and still validates what it is.
   const merged = cfg.merge(cfg.load({ skin: 'mint' }), { model: 'x', hotkey: 'Ctrl+' });
   assert.strictEqual(merged.skin, 'mint');
@@ -861,7 +910,173 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(rem.load(many, NOW).pending.length, rem.MAX_PENDING);
 
   assert.ok(rem.lateLine('stretch').includes('stretch'), 'the late line dropped the reminder');
+
+  // --- repeat rules ---------------------------------------------------------
+  // A hand-edited rule reaches setTimeout, so the shape check is the guard.
+  for (const bad of [
+    null, 'daily', {}, { kind: 'yearly', hour: 9 }, { kind: 'daily' },
+    { kind: 'daily', hour: 24 }, { kind: 'daily', hour: -1 }, { kind: 'daily', hour: 9.5 },
+    { kind: 'daily', hour: 9, minute: 60 }, { kind: 'weekly', hour: 9 },
+    { kind: 'weekly', day: 7, hour: 9 }, { kind: 'interval', ms: 1000 },
+    { kind: 'interval', ms: 30 * 24 * 3600_000 }, { kind: 'interval' },
+  ]) {
+    assert.strictEqual(rem.validRepeat(bad), null, `accepted ${JSON.stringify(bad)}`);
+  }
+  assert.deepStrictEqual(rem.validRepeat({ kind: 'daily', hour: 7 }), { kind: 'daily', hour: 7, minute: 0 });
+  assert.deepStrictEqual(rem.validRepeat({ kind: 'interval', ms: 90_000 }), { kind: 'interval', ms: 90_000 });
+
+  // Wednesday 2026-08-12, 10:00 local.
+  const wed = new Date(2026, 7, 12, 10, 0, 0, 0).getTime();
+  const fmt = (t) => new Date(t).toString().slice(0, 21);
+
+  // Later today.
+  assert.strictEqual(fmt(rem.nextAt({ kind: 'daily', hour: 18 }, wed)), fmt(new Date(2026, 7, 12, 18)));
+  // Already gone today, so tomorrow.
+  assert.strictEqual(fmt(rem.nextAt({ kind: 'daily', hour: 7 }, wed)), fmt(new Date(2026, 7, 13, 7)));
+  // Friday 18:00 from Wednesday.
+  assert.strictEqual(fmt(rem.nextAt({ kind: 'weekly', day: 5, hour: 18 }, wed)), fmt(new Date(2026, 7, 14, 18)));
+  // Weekdays skip the weekend: Friday 07:00 -> Monday, not Saturday.
+  const fri = new Date(2026, 7, 14, 10).getTime();
+  assert.strictEqual(fmt(rem.nextAt({ kind: 'weekdays', hour: 7 }, fri)), fmt(new Date(2026, 7, 17, 7)));
+  // Strictly after: an alarm firing at exactly its own time must move on, not
+  // reschedule itself for the instant it just fired.
+  const seven = new Date(2026, 7, 12, 7).getTime();
+  assert.strictEqual(fmt(rem.nextAt({ kind: 'daily', hour: 7 }, seven)), fmt(new Date(2026, 7, 13, 7)));
+  assert.strictEqual(rem.nextAt({ kind: 'interval', ms: 60_000 }, wed), wed + 60_000);
+  assert.strictEqual(rem.nextAt({ kind: 'nonsense' }, wed), null);
+
+  // The wall clock is re-asserted daily rather than 24 hours being added, so an
+  // alarm does not drift an hour twice a year. Sunday 2026-03-08 is the US
+  // spring forward; the alarm must still be 07:00 the next morning.
+  const dstEve = new Date(2026, 2, 7, 10).getTime();
+  const afterDst = new Date(rem.nextAt({ kind: 'daily', hour: 7 }, dstEve));
+  assert.strictEqual(afterDst.getHours(), 7, `alarm drifted across DST: ${afterDst}`);
+
+  // A daily alarm missed while the app was closed is still a daily alarm: said
+  // once if it is recent, and rescheduled either way.
+  const missed = rem.load([{ at: NOW - 60_000, say: 'stand up', repeat: { kind: 'daily', hour: 9 } }], NOW);
+  assert.strictEqual(missed.late.length, 1, 'a recent missed alarm went unmentioned');
+  assert.strictEqual(missed.pending.length, 1, 'a missed daily alarm was not rescheduled');
+  assert.ok(missed.pending[0].at > NOW, 'the rescheduled alarm is in the past');
+
+  // ...and one missed on holiday is not worth mentioning, but is still rescheduled.
+  const ancient = rem.load([{ at: NOW - 30 * 86_400_000, say: 'stand up', repeat: { kind: 'daily', hour: 9 } }], NOW);
+  assert.strictEqual(ancient.late.length, 0, 'a month-old alarm was replayed');
+  assert.strictEqual(ancient.pending.length, 1, 'a month-old daily alarm was dropped entirely');
+
+  // A malformed repeat degrades to a one-off rather than taking the entry down.
+  const junk = rem.load([{ at: NOW + 1000, say: 'x', repeat: { kind: 'hourly' } }], NOW);
+  assert.deepStrictEqual(junk.pending, [{ at: NOW + 1000, say: 'x' }]);
 }
+
+// ===== recurring alarms: the language half =================================
+
+{
+  const { repeatOf, clockOf, spokenRepeat, match } = require('./skills');
+
+  assert.deepStrictEqual(clockOf('at 7'), { hour: 7, minute: 0 });
+  assert.deepStrictEqual(clockOf('at 9:30am'), { hour: 9, minute: 30 });
+  assert.deepStrictEqual(clockOf('at 6 pm'), { hour: 18, minute: 0 });
+  assert.deepStrictEqual(clockOf('at 12am'), { hour: 0, minute: 0 });
+  assert.deepStrictEqual(clockOf('at 12pm'), { hour: 12, minute: 0 });
+  assert.strictEqual(clockOf('at 25'), null);
+  assert.strictEqual(clockOf('tomorrow'), null);
+
+  assert.deepStrictEqual(repeatOf('every day at 7'), { kind: 'daily', hour: 7, minute: 0 });
+  assert.deepStrictEqual(repeatOf('every weekday at 9:15'), { kind: 'weekdays', hour: 9, minute: 15 });
+  assert.deepStrictEqual(repeatOf('every monday at 6pm'), { kind: 'weekly', day: 1, hour: 18, minute: 0 });
+  assert.deepStrictEqual(repeatOf('every sunday at 11'), { kind: 'weekly', day: 0, hour: 11, minute: 0 });
+  assert.deepStrictEqual(repeatOf('every 30 minutes'), { kind: 'interval', ms: 1_800_000 });
+
+  // No "every", no repeat - a one-off must not become a daily alarm.
+  assert.strictEqual(repeatOf('in 30 minutes'), null);
+  assert.strictEqual(repeatOf('at 7'), null);
+  assert.strictEqual(repeatOf('every so often'), null);
+
+  assert.strictEqual(spokenRepeat({ kind: 'daily', hour: 7, minute: 0 }), 'every day at 07:00');
+  assert.strictEqual(spokenRepeat({ kind: 'weekdays', hour: 9, minute: 5 }), 'every weekday at 09:05');
+  assert.strictEqual(spokenRepeat({ kind: 'weekly', day: 1, hour: 18, minute: 0 }), 'every monday at 18:00');
+  assert.strictEqual(spokenRepeat({ kind: 'interval', ms: 1_800_000 }), 'every 30 minutes');
+
+  // Through the whole skill: a recurring alarm carries a rule and no duration.
+  const alarm = match('wake me every weekday at 7');
+  assert.strictEqual(alarm.name, 'timer');
+  assert.deepStrictEqual(alarm.timer.repeat, { kind: 'weekdays', hour: 7, minute: 0 });
+  assert.strictEqual(alarm.timer.ms, undefined, 'a recurring alarm also carried a stopwatch');
+  assert.ok(alarm.say.includes('every weekday at 07:00'), `the time was not read back: ${alarm.say}`);
+
+  // A one-off still carries a duration and no rule.
+  const once = match('remind me to stretch in 20 minutes');
+  assert.strictEqual(once.timer.ms, 1_200_000);
+  assert.strictEqual(once.timer.repeat, undefined, 'a one-off timer became recurring');
+  assert.ok(once.timer.say.includes('stretch'), 'the reason was lost');
+
+  // The label stops at the timing, whichever form it takes.
+  assert.ok(match('remind me to call the bank every day at 9').timer.say.includes('call the bank'));
+  assert.ok(!match('remind me to call the bank every day at 9').timer.say.includes('every'),
+    'the repeat rule leaked into the reminder text');
+
+  // "every 30 minutes" contains a duration; it must not be read as "in 30 minutes".
+  const interval = match('remind me to drink water every 30 minutes');
+  assert.deepStrictEqual(interval.timer.repeat, { kind: 'interval', ms: 1_800_000 });
+
+  // Still not a skill without a timing word.
+  assert.strictEqual(match('how do I set a timer in JavaScript'), null);
+  assert.strictEqual(match('what happens every day at build time'), null);
+}
+
+// ===== weather: the one networked feature ==================================
+
+(async () => {
+  const wx = require('./weather');
+
+  const seen = [];
+  const fake = async (url) => {
+    seen.push(url);
+    if (url.includes('geocoding')) {
+      return { ok: true, json: async () => ({ results: [{ name: 'Abu Dhabi', latitude: 24.4539123, longitude: 54.3773438 }] }) };
+    }
+    return { ok: true, json: async () => ({ current: { temperature_2m: 41.2, weather_code: 0, is_day: 1 } }) };
+  };
+
+  const line = await wx.forecast('Abu Dhabi', { fetch: fake });
+  assert.ok(line.includes('41') && /clear/.test(line), `unreadable forecast: ${line}`);
+
+  // Two requests, both to the hardcoded hosts and nowhere else.
+  assert.strictEqual(seen.length, 2);
+  assert.ok(seen[0].startsWith(wx.GEO_HOST), `geocoding went to ${seen[0]}`);
+  assert.ok(seen[1].startsWith(wx.API_HOST), `forecast went to ${seen[1]}`);
+
+  // What is in those URLs is the whole privacy claim for this feature: a town
+  // name you typed, and coordinates rounded to about a kilometre. Nothing else.
+  assert.ok(seen[0].includes('name=Abu%20Dhabi'), `town not sent as typed: ${seen[0]}`);
+  assert.ok(seen[1].includes('latitude=24.45') && !seen[1].includes('24.4539'),
+    `coordinates were not rounded down: ${seen[1]}`);
+  for (const url of seen) {
+    assert.ok(!/key|token|api_key|uuid|client|device|user/i.test(url), `identifier in ${url}`);
+  }
+
+  // A town with punctuation still becomes one encoded query parameter rather
+  // than a second one.
+  seen.length = 0;
+  await wx.forecast("Stratford-upon-Avon", { fetch: fake });
+  assert.strictEqual((seen[0].match(/[?&]/g) || []).length, 4, `query was split: ${seen[0]}`);
+
+  // Failures say something a pet would say rather than throwing a stack trace
+  // into the bubble.
+  await assert.rejects(() => wx.forecast('', { fetch: fake }), /settings/);
+  await assert.rejects(
+    () => wx.forecast('Atlantis', { fetch: async () => ({ ok: true, json: async () => ({ results: [] }) }) }),
+    /cannot find/
+  );
+  await assert.rejects(
+    () => wx.forecast('Paris', { fetch: async () => ({ ok: false, status: 503 }) }),
+    /503/
+  );
+
+  assert.strictEqual(wx.cleanCity('  '), null);
+  assert.strictEqual(wx.cleanCity(null), null);
+})();
 
 // ===== ask (async, last) ===================================================
 

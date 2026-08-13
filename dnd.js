@@ -42,7 +42,15 @@ function isQuiet(state) {
  *
  * @returns {Promise<number>} one of the QUNS values above
  */
+// Windows owns this number. The override exists because a machine sitting in one
+// state all day can only ever demonstrate half the behaviour, and "the pet went
+// quiet" and "the pet is broken" look identical from outside. Same reasoning as
+// SCREENPET_MIC_CONFIDENCE: the knob is for the thing that cannot be arranged on
+// demand.
+const FORCED = Number(process.env.SCREENPET_QUNS);
+
 function state() {
+  if (Number.isInteger(FORCED)) return Promise.resolve(FORCED);
   return new Promise((resolve, reject) => {
     const ps = spawn(
       PWSH,

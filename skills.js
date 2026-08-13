@@ -14,6 +14,7 @@
 //   expr  - a face, when the default for the kind is wrong
 //   media - a media key for main to press (see KEYS in media.js)
 //   photo - true to ask the renderer for one camera frame
+//   weather - true if this needs the one networked feature, which main gates
 
 const HOUR = 3600000;
 
@@ -69,6 +70,70 @@ function spoken(ms) {
   return parts.join(' ') || '0 seconds';
 }
 
+// --- recurring alarms --------------------------------------------------------
+//
+// The language half only. What "every weekday at 9" means on a calendar - and
+// what it means across a daylight saving boundary - is reminders.js's problem.
+
+const DAYS = {
+  sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+  thursday: 4, friday: 5, saturday: 6,
+};
+
+const EVERY = /\b(?:every|each)\b|\bdaily\b/i;
+const CLOCK = /\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i;
+
+/**
+ * "at 7", "at 9:30am", "at 6 pm" -> { hour, minute }.
+ *
+ * A bare number is read on a 24 hour clock rather than guessed at: "at 7" is
+ * 07:00, and the pet says the time back so a wrong guess is visible immediately
+ * rather than at seven in the evening.
+ */
+function clockOf(text) {
+  const m = CLOCK.exec(text);
+  if (!m) return null;
+  let hour = Number(m[1]);
+  const minute = Number(m[2] || 0);
+  const half = (m[3] || '').toLowerCase();
+  if (half === 'pm' && hour < 12) hour += 12;
+  if (half === 'am' && hour === 12) hour = 0;
+  if (hour > 23 || minute > 59) return null;
+  return { hour, minute };
+}
+
+/** A repeat rule, or null if this is a one-off. */
+function repeatOf(text) {
+  if (!EVERY.test(text)) return null;
+  const clock = clockOf(text);
+
+  if (clock) {
+    if (/\bweek\s?days?\b/i.test(text)) return { kind: 'weekdays', ...clock };
+    for (const [name, day] of Object.entries(DAYS)) {
+      if (new RegExp(`\\b(?:every|each)\\s+${name}s?\\b`, 'i').test(text)) {
+        return { kind: 'weekly', day, ...clock };
+      }
+    }
+    return { kind: 'daily', ...clock };
+  }
+
+  // "every 30 minutes". No clock time, so it is an interval from now.
+  const ms = duration(text);
+  return ms ? { kind: 'interval', ms } : null;
+}
+
+const DAY_NAMES = Object.keys(DAYS);
+const two = (n) => String(n).padStart(2, '0');
+
+/** How the pet reads a repeat rule back, which is also how you catch it being wrong. */
+function spokenRepeat(repeat) {
+  if (repeat.kind === 'interval') return `every ${spoken(repeat.ms)}`;
+  const at = `${two(repeat.hour)}:${two(repeat.minute)}`;
+  if (repeat.kind === 'daily') return `every day at ${at}`;
+  if (repeat.kind === 'weekdays') return `every weekday at ${at}`;
+  return `every ${DAY_NAMES[repeat.day]} at ${at}`;
+}
+
 const pick = (list, rand) => list[Math.floor(rand() * list.length)];
 
 const BEATS = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
@@ -79,21 +144,31 @@ const SKILLS = [
     // Needs both a timing word and an actual duration. "how do I set a timer in
     // JavaScript" has the first and not the second, and falls through to the
     // model where it belongs.
-    match: (t) => /\b(timer|alarm|remind me|wake me|nudge me|ping me)\b/i.test(t) && duration(t),
-    run: (text, ctx) => {
-      const ms = duration(text);
+    match: (t) => /\b(timer|alarm|remind me|wake me|nudge me|ping me)\b/i.test(t)
+      && (duration(t) || repeatOf(t)),
+    run: (text) => {
+      // A repeat rule wins over a bare duration: "every 30 minutes" contains
+      // one, and it means something different from "in 30 minutes".
+      const repeat = repeatOf(text);
+      const ms = repeat ? null : duration(text);
       // "remind me to stretch in 20 minutes" - everything between the verb and
-      // the duration is what you actually wanted reminding about.
-      const label = (/\b(?:remind|wake|nudge|ping) me (?:to|about) (.+?)(?:\s+in\b|\s*$)/i
+      // the timing is what you actually wanted reminding about.
+      const label = (/\b(?:remind|wake|nudge|ping) me (?:to|about) (.+?)(?:\s+in\b|\s+(?:every|each)\b|\s+at\b|\s*$)/i
         .exec(text) || [])[1];
+      const what = label && label.trim();
+      const when = repeat ? spokenRepeat(repeat) : `${spoken(ms)} from now`;
+
       return {
-        say: label
-          ? `Okay! ${spoken(ms)} from now: ${label.trim()}`
-          : `Timer set. I will shout in ${spoken(ms)}`,
+        say: what
+          ? `Okay! ${when}: ${what}`
+          : `${repeat ? 'Alarm' : 'Timer'} set. I will shout ${repeat ? when : `in ${spoken(ms)}`}`,
         expr: 'proud',
         timer: {
-          ms,
-          say: label ? `time to ${label.trim()}!` : `that is ${spoken(ms)}. time is up!`,
+          // One of the two, never both: ms is a stopwatch, repeat is a calendar.
+          ...(repeat ? { repeat } : { ms }),
+          say: what
+            ? `time to ${what}!`
+            : repeat ? 'that is the alarm!' : `that is ${spoken(ms)}. time is up!`,
         },
       };
     },
@@ -208,10 +283,15 @@ const SKILLS = [
     // Saying so is a better answer than letting the model invent a forecast,
     // which is exactly what it does if this falls through.
     match: (t) => /\bweather\b|\bforecast\b|\bis it (?:going to )?rain/i.test(t),
+    // skills.js cannot see the settings, so it returns the request and lets main
+    // decide. With the setting off, main says the line below instead - which is
+    // still the honest answer, and still better than letting the model invent a
+    // forecast, which is exactly what it does if this falls through.
     run: () => ({
       say: 'I cannot see outside! I would have to ask a stranger on the internet, '
         + 'and tell them where you are',
       expr: 'curious',
+      weather: true,
     }),
   },
 ];
@@ -311,7 +391,7 @@ function match(text, ctx = {}) {
 }
 
 module.exports = {
-  match, duration, spoken,
+  match, duration, spoken, repeatOf, clockOf, spokenRepeat,
   SKILLS, MOVE_WORDS, MOVE_LINES, MOVE_EXPR, MEDIA_WORDS, MEDIA_LINES, PHOTO_WORDS,
   MAX_TIMER_MS, MAX_COMMAND_CHARS,
 };

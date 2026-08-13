@@ -16,10 +16,20 @@ contextBridge.exposeInMainWorld('pet', {
   // renderer reduces what the camera saw to one of three words before this
   // bridge, and this is the only thing that crosses it.
   presence: (event) => ipcRenderer.send('pet:presence', String(event)),
-  // The exception, and the only one: a photo you asked for by name. Main asks,
-  // the renderer answers with exactly one frame, and main writes it to disk.
+  // The two exceptions to "never a frame", both off unless you switch them on.
+  //
+  // A photo you asked for by name: main asks, the renderer answers with exactly
+  // one frame, and main writes it to disk.
   onPhoto: (fn) => ipcRenderer.on('pet:photo', () => fn()),
   photo: (dataUrl) => ipcRenderer.send('pet:photo-taken', dataUrl),
+  // A face check, at the moment somebody arrives: one frame, handed to Windows'
+  // own detector, which answers with a count and nothing else. Never written
+  // anywhere - see faces.js.
+  face: (dataUrl) => ipcRenderer.send('pet:face-check', dataUrl),
+  // "Dance" was asked for: open the microphone for this many milliseconds and
+  // move to whatever is playing. Nothing comes back the other way - the beat
+  // never crosses this bridge, because nothing on the far side needs it.
+  onDance: (fn) => ipcRenderer.on('pet:dance', (_e, ms) => fn(ms)),
   battery: (level) => ipcRenderer.send('pet:battery', level),
   chatOpen: (open) => ipcRenderer.send('pet:chat-open', !!open),
   ask: () => ipcRenderer.send('pet:ask'),

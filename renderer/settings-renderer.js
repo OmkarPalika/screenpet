@@ -9,6 +9,11 @@ const autostart = el('autostart');
 const voice = el('voice');
 const mic = el('mic');
 const camera = el('camera');
+const wakeBox = el('wake');
+const bop = el('bop');
+const faces = el('faces');
+const weather = el('weather');
+const city = el('city');
 const status = el('status');
 const saveBtn = el('save');
 
@@ -91,6 +96,17 @@ function showVision(visionModel) {
   hint.classList.toggle('warn', !visionModel);
 }
 
+// The main process refuses these combinations anyway; greying them out here is
+// so the reason is visible before you save rather than after a checkbox quietly
+// fails to stick.
+function gateDevices() {
+  for (const [box, need] of [[wakeBox, mic], [bop, mic], [faces, camera]]) {
+    box.disabled = !need.checked;
+    if (!need.checked) box.checked = false;
+  }
+  city.disabled = !weather.checked;
+}
+
 function validate() {
   const ok = ACCELERATOR.test(hotkeyInput.value.trim());
   hotkeyInput.classList.toggle('bad', !ok);
@@ -102,6 +118,8 @@ hotkeyInput.addEventListener('input', () => {
   validate();
   status.textContent = '';
 });
+
+for (const box of [mic, camera, weather]) box.addEventListener('change', gateDevices);
 
 saveBtn.addEventListener('click', async () => {
   if (!validate()) return;
@@ -115,6 +133,11 @@ saveBtn.addEventListener('click', async () => {
     voice: voice.checked,
     mic: mic.checked,
     camera: camera.checked,
+    wake: wakeBox.checked,
+    bop: bop.checked,
+    faces: faces.checked,
+    weather: weather.checked,
+    city: city.value.trim(),
     autostart: autostart.checked,
   });
   current = res.settings;
@@ -125,6 +148,12 @@ saveBtn.addEventListener('click', async () => {
   voice.checked = current.voice;
   camera.checked = current.camera;
   mic.checked = current.mic;
+  wakeBox.checked = current.wake;
+  bop.checked = current.bop;
+  faces.checked = current.faces;
+  weather.checked = current.weather;
+  city.value = current.city;
+  gateDevices();
   status.textContent = 'Saved.';
 });
 
@@ -156,6 +185,12 @@ el('close').addEventListener('click', () => window.config.close());
   voice.checked = current.voice;
   camera.checked = current.camera;
   mic.checked = current.mic;
+  wakeBox.checked = current.wake;
+  bop.checked = current.bop;
+  faces.checked = current.faces;
+  weather.checked = current.weather;
+  city.value = current.city;
+  gateDevices();
   autostart.checked = current.autostart;
   autostart.disabled = !data.packaged;
   el('autostart-hint').textContent = data.packaged
