@@ -9,6 +9,8 @@ const fs = require('fs');
 const { recognise } = require('./ocr');
 const { listen } = require('./speech');
 const media = require('./media');
+const dnd = require('./dnd');
+const reminders = require('./reminders');
 const { ask, askVision, chat, detectVisionModel, listModels, hasEnoughText } = require('./brain');
 const pets = require('./pet-state');
 const skills = require('./skills');
@@ -23,6 +25,12 @@ const PHOTO_DELAY_MS = 1500; // between "smile!" and the shutter
 // is decoded, so a renderer sending something absurd is refused rather than
 // buffered.
 const MAX_PHOTO_CHARS = 12 * 1024 * 1024;
+// How long anything the pet says keeps it on screen during quiet hours. Long
+// enough to read an answer, short enough that it goes away again on its own.
+const QUIET_SHOW_MS = 30000;
+// setTimeout wraps past this and fires immediately, which for a reminder means
+// shouting the moment you set it. Long timers are re-armed instead.
+const MAX_DELAY_MS = 2147483647;
 
 let win = null;
 let settingsWin = null;
@@ -87,14 +95,35 @@ function lockPermissions() {
 
 // ---- windows ----------------------------------------------------------------
 
-function createWindow() {
-  const { workArea } = screen.getPrimaryDisplay();
-
-  win = new BrowserWindow({
-    width: workArea.width,
-    height: STAGE_H,
+// The strip the pet stands on: the full width of one display's work area, along
+// the bottom of it. A function rather than a constant because there is more than
+// one display and the pet does not have to stay on the first one.
+function stageBounds(display) {
+  const { workArea } = display;
+  return {
     x: workArea.x,
     y: workArea.y + workArea.height - STAGE_H,
+    width: workArea.width,
+    height: STAGE_H,
+  };
+}
+
+function placeOn(display) {
+  if (win && !win.isDestroyed()) win.setBounds(stageBounds(display));
+}
+
+// Where you are looking, as far as anything here can tell. The cursor is a
+// better guess than "the primary display", which is only right for people with
+// one monitor.
+const cursorDisplay = () => screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+
+function createWindow() {
+  win = new BrowserWindow({
+    ...stageBounds(screen.getPrimaryDisplay()),
+    // Launching into a game or a presentation should not put a pet on the screen
+    // for even one frame. It still loads and still works; it is just not shown
+    // until Windows says the coast is clear.
+    show: !quiet,
     frame: false,
     transparent: true,
     resizable: false,
@@ -105,6 +134,10 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
 
+  hiddenByQuiet = quiet;
+  // Windows hands a frameless transparent window back a few pixels taller than
+  // it was asked for, which puts the strip over the taskbar. setBounds is exact.
+  win.setBounds(stageBounds(screen.getPrimaryDisplay()));
   win.setAlwaysOnTop(true, 'screen-saver');
   // The window spans the whole bottom strip but the pet is a small part of it.
   // forward:true keeps mousemove flowing so the renderer can tell us when the
@@ -130,8 +163,16 @@ function openSettings() {
 
 function togglePet() {
   if (!win || win.isDestroyed()) return createWindow();
-  if (win.isVisible()) win.hide();
-  else win.showInactive();
+  if (win.isVisible()) {
+    win.hide();
+    quietOverride = false;
+  } else {
+    win.showInactive();
+    // Asking for the pet during quiet hours outranks Windows, but only until the
+    // quiet spell ends - the next game gets to hide it again.
+    quietOverride = quiet;
+  }
+  hiddenByQuiet = false;
   refreshTray();
 }
 
@@ -141,6 +182,8 @@ function refreshTray() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Read screen now', click: answerScreen },
     { label: shown ? 'Hide pet' : 'Show pet', click: togglePet },
+    // Two monitors and the pet is on the wrong one is not worth a settings page.
+    { label: 'Move pet here', click: () => placeOn(cursorDisplay()) },
     // Muting belongs here rather than only in settings: the moment you want the
     // pet to stop talking is the moment a call starts, and opening a settings
     // window to find a checkbox is three seconds too many.
@@ -164,9 +207,55 @@ function createTray() {
   refreshTray();
 }
 
+// ---- quiet hours ------------------------------------------------------------
+
+// Windows already knows when you are in a game, presenting, or have Do Not
+// Disturb switched on, and it is the same question it asks itself before showing
+// a toast. While the answer is "not now" the pet stops speaking up on its own
+// and gets off the screen - it does not stop working. Anything you ask for still
+// answers, and answering brings it back for half a minute.
+let quiet = false;
+let hiddenByQuiet = false; // the pet was put away by this, not by you
+let quietOverride = false; // ...and then you asked for it back
+let showUntil = 0;
+
+function applyQuiet(now = Date.now()) {
+  if (!win || win.isDestroyed()) return;
+  const hide = quiet && !quietOverride && now >= showUntil;
+
+  if (hide && win.isVisible()) {
+    win.hide();
+    hiddenByQuiet = true;
+    refreshTray();
+  } else if (!hide && hiddenByQuiet) {
+    hiddenByQuiet = false;
+    win.showInactive();
+    refreshTray();
+  }
+}
+
+function pollQuiet() {
+  // Never rejects: a check that failed means carry on as normal, because the
+  // failure mode of guessing "quiet" is a pet that silently never comes back.
+  dnd.quiet().then((now) => {
+    if (now !== quiet) {
+      quiet = now;
+      if (!quiet) quietOverride = false; // the override covered one quiet spell
+    }
+    applyQuiet();
+  });
+}
+
 // ---- renderer messaging -----------------------------------------------------
 
 function send(channel, payload) {
+  // Unprompted talk is already stopped upstream in talk(), so a line reaching
+  // here during quiet hours is an answer to something you asked for - worth
+  // pulling the window back for.
+  if (channel === 'pet:say') {
+    showUntil = Date.now() + QUIET_SHOW_MS;
+    applyQuiet();
+  }
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
 }
 
@@ -187,6 +276,10 @@ function talk(kind, { event = null, text = null, tone = 'chat', move = null } = 
   // The smoke check exits on the first thing the pet says, and it is checking
   // the answer, not the small talk.
   if (process.env.SCREENPET_SMOKE) return;
+  // The whole point of the quiet check: this is the door everything the pet says
+  // off its own bat goes through, and none of it is worth interrupting a game or
+  // a presentation for.
+  if (quiet && !quietOverride) return;
   const said = text || pets.line(kind, lineIndex++, settings.pet);
   if (!said) return;
   send('pet:say', { text: said, kind: tone, expr: pets.expressionFor(event), move });
@@ -195,6 +288,12 @@ function talk(kind, { event = null, text = null, tone = 'chat', move = null } = 
 function tick() {
   const now = Date.now();
   const napping = asleep();
+
+  // Fire and forget, once per tick. ~750ms in a background PowerShell, so the
+  // pet notices a game starting within twenty seconds rather than instantly -
+  // which is the trade for not shipping a native module to poll it faster.
+  pollQuiet();
+  applyQuiet(now);
   state = pets.tick(state, now, { asleep: napping });
 
   if (wasAsleep && !napping) talk('woke', { event: 'wake' });
@@ -234,7 +333,10 @@ async function resolveVision() {
 }
 
 async function grabScreen() {
-  const display = screen.getPrimaryDisplay();
+  // The display the cursor is on, not the primary one. On two monitors the
+  // question is almost always about the screen you are working on, and reading
+  // the other one back is worse than useless - it is confidently wrong.
+  const display = cursorDisplay();
   const { width, height } = display.size;
   const scale = display.scaleFactor || 1;
 
@@ -301,16 +403,46 @@ let replies = 0;
 // until it says otherwise, and the skill answers honestly in that case.
 let battery = null;
 
-// Pending timers, in memory and on purpose. A reminder that survives a restart
-// needs a file on disk with your notes in it, and this app does not keep one.
-const timers = new Set();
+// Pending reminders, in memory and on disk. The disk half is why "remind me to
+// call the bank in an hour" survives a restart, and it is also why timers.json
+// is the one file here with your own words in it - capped and cleaned in
+// reminders.js, and deleted the moment it fires.
+const timers = new Map(); // timeout id -> { at, say }
 
-function startTimer({ ms, say }) {
+const saveTimers = () => writeJson('timers.json', [...timers.values()]);
+
+function ring(say, late = false) {
+  send('pet:say', {
+    text: late ? reminders.lateLine(say) : say,
+    kind: 'nag',
+    expr: pets.expressionFor(late ? 'curious' : 'ring'),
+    move: 'jump',
+  });
+}
+
+function startTimer({ ms, say }, at = Date.now() + ms) {
   const id = setTimeout(() => {
     timers.delete(id);
-    send('pet:say', { text: say, kind: 'nag', expr: pets.expressionFor('ring'), move: 'jump' });
-  }, ms);
-  timers.add(id);
+    // Anything past 24 days had to be clamped to get here; re-arm rather than
+    // shout early.
+    if (Date.now() < at) return startTimer({ ms: at - Date.now(), say }, at);
+    saveTimers();
+    ring(say);
+  }, Math.min(Math.max(ms, 0), MAX_DELAY_MS));
+
+  timers.set(id, { at, say });
+  saveTimers();
+}
+
+/** Reminders from a previous run: the ones still to come, and the ones missed. */
+function restoreTimers(now) {
+  const { late, pending } = reminders.load(readJson('timers.json'), now);
+  for (const item of pending) startTimer({ ms: item.at - now, say: item.say }, item.at);
+  saveTimers(); // whatever was dropped as malformed or stale goes now
+
+  // Staggered, because one bubble replaces the last: five at once would show you
+  // the fifth and nothing else.
+  late.forEach((item, i) => setTimeout(() => ring(item.say, true), 2500 + i * 5000));
 }
 
 /**
@@ -461,11 +593,27 @@ app.whenReady().then(async () => {
   // Before any window exists, so nothing can ask for anything in the gap.
   lockPermissions();
 
+  // Awaited exactly once, here, and polled in the background from then on. The
+  // 750ms is worth paying at launch: without it the greeting goes out before the
+  // first answer comes back, which is precisely the interruption this prevents.
+  quiet = await dnd.quiet();
+
   createWindow();
   createTray();
 
+  // A monitor unplugged with the pet standing on it leaves the window running
+  // somewhere that no longer exists. getDisplayMatching returns the nearest
+  // survivor, which also covers a display simply changing resolution.
+  const restage = () => {
+    if (win && !win.isDestroyed()) placeOn(screen.getDisplayMatching(win.getBounds()));
+  };
+  screen.on('display-removed', restage);
+  screen.on('display-added', restage);
+  screen.on('display-metrics-changed', restage);
+
   win.webContents.once('did-finish-load', () => {
     sendLook();
+    restoreTimers(Date.now());
     // Launching counts as small talk, otherwise a fresh pet greets you and then
     // immediately chatters because lastChatAt is still zero.
     state.lastChatAt = Date.now();
@@ -622,7 +770,8 @@ ipcMain.on('config:close', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
-  for (const id of timers) clearTimeout(id);
+  // The timeouts go; the file stays. That is the whole point of the file.
+  for (const id of timers.keys()) clearTimeout(id);
   clearTimeout(saveTimer);
   writeJson('pet.json', state);
 });

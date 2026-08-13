@@ -801,6 +801,68 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(merged.hotkey, cfg.DEFAULTS.hotkey, 'merge let a bad hotkey through');
 }
 
+// ===== quiet hours =========================================================
+
+{
+  const dnd = require('./dnd');
+
+  // The list is of talkative states, not quiet ones, so anything Windows adds in
+  // a future version is treated as "keep quiet". Getting this backwards means a
+  // pet that chatters through a presentation.
+  for (const state of [1, 2, 3, 4, 5, 6]) {
+    assert.strictEqual(dnd.isQuiet(state), true, `state ${state} was treated as a good time to talk`);
+  }
+  assert.strictEqual(dnd.isQuiet(7), false, 'the pet stays silent when nothing is in the way');
+  for (const unknown of [0, 8, 99, -1, NaN]) {
+    assert.strictEqual(dnd.isQuiet(unknown), true, `unknown state ${unknown} was treated as talkative`);
+  }
+}
+
+// ===== reminders ===========================================================
+
+{
+  const rem = require('./reminders');
+  const NOW = 1_000_000;
+
+  // Split on the clock, oldest first, so a queue of missed ones replays in order.
+  const { late, pending } = rem.load([
+    { at: NOW + 60_000, say: 'later' },
+    { at: NOW - 60_000, say: 'missed' },
+    { at: NOW - 10_000, say: 'missed second' },
+  ], NOW);
+  assert.deepStrictEqual(late.map((r) => r.say), ['missed', 'missed second']);
+  assert.deepStrictEqual(pending.map((r) => r.say), ['later']);
+
+  // A file that got mangled must not be able to schedule anything.
+  assert.deepStrictEqual(rem.load(null, NOW), { late: [], pending: [] });
+  assert.deepStrictEqual(rem.load('nonsense', NOW), { late: [], pending: [] });
+  assert.deepStrictEqual(rem.load({ at: NOW, say: 'x' }, NOW), { late: [], pending: [] });
+  assert.deepStrictEqual(
+    rem.load([null, 42, 'x', {}, { at: 'soon', say: 'x' }, { at: NOW + 1 }, { at: NOW + 1, say: '  ' }], NOW),
+    { late: [], pending: [] }
+  );
+
+  // Last week's reminder is not worth shouting about on Monday.
+  assert.strictEqual(rem.load([{ at: NOW - rem.MAX_LATE_MS - 1, say: 'ancient' }], NOW).late.length, 0);
+  assert.strictEqual(rem.load([{ at: NOW - rem.MAX_LATE_MS + 1, say: 'recent' }], NOW).late.length, 1);
+
+  // This text goes in a bubble and through a speech engine. Neither has any use
+  // for a newline, an escape, or a novel.
+  assert.strictEqual(rem.clean('call  the\u0007 bank\n now  '), 'call the bank now');
+  assert.strictEqual(rem.clean('   '), null);
+  assert.strictEqual(rem.clean(''), null);
+  assert.strictEqual(rem.clean(null), null);
+  assert.strictEqual(rem.clean(42), null);
+  assert.strictEqual(rem.clean('x'.repeat(5000)).length, rem.MAX_TEXT);
+
+  // A file with ten thousand reminders in it must not become ten thousand live
+  // timeouts on launch.
+  const many = Array.from({ length: 500 }, (_, i) => ({ at: NOW + i + 1, say: `r${i}` }));
+  assert.strictEqual(rem.load(many, NOW).pending.length, rem.MAX_PENDING);
+
+  assert.ok(rem.lateLine('stretch').includes('stretch'), 'the late line dropped the reminder');
+}
+
 // ===== ask (async, last) ===================================================
 
 (async () => {

@@ -264,7 +264,7 @@ exact, and identical every time:
 
 | Say | Get |
 | --- | --- |
-| `set a timer for 5 minutes`, `wake me in half an hour` | A timer. `remind me to stretch in 20 minutes` keeps the reason and says it back when it fires. |
+| `set a timer for 5 minutes`, `wake me in half an hour` | A timer, and it survives a restart. `remind me to stretch in 20 minutes` keeps the reason and says it back when it fires. |
 | `what time is it`, `what day is it` | The clock, from your machine. |
 | `battery?` | Level and whether it is charging. |
 | `flip a coin`, `roll a d20` | A result, and a spin while you get it. |
@@ -273,6 +273,18 @@ exact, and identical every time:
 | `next track`, `pause the music`, `turn it up`, `mute the sound` | The keyboard's media keys. Whatever is already playing obeys. |
 | `take a photo`, `say cheese` | One frame from the camera, into your Pictures folder. Needs the camera switched on. |
 | `what is the weather` | A refusal, with the reason. |
+
+**A reminder is the one thing here that writes down your words.** "Remind me to
+call the bank in an hour" has to survive a restart to be worth setting, and
+surviving a restart means a file: `timers.json`, beside your settings, holding
+the time and the sentence. It stays on your machine like everything else, it is
+capped at 20 entries and 200 characters, control characters are flattened before
+anything reaches a speech engine, and each line is deleted the moment it fires.
+Reminders that came due while the app was closed are said once on the next
+launch — unless they are more than two days old, at which point nobody wants to
+hear about them. Every bit of that validation is in
+[reminders.js](reminders.js), on the assumption that the file may have been
+hand-edited or corrupted.
 
 **Weather is matched deliberately in order to turn it down.** Every weather
 source is somebody else's server and it wants your location to be useful. Left
@@ -398,6 +410,59 @@ camera OFF   stream:false 0x0       "take a photo" -> my eyes are shut! switch t
                                     wrote nothing
 ```
 
+## Getting out of the way
+
+A desktop pet that talks over a game is not charming, it is a bug. Windows
+already tracks whether now is a good time to interrupt — it is the same question
+it asks itself before showing a toast — so the pet asks Windows rather than
+guessing:
+
+| `SHQueryUserNotificationState` says | The pet |
+| --- | --- |
+| a full screen app, a game, or presentation mode | goes quiet and gets off the screen |
+| Focus Assist / Do Not Disturb on | same |
+| the screen is locked or off | same |
+| nothing in the way | behaves normally |
+| something Windows adds in a future version | goes quiet — the list is of *talkative* states, so an unknown one keeps the pet silent rather than chattering |
+
+**Quiet means unprompted talk only.** Everything you ask for still answers, and
+answering brings the pet back for thirty seconds before it puts itself away
+again. Reminders still fire; you set those on purpose. Showing the pet from the
+tray while it is hiding overrides the whole thing until the quiet spell ends.
+
+Nothing about the foreground application comes back from that call — not its
+name, not its title, not its window. One integer describing the machine's mood,
+which is both all the pet needs and the least it could ask for.
+
+Measured on a machine genuinely in `QUNS_QUIET_TIME`, against the real
+`main.js`:
+
+```
+QUNS state    -> 5 (quiet=true)
+visible       -> false                       put itself away
+after asking  -> visible=true "Tails!"       answered, and came back to say it
+later         -> visible=false               and went away again on its own
+```
+
+## Two monitors
+
+The pet stands on one display's bottom strip. Which one is up to you: **Move pet
+here** in the tray menu moves it to whichever display the cursor is on.
+
+Reading the screen does not wait to be told. `Ctrl+Shift+Space` captures the
+display the **cursor** is on, not the primary one, because on two monitors the
+question is almost always about the screen you are working on — and reading the
+other one back is worse than useless, it is confidently wrong.
+
+Unplugging a monitor with the pet standing on it used to leave the window running
+somewhere that no longer existed. It now restages onto the nearest surviving
+display, which covers a resolution change for free:
+
+```
+shoved to      {"x":-9000,"y":-9000,"width":400,"height":300}
+restaged       {"x":0,"y":564,"width":1536,"height":300}   on a real display: true
+```
+
 ## Conversations
 
 Right-click → **Talk…** and type. No screenshot, no OCR: the model is told
@@ -417,6 +482,11 @@ for exactly as long as the box is open and handed straight back.
 State lives in `pet.json` in Electron's `userData` directory. It is validated on
 load, so a corrupted or hand-edited file degrades to a fresh pet instead of
 crashing.
+
+That directory is the whole of what this app writes: `pet.json`, `settings.json`,
+and `timers.json` if you have set a reminder. Every one of them is validated the
+same way on load, and none of them holds a transcript — conversation history is
+in memory and dies with the process.
 
 ## Settings
 
@@ -741,7 +811,20 @@ exits. The one path the other two cannot reach.
   two minutes, and a curtain moving reads as company. Real presence detection
   wants a face model and a model file to ship with it; this is thirty lines and
   answers the only question the pet asks.
-- **Timers do not survive a restart.** Deliberate — see "Skills".
+- **Reminders survive a restart by writing your words down.** One file, capped,
+  cleaned and deleted on firing — see "Skills". It is still a file with your
+  notes in it, which is why it is the only one of its kind here.
+- **The quiet check costs a process every twenty seconds.** ~750ms of background
+  PowerShell per poll, most of it startup and compiling the P/Invoke, so the pet
+  notices a game starting within twenty seconds rather than instantly. The
+  alternative is shipping a native module to poll it faster, which is a build
+  toolchain and a binary for something nobody will notice.
+- **Quiet is Windows' opinion, not a heuristic.** If you leave Focus Assist on
+  permanently, the pet stays quiet permanently, and that is the correct
+  behaviour rather than a bug. Show it from the tray to override.
+- **The pet is on one display at a time.** It does not follow the cursor, and
+  there is no second pet for the second monitor. Reading the screen does follow
+  the cursor; the pet itself moves when you tell it to.
 - **Music is blind and one-way.** A media key is a broadcast: the pet cannot say
   what is playing, cannot pick a song, and cannot tell you whether the key did
   anything, so its lines are written to be true either way. Each press spawns
