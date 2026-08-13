@@ -113,10 +113,11 @@
       </div>
     </div>
 
-    <!-- The camera pipeline, off screen and deliberately tiny. The video is
-         never shown and the canvas is 32x24 - see "the room" in renderer.js for
-         what is and is not done with the frames. -->
-    <video id="cam-video" width="160" height="120" muted playsinline hidden></video>
+    <!-- The camera pipeline, off screen. The video is never shown and the
+         canvas is 32x24 - see "the room" in renderer.js for what is and is not
+         done with the frames. The stream is 640x480 only so that a photo you
+         asked for is worth keeping; presence still reads the tiny canvas. -->
+    <video id="cam-video" width="640" height="480" muted playsinline hidden></video>
     <canvas id="cam-canvas" width="32" height="24" hidden></canvas>
 
     <script src="renderer.js"></script>

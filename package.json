@@ -24,7 +24,8 @@
     "productName": "screenpet",
     "asarUnpack": [
       "ocr.ps1",
-      "listen.ps1"
+      "listen.ps1",
+      "media.ps1"
     ],
     "files": [
       "main.js",
@@ -35,6 +36,8 @@
       "ocr.ps1",
       "speech.js",
       "listen.ps1",
+      "media.js",
+      "media.ps1",
       "pet-state.js",
       "settings.js",
       "icon.png",

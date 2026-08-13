@@ -12,6 +12,8 @@
 //   move  - a body movement to play (see MOVES in the renderer)
 //   timer - { ms, say } for main to fire later
 //   expr  - a face, when the default for the kind is wrong
+//   media - a media key for main to press (see KEYS in media.js)
+//   photo - true to ask the renderer for one camera frame
 
 const HOUR = 3600000;
 
@@ -173,6 +175,25 @@ const SKILLS = [
     },
   },
   {
+    name: 'music',
+    match: (t) => MEDIA_WORDS.some(([, re]) => re.test(t)),
+    run: (text, ctx) => {
+      const [key] = MEDIA_WORDS.find(([, re]) => re.test(text));
+      return { media: key, say: pick(MEDIA_LINES[key], ctx.rand), expr: 'grin' };
+    },
+  },
+  {
+    name: 'photo',
+    // The camera is off unless you turned it on, and main checks that before
+    // asking for a frame - a skill cannot see the settings and must not pretend.
+    match: (t) => PHOTO_WORDS.some((re) => re.test(t)),
+    run: (_t, ctx) => ({
+      say: pick(['Smile!', 'Say cheese!', 'Hold still…'], ctx.rand),
+      expr: 'grin',
+      photo: true,
+    }),
+  },
+  {
     name: 'move',
     match: (t) => MOVE_WORDS.some(([, re]) => re.test(t)),
     run: (text, ctx) => {
@@ -194,6 +215,51 @@ const SKILLS = [
     }),
   },
 ];
+
+// Music. The pet presses the keyboard's transport keys, so whatever is already
+// playing obeys - and nothing comes back. It cannot see a track name, an artist
+// or an app, which is why every line below is true whether or not anything was
+// listening. First pattern wins, so the phrases come before the bare words.
+//
+// The bare forms are here because "next" typed at a pet that just started a song
+// obviously means the song. The phrased forms are here because "skip the failing
+// tests" must not.
+//
+// Anchored at the end for the same reason the clock is: "what does the next
+// track index do" contains "next track" and is a question about code. A command
+// ends after the command, give or take a politeness.
+const TAIL = String.raw`\s*(?:a bit|a little|please|now|for me)*\s*[?!.]*$`;
+const cmd = (body) => new RegExp(body + TAIL, 'i');
+
+const MEDIA_WORDS = [
+  ['next', cmd(String.raw`\b(?:next|skip)(?:\s+(?:this|the))?\s+(?:track|song|tune)`)],
+  ['prev', cmd(String.raw`\b(?:previous|last|go back a)\s+(?:track|song|tune)`)],
+  ['stop', cmd(String.raw`\bstop\s+(?:the\s+)?(?:music|song|playback|audio)`)],
+  ['playpause', cmd(String.raw`\b(?:play|pause|resume|unpause)\s+(?:the\s+|my\s+)?(?:music|song|track|tune|audio|it)`)],
+  ['mute', cmd(String.raw`\bmute\s+(?:the\s+)?(?:music|sound|audio|volume|speakers?)`)],
+  ['volup', cmd(String.raw`\b(?:volume up|turn (?:it|the (?:volume|music|sound)) up|louder)`)],
+  ['voldown', cmd(String.raw`\b(?:volume down|turn (?:it|the (?:volume|music|sound)) down|quieter)`)],
+  ['next', /^(?:next|skip)[!.]*$/i],
+  ['prev', /^(?:previous|back)[!.]*$/i],
+  ['playpause', /^(?:play|pause|resume)[!.]*$/i],
+];
+
+// Anchored for the same reason: "take a photo of the receipt and email it" is a
+// task you are describing, not one the pet is being given.
+const PHOTO_WORDS = [
+  cmd(String.raw`\btake (?:a |my |one )?(?:photo|picture|selfie|snap)(?: of (?:me|us))?`),
+  cmd(String.raw`\b(?:say cheese|smile for the camera)`),
+];
+
+const MEDIA_LINES = {
+  playpause: ['*taps play*', '*presses the button*', 'there'],
+  next: ['*skips*', 'next one', 'not this one, then'],
+  prev: ['*rewinds*', 'again then', 'back one'],
+  stop: ['*stops the music*', 'quiet now'],
+  volup: ['*turns it up*', 'louder!'],
+  voldown: ['*turns it down*', 'shh'],
+  mute: ['*mutes it*', 'silence'],
+};
 
 // Movement commands. Order matters: the first pattern that matches wins, so the
 // specific ones come before the general.
@@ -246,6 +312,6 @@ function match(text, ctx = {}) {
 
 module.exports = {
   match, duration, spoken,
-  SKILLS, MOVE_WORDS, MOVE_LINES, MOVE_EXPR,
+  SKILLS, MOVE_WORDS, MOVE_LINES, MOVE_EXPR, MEDIA_WORDS, MEDIA_LINES, PHOTO_WORDS,
   MAX_TIMER_MS, MAX_COMMAND_CHARS,
 };

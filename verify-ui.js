@@ -25,7 +25,10 @@ process.on('unhandledRejection', (err) => {
 
 app.whenReady().then(async () => {
   const errors = [];
-  const ipc = { act: [], interactive: [], react: [], chat: [], chatOpen: [], ask: 0, listen: 0 };
+  const ipc = {
+    act: [], interactive: [], react: [], chat: [], chatOpen: [], photo: [], ask: 0, listen: 0,
+  };
+  ipcMain.on('pet:photo-taken', (_e, v) => ipc.photo.push(v));
   ipcMain.on('pet:listen', () => { ipc.listen += 1; });
   ipcMain.on('pet:act', (_e, name) => ipc.act.push(name));
   ipcMain.on('pet:interactive', (_e, v) => ipc.interactive.push(v));
@@ -525,6 +528,14 @@ app.whenReady().then(async () => {
               return { w: c.width, h: c.height }; })()`
   );
   check(canvas.w <= 64 && canvas.h <= 48, `camera canvas is ${canvas.w}x${canvas.h}, too big to be blind`);
+
+  // Asked for a photo with no camera open, the renderer still has to answer.
+  // Staying silent would leave main waiting forever and the pet would look like
+  // it had simply ignored you.
+  win.webContents.send('pet:photo');
+  await settle();
+  check(ipc.photo.length === 1, `a photo request got ${ipc.photo.length} replies`);
+  check(ipc.photo[0] == null, 'the renderer sent a frame with the camera shut');
 
   // --- contact sheets ------------------------------------------------------
   // Assertions above prove each face and each species changes something. These

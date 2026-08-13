@@ -8,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const { recognise } = require('./ocr');
 const { listen } = require('./speech');
+const media = require('./media');
 const { ask, askVision, chat, detectVisionModel, listModels, hasEnoughText } = require('./brain');
 const pets = require('./pet-state');
 const skills = require('./skills');
@@ -17,6 +18,11 @@ const STAGE_H = 300;
 const TICK_MS = 20000;
 const IDLE_SLEEP_S = 300; // system idle this long and the pet naps
 const VISION_TIMEOUT_MS = 240000; // vision on CPU is much slower than text
+const PHOTO_DELAY_MS = 1500; // between "smile!" and the shutter
+// A 640x480 JPEG is well under a megabyte; this is the ceiling before anything
+// is decoded, so a renderer sending something absurd is refused rather than
+// buffered.
+const MAX_PHOTO_CHARS = 12 * 1024 * 1024;
 
 let win = null;
 let settingsWin = null;
@@ -315,10 +321,31 @@ function startTimer({ ms, say }) {
 function runSkill(text) {
   const skill = skills.match(text, { now: new Date(), battery });
   if (!skill) return false;
+
+  // skills.js is pure and cannot see the settings, so the refusal lives here -
+  // and it replaces the line rather than following it, because "Smile!" followed
+  // by "actually I can't see" is a worse answer than just saying so.
+  if (skill.photo && !settings.camera) {
+    send('pet:say', {
+      text: 'my eyes are shut! switch the camera on in settings and ask me again',
+      kind: 'chat',
+      expr: 'curious',
+    });
+    return true;
+  }
+
   // Not through talk(): these are answers to something you asked for, and the
   // wording comes from skills.js rather than the line bank.
   send('pet:say', { text: skill.say, kind: 'chat', expr: skill.expr, move: skill.move });
   if (skill.timer) startTimer(skill.timer);
+  if (skill.media) {
+    media.press(skill.media).catch((err) => {
+      send('pet:say', { text: err.message, kind: 'error', expr: pets.expressionFor('error') });
+    });
+  }
+  // Long enough to look up and stop typing. The renderer takes the frame; only
+  // it has the camera, and only main can write a file.
+  if (skill.photo) setTimeout(() => send('pet:photo'), PHOTO_DELAY_MS);
   return true;
 }
 
@@ -524,6 +551,40 @@ ipcMain.on('pet:presence', (_e, event) => {
   if (!['arrived', 'left', 'blind'].includes(event)) return;
   if (busy) return; // do not talk over an answer you are waiting for
   talk(event, { event, move: event === 'arrived' ? 'jump' : null });
+});
+
+// The one time a frame crosses the bridge, and only because you asked for it by
+// name. It goes to your Pictures folder and nowhere else: no upload, no
+// thumbnail cache, no analysis. The filename is generated here rather than taken
+// from the renderer, so nothing it sends can pick a path.
+ipcMain.on('pet:photo-taken', (_e, dataUrl) => {
+  const usable = typeof dataUrl === 'string'
+    && dataUrl.startsWith('data:image/jpeg;base64,')
+    && dataUrl.length <= MAX_PHOTO_CHARS;
+
+  try {
+    const img = usable ? nativeImage.createFromDataURL(dataUrl) : null;
+    if (!img || img.isEmpty()) {
+      return send('pet:say', {
+        text: 'I could not see anything! is the camera covered?',
+        kind: 'chat',
+        expr: 'curious',
+      });
+    }
+    const dir = path.join(app.getPath('pictures'), 'screenpet');
+    fs.mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const name = `screenpet-${stamp}.jpg`;
+    fs.writeFileSync(path.join(dir, name), img.toJPEG(90));
+    send('pet:say', {
+      text: `*click* saved ${name} in your Pictures\\screenpet folder`,
+      kind: 'chat',
+      expr: 'proud',
+      move: 'jump',
+    });
+  } catch (err) {
+    send('pet:say', { text: err.message, kind: 'error', expr: pets.expressionFor('error') });
+  }
 });
 
 ipcMain.on('pet:battery', (_e, level) => {

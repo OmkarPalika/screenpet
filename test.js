@@ -429,6 +429,11 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     'explain how the timer in this code fires twice on mount',
     'why does my alarm clock app drift',
     'is this rock solid enough to ship',
+    'what does the next track index do',
+    'skip the failing tests for now',
+    'why does play() throw here',
+    'can you play devil\'s advocate',
+    'go back a step and explain',
   ]) {
     assert.strictEqual(name(question), null, `a skill hijacked: ${question}`);
   }
@@ -485,6 +490,40 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     }
   }
 
+  // --- music presses a key, and only ever a key it knows ---
+  const KEYS = require('./media').KEYS;
+  for (const [key, re] of skills.MEDIA_WORDS) {
+    assert.ok(KEYS[key], `music pattern maps to unknown key "${key}"`);
+    assert.ok(skills.MEDIA_LINES[key], `music key "${key}" has nothing to say`);
+    assert.ok(re.source.endsWith('$'), `music pattern for "${key}" is not anchored`);
+  }
+  // Every code is inside the range media.ps1 will actually press. The guard
+  // there is the real one; this catches a typo before it becomes a thrown
+  // PowerShell error in a speech bubble.
+  for (const [key, code] of Object.entries(KEYS)) {
+    assert.ok(code >= 0xad && code <= 0xb3, `${key} is outside the media key block`);
+  }
+  for (const [phrase, key] of Object.entries({
+    'next track': 'next', 'skip the song': 'next', 'skip': 'next',
+    'previous track': 'prev', 'back': 'prev',
+    'pause the music': 'playpause', 'play it': 'playpause', 'resume': 'playpause',
+    'stop the music': 'stop',
+    'turn it up a bit': 'volup', 'louder': 'volup', 'volume up please': 'volup',
+    'turn the volume down': 'voldown', 'quieter': 'voldown',
+    'mute the sound': 'mute',
+  })) {
+    const out = skills.match(phrase, ctx);
+    assert.strictEqual(out && out.name, 'music', `"${phrase}" did not reach the music skill`);
+    assert.strictEqual(out.media, key, `"${phrase}" pressed ${out.media}`);
+  }
+
+  // --- a photo is asked for, never volunteered ---
+  const photo = skills.match('take a photo', ctx);
+  assert.strictEqual(photo.name, 'photo');
+  assert.strictEqual(photo.photo, true);
+  assert.strictEqual(name('take a photo of the receipt and email it'), null,
+    'the photo skill fired on a sentence about photos');
+
   // --- weather is refused, not answered ---
   const weather = skills.match('what is the weather today', ctx);
   assert.strictEqual(weather.name, 'weather');
@@ -510,7 +549,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     const probe = {
       timer: 'set a timer for 5 minutes', time: 'what time is it', date: 'what day is it',
       battery: 'battery?', coin: 'flip a coin', dice: 'roll a dice', rps: 'rock',
-      move: 'dance', weather: 'weather?',
+      move: 'dance', weather: 'weather?', music: 'next track', photo: 'take a photo',
     }[skill.name];
     assert.ok(probe, `no probe for skill "${skill.name}"`);
     const out = skills.match(probe, ctx);
