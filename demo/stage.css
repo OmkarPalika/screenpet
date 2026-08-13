@@ -1,0 +1,84 @@
+/* Loaded after the real style.css to give the demo a desktop to sit on.
+   style.css keeps the body transparent because the real app is an overlay. */
+
+html, body {
+  background: #eef1f6;
+  overflow: hidden;
+}
+
+.page {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.card {
+  width: 100%;
+  max-width: 620px;
+  padding: 34px 38px 30px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 10px 34px rgb(30 40 60 / 0.13);
+}
+
+.eyebrow {
+  margin-bottom: 14px;
+  color: #7b8598;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.card h1:last-child { margin-bottom: 0; }
+
+.card h1 {
+  margin-bottom: 22px;
+  color: #1d2430;
+  font-size: 40px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.prompt-line {
+  padding-top: 16px;
+  border-top: 1.5px solid #e6ebf2;
+  color: #7b8598;
+  font-size: 19px;
+}
+
+/* ---- hotkey badge ---- */
+
+.badge {
+  position: absolute;
+  top: 26px;
+  left: 50%;
+  transform: translate(-50%, -14px);
+  padding: 9px 17px;
+  border-radius: 999px;
+  background: #1d2430;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.badge.on { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---- the pet, parked bottom right the way it sits on a real taskbar ---- */
+
+.pet-layer {
+  position: absolute;
+  right: 34px;
+  bottom: 14px;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.pet-layer[hidden] { display: none; }

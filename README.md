@@ -3,6 +3,8 @@
 A desktop pet that reads your screen and answers the question on it. Nothing
 leaves your machine.
 
+![screenpet reading a quiz question and answering it](demo/screenpet-demo.gif)
+
 Phase 3. The pet has a care loop, lives in the tray, has a settings window and
 four skins, uses a vision model when there is no text to read, and builds into a
 Windows installer.
@@ -173,6 +175,21 @@ see above. The remaining env vars are development knobs only:
 | `SCREENPET_SMOKE` | unset | Answer once, print, exit. |
 | `SCREENPET_MODEL` / `SCREENPET_OLLAMA` | — | Defaults for direct `brain.js` calls in tests. The app reads `settings.json`. |
 
+## Demo
+
+```bash
+npm run demo
+```
+
+Rebuilds `demo/screenpet-demo.gif` and a still for store listings.
+
+The recorder does not touch your actual screen — it renders a mock quiz page in
+its own window, so nothing personal ends up in the clip. Everything else is real:
+the pet, the bubble and the animations are the app's own stylesheet, and the
+answer comes from capturing that page, running it through Windows OCR and asking
+the local model, exactly as the app does. If the model is unreachable the
+recorder fails rather than writing a hard-coded answer.
+
 ## Build
 
 ```bash
@@ -276,6 +293,13 @@ exits. The one path the other two cannot reach.
   mood after the task makes it reply with nothing.
 - **A screen with both a diagram and plenty of text takes the text path**, so the
   diagram is not looked at. Pick a vision model explicitly if that is your case.
+- **Multiple choice is the weak spot.** `llama3.1:8b` gets the arithmetic right
+  consistently and then maps it to the wrong option letter often enough to
+  matter — in testing it answered `391` correctly and labelled it `D` in the same
+  breath. OCR reading a two-column option grid out of order makes it worse. Use a
+  larger model if you rely on the letter rather than the value.
+- **OCR misreads some glyphs.** `Question 4 of 10` comes back as `4 of IO`. It
+  has not affected an answer yet, but it is there in every capture.
 - **The pet hides for the capture**, which is a visible flicker.
 - **Wandering is a CSS transform, not a window move.** The window is a fixed
   full-width strip along the bottom of the primary display and the pet slides

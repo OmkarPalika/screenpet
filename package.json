@@ -10,12 +10,14 @@
     "test": "node test.js",
     "verify:ui": "electron verify-ui.js",
     "smoke": "set SCREENPET_SMOKE=1&& electron .",
+    "demo": "electron demo/record.js",
     "dist": "electron-builder",
     "pack": "electron-builder --dir"
   },
   "devDependencies": {
     "electron": "^43.4.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "gifenc": "^1.0.3"
   },
   "build": {
     "appId": "dev.screenpet.app",

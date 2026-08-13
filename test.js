@@ -41,6 +41,18 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(stripThinking('  plain answer  '), 'plain answer');
 }
 
+// --- stripEcho: models restate the question however firmly you tell them not to ---
+{
+  const { stripEcho } = require('./brain');
+  assert.strictEqual(stripEcho('What is 17 x 23?\n\nThe answer is 391.'), 'The answer is 391.');
+  assert.strictEqual(stripEcho('Is this a bug?'), 'Is this a bug?', 'ate a genuine question');
+  assert.strictEqual(stripEcho('The answer is 391.'), 'The answer is 391.');
+  // Multi-line answers that simply do not start with an echo are left alone.
+  assert.strictEqual(stripEcho('First line.\nSecond line.'), 'First line.\nSecond line.');
+  // A question followed by only whitespace is still the model asking something.
+  assert.strictEqual(stripEcho('Which one?\n\n   '), 'Which one?\n\n   ');
+}
+
 // --- cleanOcr ---
 {
   assert.strictEqual(cleanOcr('  a   b \n\n\n  c  '), 'a b\nc');
