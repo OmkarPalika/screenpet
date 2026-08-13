@@ -1,5 +1,5 @@
 node_modules/
-pet-preview.png
+pet-*.png
 dist/
 out/
 *.log

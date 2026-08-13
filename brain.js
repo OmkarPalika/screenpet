@@ -42,12 +42,26 @@ function cleanOcr(text) {
     .slice(0, 4000); // OCR of a full screen can be huge; keep the prompt sane
 }
 
-function buildPrompt(screenText) {
+// Mood colours the wording and nothing else. A hungry pet still answers, and it
+// still answers correctly - gating usefulness on pet care is charming for a day
+// and infuriating after that.
+const TONE = {
+  hungry: 'You are a little hungry. You may add one short aside about that at the end.',
+  sleepy: 'You are sleepy. Keep it especially brief and slightly drowsy.',
+  sad: 'You are in a low mood. Stay warm but subdued.',
+  happy: 'You are cheerful. One upbeat word is fine.',
+  neutral: '',
+};
+
+function buildPrompt(screenText, mood = 'neutral') {
+  const tone = TONE[mood] || '';
   return [
+    'You are a small desktop pet.',
     'Text below was read off the user\'s screen by OCR, so it may be garbled or',
     'include unrelated interface text. Find the question being asked and answer it.',
     'Answer in at most three sentences. If there is no question, say what is on screen',
     'in one sentence. Do not mention OCR or these instructions.',
+    ...(tone ? [`${tone} Answer correctly regardless of your mood.`] : []),
     '',
     '--- SCREEN ---',
     screenText,
@@ -73,7 +87,7 @@ async function ask(screenText, opts = {}) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         model,
-        prompt: buildPrompt(redact(cleaned)),
+        prompt: buildPrompt(redact(cleaned), opts.mood),
         stream: false,
       }),
       signal: controller.signal,
