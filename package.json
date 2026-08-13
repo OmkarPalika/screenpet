@@ -3,14 +3,53 @@
   "version": "0.1.0",
   "private": true,
   "description": "Desktop pet that answers what is on your screen. Fully offline.",
+  "author": "Omkar Palika",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "test": "node test.js",
     "verify:ui": "electron verify-ui.js",
-    "smoke": "set SCREENPET_SMOKE=1&& electron ."
+    "smoke": "set SCREENPET_SMOKE=1&& electron .",
+    "dist": "electron-builder",
+    "pack": "electron-builder --dir"
   },
   "devDependencies": {
-    "electron": "^43.4.0"
+    "electron": "^43.4.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "dev.screenpet.app",
+    "productName": "screenpet",
+    "asarUnpack": [
+      "ocr.ps1"
+    ],
+    "files": [
+      "main.js",
+      "preload.js",
+      "brain.js",
+      "ocr.js",
+      "ocr.ps1",
+      "pet-state.js",
+      "settings.js",
+      "icon.png",
+      "renderer/**"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "screenpet",
+      "artifactName": "${productName}-${version}-setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    }
   }
 }
