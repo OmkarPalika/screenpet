@@ -164,6 +164,20 @@ const LINES = {
   dragged: ['wheee', 'put me down gently', 'I liked it over there'],
 
   woke: ['oh, you are back', 'I was resting my eyes', 'hello again'],
+  // Going the other way. The pet used to nod off in silence and just look grey,
+  // which reads as the app having died rather than the pet having settled.
+  dozing: ['*yawn*', 'just resting my eyes', 'wake me if you need me', 'going quiet for a bit'],
+
+  // The microphone is open. A label, not a speech - it is on screen for as long
+  // as it takes you to say one sentence.
+  listening: ['I am all ears', '*ears up*', 'go on then', 'listening'],
+  // ...and nothing came back. Not an error: a room can just be quiet.
+  deaf: [
+    'I did not catch that',
+    'say again? my ears are small',
+    'nothing but silence out here',
+    'not a peep. try once more?',
+  ],
 
   // The pet says nice things about you, unprompted. Kept vague on purpose - it
   // cannot see what you are doing, and a compliment about work it has not seen
@@ -282,6 +296,15 @@ const EXPRESSIONS = {
   bashful: 'shy',
   nothing: 'giggle',
   milestone: 'joy',
+  doze: 'doze',
+  listen: 'listen',
+  // Heard the microphone open and got nothing back. A head tilt, not a failure.
+  curious: 'curious',
+  // Every other spoken reply, so a long conversation is not one fixed smile.
+  wink: 'wink',
+  // Something actually went wrong. Distinct from 'refuse', which is the pet
+  // declining - being too full is not the same as a crash.
+  error: 'oops',
   // The poke ladder below resolves to these.
   annoy: 'annoyed',
   rage: 'rage',

@@ -25,7 +25,8 @@ process.on('unhandledRejection', (err) => {
 
 app.whenReady().then(async () => {
   const errors = [];
-  const ipc = { act: [], interactive: [], react: [], chat: [], chatOpen: [], ask: 0 };
+  const ipc = { act: [], interactive: [], react: [], chat: [], chatOpen: [], ask: 0, listen: 0 };
+  ipcMain.on('pet:listen', () => { ipc.listen += 1; });
   ipcMain.on('pet:act', (_e, name) => ipc.act.push(name));
   ipcMain.on('pet:interactive', (_e, v) => ipc.interactive.push(v));
   ipcMain.on('pet:react', (_e, v) => ipc.react.push(v));
@@ -45,6 +46,14 @@ app.whenReady().then(async () => {
       backgroundThrottling: false,
     },
   });
+
+  // Every mouse event this file cares about is dispatched into the DOM on
+  // purpose. Left alive to the real pointer, a window that happens to open under
+  // the cursor fires mousemove, which fires express('smile'), which replaces
+  // whatever face was being checked - so the run failed on a different assertion
+  // each time depending on where the mouse was sitting. Synthetic events are
+  // unaffected by this; only the OS-delivered ones stop.
+  win.setIgnoreMouseEvents(true);
 
   win.webContents.on('console-message', (e) => {
     if (e.level === 'error') errors.push(e.message);
@@ -306,7 +315,10 @@ app.whenReady().then(async () => {
   win.webContents.send('pet:say', { text: 'grr', kind: 'chat', expr: 'rage' });
   await settle();
   check(
-    await js(`[...document.querySelectorAll('#fx .drop')].every((d) => '💢🔥'.includes(d.textContent))`),
+    // Every character rage can drop, across all of its sets - it picks one at
+    // random per burst, and naming only the first set made this pass or fail
+    // depending on the coin toss.
+    await js(`[...document.querySelectorAll('#fx .drop')].every((d) => '💢🔥⚡'.includes(d.textContent))`),
     'a new feeling left the old one still falling'
   );
 
@@ -411,6 +423,59 @@ app.whenReady().then(async () => {
     'chat box kept the last message in it'
   );
 
+  // --- voice ---------------------------------------------------------------
+  // The Listen entry only exists once the microphone is switched on. A menu item
+  // that is present but only tells you the feature is off is worse than no item.
+  win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', voice: false, mic: false });
+  await settle();
+  await js(`document.getElementById('pet').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))`);
+  await settle();
+  const listenShown = () =>
+    js(`getComputedStyle(document.querySelector('[data-listen]')).display !== 'none'`);
+  check(!(await listenShown()), 'Listen is offered while the microphone is switched off');
+
+  win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', voice: true, mic: true });
+  await settle();
+  check(await listenShown(), 'Listen never appears even with the microphone on');
+  await js(`document.querySelector('[data-listen]').click()`);
+  await settle();
+  check(ipc.listen === 1, `Listen sent ${ipc.listen} requests to main, wanted 1`);
+
+  // Every voice the pet may use has to be one this machine renders itself. Some
+  // platforms list network-rendered voices next to the installed ones and
+  // nothing but this flag tells them apart.
+  const voices = await js(
+    `speechSynthesis.getVoices().map((v) => ({ name: v.name, local: v.localService }))`
+  );
+  const speaking = () => js(`speechSynthesis.speaking || speechSynthesis.pending`);
+  if (voices.length) check(voices.some((v) => v.local), 'no local voice at all - the pet is mute');
+
+  // Muted is muted. Checked before the audible case, so a failure here cannot be
+  // masked by an utterance the next block queued.
+  win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', voice: false, mic: false });
+  win.webContents.send('pet:say', { text: 'this must stay silent', kind: 'chat', expr: 'smile' });
+  await settle();
+  check(!(await speaking()), 'the pet spoke out loud while muted');
+
+  if (voices.length) {
+    win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', voice: true, mic: false });
+    win.webContents.send('pet:say', { text: 'hi', kind: 'chat', expr: 'smile' });
+    await settle();
+    check(await speaking(), 'the pet stays silent with the voice switched on');
+    await js(`speechSynthesis.cancel()`);
+  }
+
+  // 'thinking' is a placeholder with an animated ellipsis after it, not a line
+  // to read out every time the model takes a moment.
+  win.webContents.send('pet:say', { text: 'thinking', kind: 'thinking' });
+  await settle();
+  check(!(await speaking()), 'the pet reads "thinking" out loud');
+  win.webContents.send('pet:say', { text: 'done', kind: 'answer', expr: 'smile' });
+  await settle();
+  await js(`speechSynthesis.cancel()`);
+  win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', voice: false, mic: false });
+  await settle();
+
   // --- contact sheets ------------------------------------------------------
   // Assertions above prove each face and each species changes something. These
   // are here so a human can see whether the something looks like a feeling, or
@@ -470,8 +535,9 @@ app.whenReady().then(async () => {
   const faces = [
     'blank', 'smile', 'grin', 'love', 'yum', 'giggle', 'oh', 'hmm', 'sulk', 'dizzy',
     'shy', 'proud', 'joy', 'annoyed', 'rage', 'cry',
+    'listen', 'curious', 'wink', 'doze', 'oops',
   ];
-  await sheet('pet-faces.png', [660, 500], `(source, box, clone) => {
+  await sheet('pet-faces.png', [660, 640], `(source, box, clone) => {
     box.style.display = 'flex';
     box.style.flexWrap = 'wrap';
     for (const f of ${JSON.stringify(faces)}) {
@@ -525,7 +591,7 @@ app.whenReady().then(async () => {
   });
 
   const sw = new BrowserWindow({
-    width: 460, height: 730, show: true, // must match openSettings() in main.js
+    width: 460, height: 980, show: true, // must match openSettings() in main.js
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       backgroundThrottling: false,

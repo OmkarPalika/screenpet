@@ -22,6 +22,13 @@ const DEFAULTS = {
   hotkey: 'CommandOrControl+Shift+Space',
   pet: 'blob',
   skin: 'butter',
+  // Reads its replies aloud through Windows' own voices. On by default - a pet
+  // you cannot hear is the feature not existing - and mutable from the tray,
+  // because the moment you need it off is the moment a call starts.
+  voice: true,
+  // The microphone is opt-in and stays that way. A desktop pet that starts
+  // listening because it shipped that way is not a pet, it is an incident.
+  mic: false,
   autostart: false,
   ollama: 'http://127.0.0.1:11434',
 };
@@ -60,6 +67,10 @@ function load(raw) {
     hotkey: validHotkey(s.hotkey) ? s.hotkey : DEFAULTS.hotkey,
     pet: PETS.includes(s.pet) ? s.pet : DEFAULTS.pet,
     skin: SKINS.includes(s.skin) ? s.skin : DEFAULTS.skin,
+    voice: typeof s.voice === 'boolean' ? s.voice : DEFAULTS.voice,
+    // Anything but a literal true leaves the microphone shut. A hand-edited
+    // "mic": "yes" must not be the thing that opens it.
+    mic: s.mic === true,
     autostart: typeof s.autostart === 'boolean' ? s.autostart : DEFAULTS.autostart,
     ollama: validEndpoint(s.ollama) ? s.ollama : DEFAULTS.ollama,
   };

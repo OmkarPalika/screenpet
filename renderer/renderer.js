@@ -57,6 +57,12 @@ const EMOJI = {
   rage:    [['💢', '🔥'], ['💢', '⚡']],
   cry:     [['💧', '💔'], ['💧', '🥺']],
   sulk:    [['💧'], ['🌧️']],
+  curious: [['❓'], ['❔', '💭'], ['💭']],
+  wink:    [['✨'], ['💫'], ['⭐']],
+  doze:    [['💤'], ['💤', '🌙']],
+  // 'listen' and 'oops' deliberately rain nothing. The microphone is open for
+  // several seconds and confetti the whole time would be a strobe; an error is
+  // not something to decorate.
 };
 
 const rand = (lo, hi) => lo + Math.random() * (hi - lo);
@@ -94,6 +100,54 @@ function express(name, ms = 2600) {
   exprTimer = setTimeout(() => { delete petEl.dataset.expr; }, ms);
 }
 
+// ---- speaking out loud ---------------------------------------------------
+// Windows' own voices, through the platform synthesiser. localService is the
+// filter that keeps this honest: a voice the platform would render over a
+// network is not eligible, whatever else is installed. Nothing said here is
+// uploaded, because nothing said here leaves SAPI.
+
+let voiceOn = false;
+let voice = null;
+let utter = null;
+
+function pickVoice() {
+  const local = speechSynthesis.getVoices().filter((v) => v.localService);
+  const lang = navigator.language.slice(0, 2);
+  voice = local.find((v) => v.lang.startsWith(lang)) || local[0] || null;
+}
+
+// getVoices() is empty until the platform has enumerated them, and how long that
+// takes is not defined anywhere.
+speechSynthesis.addEventListener('voiceschanged', pickVoice);
+pickVoice();
+
+/** Strip what reads badly out loud: emoji names, and stage directions. */
+const speakable = (text) =>
+  text.replace(/\p{Extended_Pictographic}/gu, '').replace(/\*/g, '').trim();
+
+function speak(text, kind) {
+  // Cancel unconditionally, even when muted - the toggle has to stop a line
+  // that is already halfway out.
+  speechSynthesis.cancel();
+  if (!voiceOn || !voice || kind === 'thinking') return;
+
+  const line = speakable(text);
+  if (!line) return;
+
+  const u = new SpeechSynthesisUtterance(line);
+  utter = u;
+  u.voice = voice;
+  u.rate = 1.05;
+  u.pitch = 1.4; // small creature, not a narrator
+  u.onstart = () => petEl.classList.add('is-talking');
+  // Only the current utterance may stop the mouth: cancel() settles the old one
+  // after the new one has already started, and it would clear the wrong class.
+  const done = () => { if (utter === u) petEl.classList.remove('is-talking'); };
+  u.onend = done;
+  u.onerror = done;
+  speechSynthesis.speak(u);
+}
+
 window.pet.onSay(({ text, kind, expr }) => {
   busy = kind === 'thinking';
   petEl.classList.toggle('is-thinking', busy);
@@ -101,10 +155,16 @@ window.pet.onSay(({ text, kind, expr }) => {
   if (busy) express('hmm', 600000);
   else express(expr || null, Math.min(20000, Math.max(2600, text.length * 55)));
   say(text, { kind, sticky: busy });
+  speak(text, kind);
 });
 
-// A bubble in the way is a bubble you want gone.
-bubble.addEventListener('click', () => { if (!busy) bubble.hidden = true; });
+// A bubble in the way is a bubble you want gone - and so is the sentence still
+// being read out of it.
+bubble.addEventListener('click', () => {
+  if (busy) return;
+  bubble.hidden = true;
+  speechSynthesis.cancel();
+});
 
 // ---- stats ---------------------------------------------------------------
 
@@ -210,6 +270,7 @@ menu.addEventListener('click', (e) => {
   menu.hidden = true;
   if (btn.dataset.act) window.pet.act(btn.dataset.act);
   else if (btn.hasAttribute('data-talk')) openChat(true);
+  else if (btn.hasAttribute('data-listen')) window.pet.listen();
   else if (btn.hasAttribute('data-ask')) window.pet.ask();
   else if (btn.hasAttribute('data-settings')) window.pet.settings();
   else if (btn.hasAttribute('data-quit')) window.pet.quit();
@@ -272,11 +333,17 @@ chatInput.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') openChat(false);
 });
 
-// Species and palette both hang off the root element: the shape rules in
-// pets.css are plain descendant selectors, so they work anywhere they are set.
-window.pet.onLook(({ pet, skin }) => {
+// How the pet looks and sounds. Species and palette hang off the root element:
+// the shape rules in pets.css are plain descendant selectors, so they work
+// anywhere they are set.
+window.pet.onLook(({ pet, skin, voice: on, mic }) => {
   document.documentElement.dataset.pet = pet;
   document.documentElement.dataset.skin = skin;
+  voiceOn = !!on;
+  if (!voiceOn) speechSynthesis.cancel();
+  // No microphone, no button. An entry that only tells you the feature is off
+  // is a worse answer than the entry not being there.
+  menu.querySelector('[data-listen]').hidden = !mic;
 });
 
 // ---- wandering -----------------------------------------------------------

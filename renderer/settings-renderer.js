@@ -6,6 +6,8 @@ const visionSel = el('vision');
 const hotkeyInput = el('hotkey');
 const skinsBox = el('skins');
 const autostart = el('autostart');
+const voice = el('voice');
+const mic = el('mic');
 const status = el('status');
 const saveBtn = el('save');
 
@@ -109,6 +111,8 @@ saveBtn.addEventListener('click', async () => {
     hotkey: hotkeyInput.value.trim(),
     pet: species,
     skin,
+    voice: voice.checked,
+    mic: mic.checked,
     autostart: autostart.checked,
   });
   current = res.settings;
@@ -116,6 +120,8 @@ saveBtn.addEventListener('click', async () => {
   // Reflect what was actually accepted - a rejected value silently reverting
   // would be worse than showing the user it did not stick.
   hotkeyInput.value = current.hotkey;
+  voice.checked = current.voice;
+  mic.checked = current.mic;
   status.textContent = 'Saved.';
 });
 
@@ -144,6 +150,8 @@ el('close').addEventListener('click', () => window.config.close());
   visionSel.value = current.vision;
 
   hotkeyInput.value = current.hotkey;
+  voice.checked = current.voice;
+  mic.checked = current.mic;
   autostart.checked = current.autostart;
   autostart.disabled = !data.packaged;
   el('autostart-hint').textContent = data.packaged

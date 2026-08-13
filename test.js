@@ -360,18 +360,72 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   }
   assert.ok(/🎉|🎊|🍾|🎆/.test(emoji), 'nothing ever celebrates');
 
+  // Speaking out loud is a class, not an expression, and has to stay that way:
+  // an expression would replace whatever face was already showing, and a raging
+  // pet that goes blank the moment it opens its mouth is not raging.
+  assert.ok(css.includes('.pet.is-talking'), 'nothing moves the mouth while the pet speaks');
+  assert.ok(
+    !Object.values(pets.EXPRESSIONS).includes('talking'),
+    'speaking became an expression and now overwrites the face it should sit on'
+  );
+
+  // Two faces that must NOT rain, for the same reason smile does not: the
+  // microphone is open for seconds at a time, and an error is not a party.
+  for (const quiet of ['listen', 'oops']) {
+    assert.ok(!new RegExp(`\\b${quiet}:`).test(emoji), `"${quiet}" rains, and it should not`);
+  }
+
   // The bow belongs to the cute half of the range only.
   const bow = css.slice(css.indexOf('.pet[data-expr="love"] .bow'), css.indexOf('@keyframes bow-on'));
-  for (const cute of ['love', 'shy', 'giggle', 'proud', 'joy']) {
+  for (const cute of ['love', 'shy', 'giggle', 'proud', 'joy', 'wink']) {
     assert.ok(bow.includes(`[data-expr="${cute}"] .bow`), `${cute} does not wear the bow`);
   }
-  for (const notCute of ['rage', 'cry', 'annoyed', 'sulk']) {
+  for (const notCute of ['rage', 'cry', 'annoyed', 'sulk', 'oops']) {
     assert.ok(!bow.includes(`[data-expr="${notCute}"] .bow`), `${notCute} should not wear a bow`);
   }
   assert.ok(
     require('fs').readFileSync('./renderer/pets.css', 'utf8').includes('.bow      { display: none; }'),
     'the bow is not hidden by default, so every pet wears one always'
   );
+}
+
+// ===== voice ===============================================================
+
+// The whole feature turns on one claim: neither direction of speech leaves the
+// machine. These are the two ways it could stop being true.
+{
+  const fs = require('fs');
+  const rjs = fs.readFileSync('./renderer/renderer.js', 'utf8');
+
+  // Chromium's SpeechRecognition posts audio to a Google endpoint. It is the
+  // obvious way to add dictation to an Electron app and it is the one thing
+  // this app may never do - hence a test rather than a comment.
+  for (const src of ['./renderer/renderer.js', './main.js', './speech.js', './preload.js']) {
+    assert.ok(
+      !/SpeechRecognition|SpeechGrammarList/.test(fs.readFileSync(src, 'utf8')),
+      `${src} uses the Web Speech recogniser, which uploads the audio`
+    );
+  }
+  // Listening is Windows' own on-device recogniser, driven the same way as OCR.
+  const ps1 = fs.readFileSync('./listen.ps1', 'utf8');
+  assert.ok(ps1.includes('System.Speech'), 'listen.ps1 does not use the on-device recogniser');
+  assert.ok(ps1.includes('DictationGrammar'), 'listen.ps1 recognises nothing you could say');
+
+  // Speaking picks from local voices only. Some platforms list network-rendered
+  // voices alongside the installed ones and they are indistinguishable but for
+  // this flag.
+  assert.ok(rjs.includes('localService'), 'the pet would speak through any voice, network ones included');
+
+  // Every new face has to be reachable and have something to say behind it.
+  for (const kind of ['dozing', 'listening', 'deaf']) {
+    assert.ok(pets.line(kind, 0), `"${kind}" has no lines`);
+  }
+  for (const event of ['doze', 'listen', 'curious', 'wink', 'error']) {
+    assert.ok(pets.expressionFor(event), `"${event}" resolves to no expression`);
+  }
+  // An error is not the pet turning you down - those are different faces on
+  // purpose, and collapsing them loses the distinction.
+  assert.notStrictEqual(pets.expressionFor('error'), pets.expressionFor('refuse'));
 }
 
 // --- the poke ladder ---
@@ -517,6 +571,17 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(cfg.load({ skin: 'chartreuse' }).skin, cfg.DEFAULTS.skin);
   assert.strictEqual(cfg.load({ skin: 'mint' }).skin, 'mint');
   assert.strictEqual(cfg.load({ autostart: 'yes' }).autostart, false);
+
+  // The microphone opens for a literal true and nothing else. A hand-edited
+  // "mic": "yes" or a 1 left over from some other config format must not be the
+  // thing that turns a desktop pet into a live microphone.
+  assert.strictEqual(cfg.DEFAULTS.mic, false, 'the microphone ships switched on');
+  for (const truthy of ['yes', 1, 'true', {}, [], 'on']) {
+    assert.strictEqual(cfg.load({ mic: truthy }).mic, false, `mic opened for ${JSON.stringify(truthy)}`);
+  }
+  assert.strictEqual(cfg.load({ mic: true }).mic, true);
+  assert.strictEqual(cfg.load({ voice: 'loud' }).voice, cfg.DEFAULTS.voice);
+  assert.strictEqual(cfg.load({ voice: false }).voice, false);
 
   // merge keeps what it is not told about, and still validates what it is.
   const merged = cfg.merge(cfg.load({ skin: 'mint' }), { model: 'x', hotkey: 'Ctrl+' });
