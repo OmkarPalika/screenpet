@@ -239,7 +239,15 @@ async function answerScreen() {
           mood, model: visionModel, endpoint: endpoint(), timeoutMs: VISION_TIMEOUT_MS,
         })
       : await ask(ocrText, { mood, model: settings.model, endpoint: endpoint() });
-    send('pet:say', { text: answer, kind: 'answer', expr: pets.expressionFor('answer') });
+
+    // Nothing to answer is not a failure. Said through the line bank rather than
+    // reported as one, and not through talk(), which the smoke check silences.
+    const said = answer || pets.line('nothing', lineIndex++, settings.pet);
+    send('pet:say', {
+      text: said,
+      kind: 'answer',
+      expr: pets.expressionFor(answer ? 'answer' : 'nothing'),
+    });
   } catch (err) {
     send('pet:say', { text: err.message, kind: 'error', expr: pets.expressionFor('refuse') });
   } finally {

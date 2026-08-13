@@ -178,6 +178,18 @@ const LINES = {
   // Said straight after a compliment, because giving one is embarrassing.
   bashful: ['...anyway', 'do not make it weird', 'forget I said anything', '*looks away*'],
 
+  // Nothing to answer. The pet used to report this as a failure - "I could not
+  // read any text on screen" - which is technically true and reads like a broken
+  // tool. It looked, there was no question, and that is fine.
+  nothing: [
+    'no question up there. just us then',
+    'I looked everywhere. no homework today',
+    'all clear! nothing to solve',
+    'nothing to answer, so I am just keeping you company',
+    'read the whole thing. no question in it',
+    'not a single question. suspicious',
+  ],
+
   // The poke ladder. Three separate banks because "stop" and "STOP" and
   // "*sniffles*" are three different feelings, not one with more exclamation marks.
   shyly: ['oh - hello', 'that is a lot of attention', '*hides*', 'you are very close'],
@@ -268,6 +280,7 @@ const EXPRESSIONS = {
   wake: 'oh',
   praise: 'proud',
   bashful: 'shy',
+  nothing: 'giggle',
   milestone: 'joy',
   // The poke ladder below resolves to these.
   annoy: 'annoyed',

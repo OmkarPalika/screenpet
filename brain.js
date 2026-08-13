@@ -48,6 +48,15 @@ function stripEcho(text) {
   return rest || text;
 }
 
+// Small models like to wrap a reply in quotation marks, and often open one they
+// never close. Either way the punctuation is the model narrating a line of
+// dialogue rather than the pet speaking, so it does not belong in the bubble.
+function unquote(text) {
+  const t = text.trim();
+  if (!t.startsWith('"') && !t.startsWith('“')) return t;
+  return t.replace(/^["“]\s*/, '').replace(/\s*["”]$/, '').trim();
+}
+
 function cleanOcr(text) {
   return text
     .split('\n')
@@ -70,17 +79,27 @@ const TONE = {
 
 function buildPrompt(screenText, mood = 'neutral') {
   const tone = TONE[mood] || '';
-  // Measured against llama3.1:8b on a fixed OCR string. The earlier wording -
-  // which opened by telling the model it was a desktop pet and allowed three
-  // sentences - produced 79-240 character replies that narrated the screen and
-  // talked about themselves. This produces 28-53 characters that answer.
+  // Measured, and measured again after the pet framing came back. An early
+  // version that opened "you are a desktop pet" and allowed three sentences
+  // produced 79-240 character replies that narrated the screen and talked about
+  // themselves; a bare instruction to answer produced 28-53 characters that
+  // answered but sounded like a search result. The wording below is the third
+  // pass: it re-introduces the pet, and pins the answer down explicitly so the
+  // warmth cannot eat it. "Say the answer plainly and completely" and the cap of
+  // one flourish are both load-bearing - drop either and it narrates again.
+  // Re-measure before editing; probe against the quiz and mix screens.
   return [
-    "The text below was captured from the user's screen by OCR. It may be garbled",
+    'You are a small friendly desktop pet, reading over the shoulder of the person',
+    'you live with.',
+    'The text below was captured from their screen by OCR. It may be garbled',
     'and may include unrelated interface text.',
-    'Find the question and answer it directly, in at most two sentences.',
-    'Do not restate the question, do not explain your reasoning, and do not describe',
-    'yourself or the screen. If there is genuinely no question, describe the screen',
-    'in one short sentence.',
+    'Find the question and answer it, in at most two short sentences.',
+    'Say the answer plainly and completely - never hide it, hint at it or make them',
+    'work for it - but say it warmly, the way a fond pet would. One small',
+    'affectionate flourish is welcome; more than one is too many.',
+    'Do not restate the question and do not explain your reasoning.',
+    'If there is genuinely no question, say one cheerful line about that instead.',
+    'Never say that you could not find a question or could not help.',
     ...(tone ? [`${tone} Answer correctly regardless of your mood.`] : []),
     '',
     '--- SCREEN ---',
@@ -128,7 +147,9 @@ function buildChatPrompt(message, { mood = 'neutral', history = [] } = {}) {
   const tone = TONE[mood] || '';
   return [
     PERSONA,
-    'Reply in at most two short sentences. Be warm and plain-spoken.',
+    'Reply in at most two short sentences. Be warm, fond and a little playful.',
+    'A small affectionate flourish is welcome - one, not three.',
+    'If they ask you something factual, still answer it properly.',
     'You cannot see their screen right now, so never claim to know what is on it.',
     ...(tone ? [tone] : []),
     '',
@@ -148,7 +169,9 @@ async function chat(message, opts = {}) {
   return generate({ model: opts.model || MODEL, prompt: buildChatPrompt(text, opts) }, opts);
 }
 
-const EMPTY_SCREEN = 'I could not read any text on screen.';
+// Nothing to answer is not an error, and it is not this file's job to have a
+// personality about it - ask() returns nothing and main.js picks a line.
+const EMPTY_SCREEN = '';
 
 // Below this many characters, the screen is probably a diagram, a photo or a
 // game rather than something to read - the case the vision tier exists for.
@@ -219,8 +242,10 @@ async function generate(body, opts = {}) {
     }
     if (!res.ok) throw new Error(`Ollama returned ${res.status}`);
     const data = await res.json();
-    const answer = stripEcho(stripThinking(String(data.response || '')));
-    return answer || 'I read the screen but came up blank.';
+    // Empty means empty. The pet's own voice lives in pet-state's line bank, so
+    // inventing a sentence here would put a second, blander personality in the
+    // one file that is meant to have none.
+    return unquote(stripEcho(stripThinking(String(data.response || ''))));
   } catch (err) {
     if (err.name === 'AbortError') return 'That took too long. Try a smaller model.';
     return `I cannot reach the local model. Is Ollama running?\n(${err.message})`;
@@ -305,7 +330,7 @@ async function listModels(opts = {}) {
 }
 
 module.exports = {
-  redact, stripThinking, stripEcho, cleanOcr, hasEnoughText,
+  redact, stripThinking, stripEcho, unquote, cleanOcr, hasEnoughText,
   buildPrompt, buildVisionPrompt, buildChatPrompt,
   ask, askVision, chat, detectVisionModel, listModels,
   MODEL, EMPTY_SCREEN, MIN_SCREEN_TEXT,
