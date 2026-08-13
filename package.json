@@ -25,7 +25,8 @@
     "asarUnpack": [
       "ocr.ps1",
       "listen.ps1",
-      "media.ps1"
+      "media.ps1",
+      "dnd.ps1"
     ],
     "files": [
       "main.js",
@@ -38,6 +39,9 @@
       "listen.ps1",
       "media.js",
       "media.ps1",
+      "dnd.js",
+      "dnd.ps1",
+      "reminders.js",
       "pet-state.js",
       "settings.js",
       "icon.png",
