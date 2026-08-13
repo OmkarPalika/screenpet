@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:"
+    />
+    <title>screenpet settings</title>
+    <link rel="stylesheet" href="settings.css" />
+  </head>
+  <body>
+    <h1>screenpet</h1>
+    <p class="sub">Everything stays on this machine.</p>
+
+    <label for="model">Model</label>
+    <select id="model"></select>
+    <p class="hint" id="model-hint">Used for reading text off the screen.</p>
+
+    <label for="vision">Diagrams and images</label>
+    <select id="vision">
+      <option value="auto">Auto — use a vision model if one is installed</option>
+      <option value="off">Off — always read text only</option>
+    </select>
+    <p class="hint" id="vision-hint"></p>
+
+    <label for="hotkey">Hotkey</label>
+    <input id="hotkey" type="text" spellcheck="false" />
+    <p class="hint">For example <code>CommandOrControl+Shift+Space</code>.</p>
+
+    <label for="skin">Skin</label>
+    <div class="skins" id="skins"></div>
+
+    <label class="check">
+      <input id="autostart" type="checkbox" />
+      <span>Start with Windows</span>
+    </label>
+    <p class="hint" id="autostart-hint"></p>
+
+    <div class="row">
+      <span class="status" id="status"></span>
+      <button id="close" class="ghost">Close</button>
+      <button id="save" class="primary">Save</button>
+    </div>
+
+    <script src="settings-renderer.js"></script>
+  </body>
+</html>

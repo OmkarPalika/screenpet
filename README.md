@@ -3,9 +3,8 @@
 A desktop pet that reads your screen and answers the question on it. Nothing
 leaves your machine.
 
-Phase 1. The pet now has a care loop — it gets hungry, bored and tired, naps when
-you walk away, wanders along the bottom of the screen, and remembers you between
-sessions.
+Phase 2. The pet has a care loop, lives in the tray, has a settings window and
+four skins, and will use a vision model for diagrams if you have one installed.
 
 ## The one rule
 
@@ -45,6 +44,55 @@ than that gets uninstalled.
 State lives in `pet.json` in Electron's `userData` directory. It is validated on
 load, so a corrupted or hand-edited file degrades to a fresh pet instead of
 crashing.
+
+## Settings
+
+Right-click the pet, or use the tray icon. The tray is also how you show, hide
+and quit it — the pet has no taskbar button by design.
+
+| Setting | Notes |
+| --- | --- |
+| Model | Picked from what Ollama actually has installed. |
+| Diagrams and images | `Auto` uses a vision model if one exists, `Off` forces text-only. |
+| Hotkey | Validated before saving; a malformed accelerator would crash the app on launch. |
+| Skin | Butter, mint, blossom or slate. |
+| Start with Windows | Packaged builds only — in development this would register `electron.exe`. |
+
+Settings live in `settings.json` next to `pet.json` in Electron's `userData`.
+Both are validated on load, so a corrupt or hand-edited file degrades to
+defaults rather than crashing.
+
+**The endpoint is locked to loopback.** `127.0.0.1`, `localhost` and `[::1]` are
+the only accepted hosts, and that is enforced in code rather than by convention.
+A remote endpoint would quietly turn the entire privacy claim into a lie, so it
+is not a supported configuration even if you hand-edit the file. There is a test
+for it.
+
+## Two tiers
+
+**Tier 1 — text, the default.** Windows OCR reads the screen and a text model
+answers. Runs on any machine, no GPU, no model download beyond the text model.
+Secrets are redacted before the text reaches the model.
+
+**Tier 2 — vision, if available.** If Ollama has a model that reports the
+`vision` capability, the screenshot itself is sent instead, which handles
+diagrams, geometry, charts and handwriting that OCR cannot see. Detection asks
+Ollama via `/api/show` rather than pattern-matching model names, so it does not
+go stale.
+
+To turn it on:
+
+```bash
+ollama pull moondream
+```
+
+Nothing else — `Auto` picks it up on next launch.
+
+One honest caveat: **an image cannot be redacted the way text can.** On the text
+path a password on screen is replaced with `[REDACTED]` before the model sees
+it. On the vision path the model receives the raw screenshot. It is still
+entirely local, but it is a wider exposure, and `Off` is there if you would
+rather not.
 
 ## How answering works
 
@@ -91,7 +139,7 @@ non-reasoning beats smaller and reasoning here.
 
 | Key | Does |
 | --- | --- |
-| `Ctrl+Shift+Space` | Read the screen and answer |
+| `Ctrl+Shift+Space` | Read the screen and answer (rebindable in Settings) |
 | `Ctrl+Shift+Q` | Quit |
 
 The window spans the bottom strip of the screen but stays click-through; the
@@ -101,12 +149,14 @@ you are doing.
 
 ## Config
 
-| Env var | Default |
-| --- | --- |
-| `SCREENPET_MODEL` | `llama3.1:8b` |
-| `SCREENPET_OLLAMA` | `http://127.0.0.1:11434` |
-| `SCREENPET_HOTKEY` | `CommandOrControl+Shift+Space` |
-| `SCREENPET_TIMEOUT_MS` | `120000` |
+Model, hotkey, skin, vision mode and autostart all live in the Settings window —
+see above. The remaining env vars are development knobs only:
+
+| Env var | Default | Does |
+| --- | --- | --- |
+| `SCREENPET_TIMEOUT_MS` | `120000` | Text-path timeout. Vision uses 240s. |
+| `SCREENPET_SMOKE` | unset | Answer once, print, exit. |
+| `SCREENPET_MODEL` / `SCREENPET_OLLAMA` | — | Defaults for direct `brain.js` calls in tests. The app reads `settings.json`. |
 
 ## Verify the privacy claim
 
@@ -132,9 +182,9 @@ of the model call. No framework.
 npm run verify:ui
 ```
 
-Drives the real UI over real IPC — speech, all five moods, stat bars, hover
-hit-testing, headpat, and every menu item — and fails on any console error.
-Writes `pet-preview.png`, `pet-hungry.png` and `pet-menu.png` to look at.
+Drives both real windows over real IPC — speech, all five moods, all four skins,
+stat bars, hover hit-testing, headpat, every menu item, and the whole settings
+form — and fails on any console error. Writes PNGs to look at.
 
 It earns its place. It has already caught three bugs that unit tests cannot see:
 a `const pet` in `renderer.js` colliding with the `contextBridge` global and
@@ -156,8 +206,11 @@ exits. The one path the other two cannot reach.
 - **Primary display only.** Multi-monitor picks the primary one.
 - **Whole screen, no region select.** More text than needed, so a busy screen
   makes for a worse prompt.
-- **Text only.** OCR cannot see diagrams, geometry or charts. That needs a vision
-  model, which is Phase 2 and GPU-gated.
+- **Text only until you install a vision model.** See "Two tiers" above. The
+  vision path is covered by unit tests against a stubbed Ollama, but has not been
+  run against a real vision model on this machine.
+- **First vision model wins.** Detection takes the first model reporting the
+  `vision` capability rather than ranking them by size or quality.
 - **The pet hides for the capture**, which is a visible flicker.
 - **Wandering is a CSS transform, not a window move.** The window is a fixed
   full-width strip along the bottom of the primary display and the pet slides

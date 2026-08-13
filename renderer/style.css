@@ -1,5 +1,12 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/* ---- skins: one palette swap, so moods stay filters rather than 4x5 rules ---- */
+
+:root                    { --body: #f2b45c; --ear: #e09c3e; --cheek: #f08a7a; }
+[data-skin="mint"]       { --body: #7fd1b0; --ear: #5fb896; --cheek: #ef9a8e; }
+[data-skin="blossom"]    { --body: #f3a3bd; --ear: #dd88a6; --cheek: #dd5f7f; }
+[data-skin="slate"]      { --body: #9aa8bd; --ear: #7d8b9f; --cheek: #e28a7a; }
+
 html, body {
   width: 100%;
   height: 100%;
@@ -118,11 +125,13 @@ html, body {
 
 .pet { position: relative; animation: bob 3.2s ease-in-out infinite; }
 
-.body   { fill: #f2b45c; }
-.ear    { fill: #e09c3e; }
+.pet svg { transition: filter 400ms ease; }
+
+.body   { fill: var(--body); }
+.ear    { fill: var(--ear); }
 .eye    { fill: #3a2c1e; }
 .glint  { fill: #fff; }
-.cheek  { fill: #f08a7a; opacity: 0.55; }
+.cheek  { fill: var(--cheek); opacity: 0.55; }
 .shadow { fill: #000; opacity: 0.16; }
 .mouth  { fill: none; stroke: #3a2c1e; stroke-width: 2.6; stroke-linecap: round; }
 .lids   { display: none; stroke: #3a2c1e; stroke-width: 2.6; stroke-linecap: round; }
@@ -141,10 +150,11 @@ html, body {
 
 /* ---- moods ---- */
 
-.pet[data-mood="hungry"] .body  { fill: #e3a54f; }
+/* Moods are filters, not fills, so they compose with any skin. */
+.pet[data-mood="hungry"] svg    { filter: saturate(0.8) brightness(0.96); }
 .pet[data-mood="hungry"] .cheek { opacity: 0.3; }
 
-.pet[data-mood="sad"] .body  { fill: #cfae86; }
+.pet[data-mood="sad"] svg    { filter: saturate(0.45) brightness(0.92); }
 .pet[data-mood="sad"] .cheek { opacity: 0.2; }
 .pet[data-mood="sad"] { animation-duration: 5s; }
 
@@ -154,7 +164,7 @@ html, body {
 /* Asleep: hide the eyes, show closed lids, slow everything down. */
 .pet[data-mood="sleepy"] .eyes  { display: none; }
 .pet[data-mood="sleepy"] .lids  { display: block; }
-.pet[data-mood="sleepy"] .body  { fill: #dcae68; }
+.pet[data-mood="sleepy"] svg    { filter: brightness(0.9); }
 .pet[data-mood="sleepy"] { animation-duration: 6s; }
 
 .pet.is-thinking { animation: bob 0.9s ease-in-out infinite; }
