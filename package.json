@@ -23,7 +23,8 @@
     "appId": "dev.screenpet.app",
     "productName": "screenpet",
     "asarUnpack": [
-      "ocr.ps1"
+      "ocr.ps1",
+      "listen.ps1"
     ],
     "files": [
       "main.js",
@@ -31,6 +32,8 @@
       "brain.js",
       "ocr.js",
       "ocr.ps1",
+      "speech.js",
+      "listen.ps1",
       "pet-state.js",
       "settings.js",
       "icon.png",

@@ -61,6 +61,21 @@
     </label>
     <p class="hint" id="autostart-hint"></p>
 
+    <label class="check">
+      <input id="voice" type="checkbox" />
+      <span>Speak replies out loud</span>
+    </label>
+    <p class="hint">Uses a voice already installed on Windows. Mute from the tray icon.</p>
+
+    <label class="check">
+      <input id="mic" type="checkbox" />
+      <span>Let me talk to it</span>
+    </label>
+    <p class="hint">
+      Adds <code>Listen…</code> to the pet's menu. Windows recognises the speech on this
+      machine; no audio is recorded, saved or sent anywhere.
+    </p>
+
     <div class="row">
       <span class="status" id="status"></span>
       <button id="close" class="ghost">Close</button>

@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('pet', {
   act: (name) => ipcRenderer.send('pet:act', name),
   react: (event) => ipcRenderer.send('pet:react', String(event)),
   chat: (text) => ipcRenderer.send('pet:chat', String(text)),
+  listen: () => ipcRenderer.send('pet:listen'),
   chatOpen: (open) => ipcRenderer.send('pet:chat-open', !!open),
   ask: () => ipcRenderer.send('pet:ask'),
   settings: () => ipcRenderer.send('pet:settings'),

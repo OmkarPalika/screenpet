@@ -7,6 +7,7 @@ const {
 const path = require('path');
 const fs = require('fs');
 const { recognise } = require('./ocr');
+const { listen } = require('./speech');
 const { ask, askVision, chat, detectVisionModel, listModels, hasEnoughText } = require('./brain');
 const pets = require('./pet-state');
 const config = require('./settings');
@@ -23,6 +24,7 @@ let state = null;
 let settings = null;
 let visionModel = null; // resolved model name, or null for the OCR path
 let busy = false;
+let listening = false; // the microphone is open - separate from busy, and rarer
 let lastPath = 'ocr'; // which tier actually answered, for the smoke check
 let lineIndex = 0;
 let chats = 0;
@@ -93,7 +95,7 @@ function openSettings() {
   if (settingsWin && !settingsWin.isDestroyed()) return settingsWin.focus();
   settingsWin = new BrowserWindow({
     width: 460,
-    height: 730,
+    height: 980,
     resizable: false,
     title: 'screenpet',
     icon: path.join(__dirname, 'icon.png'),
@@ -117,6 +119,15 @@ function refreshTray() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Read screen now', click: answerScreen },
     { label: shown ? 'Hide pet' : 'Show pet', click: togglePet },
+    // Muting belongs here rather than only in settings: the moment you want the
+    // pet to stop talking is the moment a call starts, and opening a settings
+    // window to find a checkbox is three seconds too many.
+    {
+      label: 'Mute voice',
+      type: 'checkbox',
+      checked: !settings.voice,
+      click: () => saveSettings({ voice: !settings.voice }),
+    },
     { type: 'separator' },
     { label: 'Settings…', click: openSettings },
     { type: 'separator' },
@@ -165,6 +176,9 @@ function tick() {
   state = pets.tick(state, now, { asleep: napping });
 
   if (wasAsleep && !napping) talk('woke', { event: 'wake' });
+  // Going under used to be silent, so the pet just turned grey and stopped
+  // answering - which reads as a crash rather than a nap.
+  if (!wasAsleep && napping) talk('dozing', { event: 'doze' });
   wasAsleep = napping;
 
   if (!busy && !napping) {
@@ -249,9 +263,69 @@ async function answerScreen() {
       expr: pets.expressionFor(answer ? 'answer' : 'nothing'),
     });
   } catch (err) {
-    send('pet:say', { text: err.message, kind: 'error', expr: pets.expressionFor('refuse') });
+    send('pet:say', { text: err.message, kind: 'error', expr: pets.expressionFor('error') });
   } finally {
     busy = false;
+  }
+}
+
+// ---- talking ----------------------------------------------------------------
+
+// How many replies this session, only so the face can alternate. A conversation
+// where every answer wears the same smile stops looking like a conversation.
+let replies = 0;
+
+async function replyTo(message) {
+  const text = String(message || '').trim();
+  if (!text || busy) return;
+  busy = true;
+  send('pet:say', { text: 'thinking', kind: 'thinking' });
+  try {
+    const reply = await chat(text, {
+      mood: pets.mood(state, { asleep: asleep() }),
+      history,
+      model: settings.model,
+      endpoint: endpoint(),
+    });
+    history.push({ you: text, pet: reply });
+    if (history.length > HISTORY_TURNS) history.shift();
+    talk(null, { text: reply, event: replies++ % 2 ? 'wink' : 'chat' });
+  } catch (err) {
+    send('pet:say', { text: err.message, kind: 'error', expr: pets.expressionFor('error') });
+  } finally {
+    busy = false;
+  }
+}
+
+/**
+ * Push to talk. The microphone opens when you ask it to and shuts as soon as
+ * you stop speaking - there is no wake word and no listening loop, because a
+ * pet that is always listening is a microphone with a face on it.
+ */
+async function listenAndReply() {
+  if (busy || listening || !settings.mic) return;
+  listening = true;
+  // Said directly rather than through talk(): the user needs to see that the
+  // microphone is open, and the smoke check silences talk().
+  send('pet:say', {
+    text: pets.line('listening', lineIndex++, settings.pet),
+    kind: 'chat',
+    expr: pets.expressionFor('listen'),
+  });
+  try {
+    const heard = await listen();
+    if (!heard) {
+      return send('pet:say', {
+        text: pets.line('deaf', lineIndex++, settings.pet),
+        kind: 'chat',
+        expr: pets.expressionFor('curious'),
+      });
+    }
+    await replyTo(heard);
+  } catch (err) {
+    send('pet:say', { text: err.message, kind: 'error', expr: pets.expressionFor('error') });
+  } finally {
+    listening = false;
   }
 }
 
@@ -275,11 +349,31 @@ function applyAutostart() {
   app.setLoginItemSettings({ openAtLogin: settings.autostart, path: process.execPath });
 }
 
+// How the pet looks and sounds. One message, because the renderer needs all of
+// it at the same moments: on load, and on every save.
+function sendLook() {
+  send('pet:look', {
+    pet: settings.pet,
+    skin: settings.skin,
+    voice: settings.voice,
+    mic: settings.mic,
+  });
+}
+
 async function applySettings() {
   applyHotkey();
   applyAutostart();
-  send('pet:look', { pet: settings.pet, skin: settings.skin });
+  sendLook();
+  refreshTray(); // the mute state is shown there
   visionModel = await resolveVision();
+}
+
+/** The one way settings change, wherever the change came from. */
+async function saveSettings(patch) {
+  settings = config.merge(settings, patch);
+  writeJson('settings.json', settings);
+  await applySettings();
+  return settings;
 }
 
 // ---- wiring -----------------------------------------------------------------
@@ -292,7 +386,7 @@ app.whenReady().then(async () => {
   createTray();
 
   win.webContents.once('did-finish-load', () => {
-    send('pet:look', { pet: settings.pet, skin: settings.skin });
+    sendLook();
     // Launching counts as small talk, otherwise a fresh pet greets you and then
     // immediately chatters because lastChatAt is still zero.
     state.lastChatAt = Date.now();
@@ -369,25 +463,8 @@ ipcMain.on('pet:chat-open', (_e, open) => {
   if (open) win.focus();
 });
 
-ipcMain.on('pet:chat', async (_e, text) => {
-  const message = String(text || '').trim();
-  if (!message || busy) return;
-  busy = true;
-  send('pet:say', { text: 'thinking', kind: 'thinking' });
-  try {
-    const reply = await chat(message, {
-      mood: pets.mood(state, { asleep: asleep() }),
-      history,
-      model: settings.model,
-      endpoint: endpoint(),
-    });
-    history.push({ you: message, pet: reply });
-    if (history.length > HISTORY_TURNS) history.shift();
-    talk(null, { text: reply, event: 'chat' });
-  } finally {
-    busy = false;
-  }
-});
+ipcMain.on('pet:chat', (_e, text) => replyTo(text));
+ipcMain.on('pet:listen', listenAndReply);
 
 // The renderer owns hit-testing because only it knows where the pet is standing.
 ipcMain.on('pet:interactive', (_e, interactive) => {
@@ -407,12 +484,10 @@ ipcMain.handle('config:get', async () => ({
   packaged: app.isPackaged,
 }));
 
-ipcMain.handle('config:save', async (_e, patch) => {
-  settings = config.merge(settings, patch);
-  writeJson('settings.json', settings);
-  await applySettings();
-  return { settings, visionModel };
-});
+ipcMain.handle('config:save', async (_e, patch) => ({
+  settings: await saveSettings(patch),
+  visionModel,
+}));
 
 ipcMain.on('config:close', () => {
   if (settingsWin && !settingsWin.isDestroyed()) settingsWin.close();

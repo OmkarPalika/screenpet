@@ -122,6 +122,7 @@ happened, laid over the top and cleared after a couple of seconds.
 
 `smile` `grin` `love` `yum` `giggle` `oh` `hmm` `sulk` `dizzy`
 `shy` `proud` `joy` `annoyed` `rage` `cry`
+`listen` `curious` `wink` `doze` `oops`
 
 They are CSS, not sprites — the mouth is a `d: path(...)` swap and the extras
 (brows, tongue, tears, sweat, sparkle, anger mark, `z`s) are `display` toggles.
@@ -134,9 +135,17 @@ up.
 
 **The bow** is an accessory on the shared rig, not part of any body, so all six
 species wear it with no per-species rules. It appears for the cute half of the
-range only — `love` `shy` `giggle` `proud` `joy` — and a test asserts `rage` and
-`cry` never get one. A pet in tears wearing a party bow is a different feeling
-entirely.
+range only — `love` `shy` `giggle` `proud` `joy` `wink` — and a test asserts
+`rage`, `cry` and `oops` never get one. A pet in tears wearing a party bow is a
+different feeling entirely.
+
+Every face is reachable from something that actually happens, which is why there
+are twenty-one and not fifty: `listen` while the microphone is open, `curious`
+when it heard nothing back, `wink` on every other spoken reply so a long
+conversation is not one fixed smile, `doze` when the machine goes idle — it used
+to nod off silently and just turn grey, which reads as a crash rather than a nap
+— and `oops` for a genuine failure, which is a different thing from `sulk`. The
+pet declining to eat because it is full is not an error.
 
 **Emoji rain.** Each feeling drops a handful of emoji in from above the head, and
 each has **several sets picked at random per burst** — a headpat is 💕💖💗 or
@@ -197,6 +206,56 @@ Small models like to wrap a reply in quotation marks, often opening one they
 never close. `unquote` strips that: it is the model narrating a line of dialogue,
 not the pet speaking. Quotes inside an answer survive.
 
+## Out loud, and back
+
+Both directions of speech are on-device, and both are the platform's own — no
+model files, no downloads, nothing new to trust.
+
+**It speaks** through Windows' installed voices, via the platform synthesiser.
+The only voices it will use are ones flagged `localService`: some platforms list
+network-rendered voices next to the installed ones and nothing else tells them
+apart. Emoji and `*stage directions*` are stripped before speaking, because
+"money with wings" read aloud is not the joke. Mute lives in the tray, one click,
+because the moment you want it quiet is the moment a call starts.
+
+The mouth moving while it talks is a **class**, not an expression, and that
+distinction is load-bearing: an expression would replace whatever face the pet
+was already making, and a raging pet that goes blank the moment it opens its
+mouth is not raging. There is a test pinning it.
+
+**It listens** through `System.Speech`, driven from `listen.ps1` exactly the way
+OCR is driven from `ocr.ps1`. Push to talk: `Listen…` opens the microphone, one
+phrase is recognised, and it shuts. No wake word and no listening loop — a pet
+that is always listening is a microphone with a face on it.
+
+Chromium's `SpeechRecognition` is the obvious way to add dictation to an Electron
+app, and it uploads the audio to Google. **That is the one thing this app may
+never do**, so there is a test asserting the string appears in none of the source
+files rather than a comment asking nicely.
+
+**Noise is the real failure mode, not silence.** Dictation does not return
+"nothing" when nobody is speaking — it returns a fluent sentence with a terrible
+score behind it. Measured on this machine, three seconds of an ordinary room:
+
+```
+heard:      "Note to the audit got a"
+confidence: 0.029
+```
+
+So a result under `0.30` is discarded and the pet says it did not catch that. The
+threshold clears the measured noise floor by an order of magnitude, but it has
+**not** been calibrated against real speech on a quiet headset — rooms and
+microphones differ. If a perfectly clear sentence keeps coming back as "I did not
+catch that", lower it:
+
+```bash
+set SCREENPET_MIC_CONFIDENCE=0.15
+```
+
+Accuracy is SAPI's, which is fair for plain sentences and poor for technical
+words. Swapping in whisper.cpp would fix that at the cost of a binary and a model
+download; the trade is noted in `listen.ps1` rather than taken.
+
 ## Conversations
 
 Right-click → **Talk…** and type. No screenshot, no OCR: the model is told
@@ -229,6 +288,8 @@ and quit it — the pet has no taskbar button by design.
 | Hotkey | Validated before saving; a malformed accelerator would crash the app on launch. |
 | Pet | Blob, cat, pup, bun, bird or dragon. Previews are the real thing. |
 | Skin | Butter, mint, blossom or slate. Applies to whichever pet you picked. |
+| Speak replies out loud | On by default. Mute from the tray without opening this window. |
+| Let me talk to it | Off by default. Adds `Listen…` to the pet's menu. |
 | Start with Windows | Packaged builds only — in development this would register `electron.exe`. |
 
 Settings live in `settings.json` next to `pet.json` in Electron's `userData`.
@@ -310,6 +371,16 @@ the whole app behind 8GB of VRAM.
 - Windows 10/11
 - [Ollama](https://ollama.com) running locally
 - Node 18+
+- A microphone and a Windows speech recogniser, **only** if you switch on
+  `Let me talk to it`. Check what you have:
+
+  ```powershell
+  Add-Type -AssemblyName System.Speech
+  [System.Speech.Recognition.SpeechRecognitionEngine]::InstalledRecognizers()
+  ```
+
+  An empty list means no recogniser is installed and the pet says so rather than
+  failing silently. Add one under Settings ▸ Time & language ▸ Speech.
 
 ## Run
 
@@ -518,6 +589,18 @@ exits. The one path the other two cannot reach.
 
 ## Known ceilings
 
+- **The confidence gate is calibrated against noise, not against speech.** 0.30
+  clears the measured floor (0.029) by an order of magnitude, but nobody has
+  spoken a clear sentence into it on a quiet headset and checked what score comes
+  back. It could be rejecting real speech. `SCREENPET_MIC_CONFIDENCE` is the knob.
+- **Dictation accuracy is SAPI's**, which means plain sentences are fine and
+  anything technical is not. "deserialise" is not coming back intact.
+- **The mouth starts moving about a second after the bubble appears**, because
+  `speechSynthesis.speaking` goes true when the utterance is queued and `onstart`
+  fires when audio actually begins. Measured, and left alone: the mouth should
+  move when sound comes out, not when the text appears.
+- **Speaking is not interruptible by voice.** The only ways to stop a line are
+  clicking the bubble and the tray mute.
 - **Primary display only.** Multi-monitor picks the primary one.
 - **Whole screen, no region select.** More text than needed, so a busy screen
   makes for a worse prompt.
