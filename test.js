@@ -82,6 +82,22 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(unquote(''), '');
 }
 
+// --- stripMarkup: the bubble is a text node, so markdown arrives as clutter ---
+{
+  const { stripMarkup } = require('./brain');
+  assert.strictEqual(stripMarkup('The answer is **391**'), 'The answer is 391');
+  assert.strictEqual(stripMarkup('__really__ sure'), 'really sure');
+  assert.strictEqual(stripMarkup('## Heading\nbody'), 'Heading\nbody');
+  assert.strictEqual(stripMarkup('- one\n- two'), 'one\ntwo');
+
+  // A lone asterisk is the pet doing something, not emphasis, and has to
+  // survive - stripping it would turn "*pounces*" into "pounces".
+  assert.strictEqual(stripMarkup('17 times 23 is... *pounces* ...391!'),
+    '17 times 23 is... *pounces* ...391!');
+  // Multiplication is not emphasis either.
+  assert.strictEqual(stripMarkup('3 * 4 * 5 = 60'), '3 * 4 * 5 = 60');
+}
+
 // --- stripThinking ---
 {
   assert.strictEqual(stripThinking('<think>hmm 17*23</think>The answer is 391.'), 'The answer is 391.');

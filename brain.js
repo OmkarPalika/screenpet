@@ -57,6 +57,19 @@ function unquote(text) {
   return t.replace(/^["“]\s*/, '').replace(/\s*["”]$/, '').trim();
 }
 
+// The bubble is a plain text node, so markdown arrives as visible punctuation:
+// the pet saying "the answer is **391**" with the asterisks in it. Only the
+// paired emphasis markers go - a lone asterisk is left alone, because
+// "*pounces*" is the pet doing something and reads correctly as it is.
+function stripMarkup(text) {
+  return text
+    .replace(/\*\*(\S(?:[\s\S]*?\S)?)\*\*/g, '$1')
+    .replace(/__(\S(?:[\s\S]*?\S)?)__/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*]\s+/gm, '') // the bubble is two lines, not a bullet list
+    .trim();
+}
+
 function cleanOcr(text) {
   return text
     .split('\n')
@@ -245,7 +258,7 @@ async function generate(body, opts = {}) {
     // Empty means empty. The pet's own voice lives in pet-state's line bank, so
     // inventing a sentence here would put a second, blander personality in the
     // one file that is meant to have none.
-    return unquote(stripEcho(stripThinking(String(data.response || ''))));
+    return stripMarkup(unquote(stripEcho(stripThinking(String(data.response || '')))));
   } catch (err) {
     if (err.name === 'AbortError') return 'That took too long. Try a smaller model.';
     return `I cannot reach the local model. Is Ollama running?\n(${err.message})`;
@@ -330,7 +343,7 @@ async function listModels(opts = {}) {
 }
 
 module.exports = {
-  redact, stripThinking, stripEcho, unquote, cleanOcr, hasEnoughText,
+  redact, stripThinking, stripEcho, unquote, stripMarkup, cleanOcr, hasEnoughText,
   buildPrompt, buildVisionPrompt, buildChatPrompt,
   ask, askVision, chat, detectVisionModel, listModels,
   MODEL, EMPTY_SCREEN, MIN_SCREEN_TEXT,

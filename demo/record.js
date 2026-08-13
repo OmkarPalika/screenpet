@@ -80,9 +80,19 @@ app.whenReady().then(async () => {
     for (let i = 0; i < count; i++) await frame(minDelay);
   }
 
-  await beat(5);                                // idle: bobbing, blinking
-  await js('demo.quirk()');
-  await beat(22);                               // stretch, tail flick, glance
+  await beat(4);                                // idle: bobbing, blinking
+  // Body first. Before it is asked anything, the pet walks across and has a
+  // look around - which is the fastest way to say this is a creature and not a
+  // notification with a face drawn on it.
+  await js('demo.walkTo(-150)');
+  await beat(15);                               // step cycle, moving
+  await js(`demo.move('peek')`);
+  await beat(13);                               // looks left, holds, looks right
+  // And back to its corner before it is asked anything. Not padding: the bubble
+  // hangs off the pet, so answering from the middle of the stage puts the reply
+  // straight over the question it is answering.
+  await js('demo.walkTo(0, 1500)');
+  await beat(11);
   await js('demo.badge(true)');
   await beat(6);                                // hotkey pressed
   await js(`demo.thinking(); demo.expr('hmm')`);
@@ -96,15 +106,20 @@ app.whenReady().then(async () => {
   frames.push({ ...frames.at(-1), delay: 1600 }); // hold so it can be read
 
   await js(`demo.headpat(); demo.expr('love')`);
-  await beat(16);                               // heart eyes, and hearts raining down
+  await beat(14);                               // heart eyes, and hearts raining down
   frames.push({ ...frames.at(-1), delay: 700 });
 
-  // Then it gets shy about it, which is where the bow turns up. Two feelings is
-  // enough for a hero image: the clip is about reading the screen, and the rest
-  // of the range lives in pet-faces.png rather than padding this out.
+  // Then it gets shy about it, which is where the bow turns up.
   await js(`demo.expr('shy'); demo.rain(['🌸', '💗'])`);
-  await beat(16);
-  frames.push({ ...frames.at(-1), delay: 1500 });
+  await beat(12);
+  frames.push({ ...frames.at(-1), delay: 800 });
+
+  // And a dance to finish, because a body that only walks is a cursor. The rest
+  // of the range lives in pet-faces.png and pet-moves.png rather than padding
+  // this out - the clip is still about reading the screen.
+  await js(`demo.move('dance'); demo.expr('joy'); demo.rain(['🎉', '🎊', '✨'], 7)`);
+  await beat(18);
+  frames.push({ ...frames.at(-1), delay: 1400 });
 
   fs.writeFileSync(STILL, (await shot()).toPNG());
 
