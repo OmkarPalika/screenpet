@@ -291,10 +291,46 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(await askVision('', { fetch: vspy }), EMPTY_SCREEN);
   assert.strictEqual(visionCalled, false);
 
-  // Vision answers carry mood the same way, and still cannot decline.
+  // Vision answers carry mood too, but the prompt has hard shape constraints -
+  // small vision models emit "!!!" or nothing at all when it grows. Measured
+  // against moondream; see the comment on VISION_TASK in brain.js.
   await askVision('X', { fetch: grab, mood: 'sleepy' });
   assert.ok(vbody.prompt.includes('sleepy'), 'mood did not reach the vision prompt');
-  assert.ok(vbody.prompt.includes('Answer correctly regardless of your mood'));
+  assert.ok(vbody.prompt.includes('answer it'), 'vision prompt lost the task');
+
+  // --- tier routing --------------------------------------------------------
+  // OCR wins whenever there is text, because a small vision model is measurably
+  // worse at dense screens - moondream returns nothing at all for one.
+  const { hasEnoughText, MIN_SCREEN_TEXT } = require('./brain');
+  assert.strictEqual(hasEnoughText(''), false);
+  assert.strictEqual(hasEnoughText('   \n \n'), false);
+  assert.strictEqual(hasEnoughText(null), false);
+  assert.strictEqual(hasEnoughText(undefined), false);
+  assert.strictEqual(hasEnoughText('OK'), false, 'a stray label is not a screen of text');
+  assert.strictEqual(hasEnoughText('x'.repeat(MIN_SCREEN_TEXT - 1)), false);
+  assert.strictEqual(hasEnoughText('x'.repeat(MIN_SCREEN_TEXT)), true);
+  // 38 characters - under any sensible length threshold, and exactly the case
+  // that must never be handed to a vision model.
+  assert.strictEqual(
+    hasEnoughText('What is 17 * 23 ? A) 391 B) 371 C) 411'),
+    true,
+    'a real question must take the OCR path'
+  );
+  assert.strictEqual(hasEnoughText('2+2?'), true, 'a question mark counts on its own');
+  // Whitespace must not pad a blank screen over the threshold.
+  assert.strictEqual(hasEnoughText(' '.repeat(500)), false);
+
+  const { buildVisionPrompt } = require('./brain');
+  for (const m of ['hungry', 'sleepy', 'sad', 'happy', 'neutral']) {
+    const p = buildVisionPrompt(m);
+    assert.ok(p.length <= 200, `vision prompt too long for ${m} (${p.length} chars)`);
+    assert.ok(!p.includes('\n'), `vision prompt must stay one line (${m})`);
+    assert.ok(!/sentence/i.test(p), `length constraints break small vision models (${m})`);
+    assert.ok(!/refuse|decline|do not answer/i.test(p), `vision prompt lets the pet decline (${m})`);
+    // Mood must come first: appending it after the task returned empty 0/3.
+    assert.ok(p.startsWith('You are a'), `mood must prefix the vision task (${m})`);
+    assert.ok(p.indexOf('screenshot') > p.indexOf('pet'), `mood must precede the task (${m})`);
+  }
 
   console.log('all checks passed');
 })();
