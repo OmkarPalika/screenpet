@@ -270,6 +270,8 @@ exact, and identical every time:
 | `flip a coin`, `roll a d20` | A result, and a spin while you get it. |
 | `rock` / `paper` / `scissors` | An actual game. It dances if it wins and falls over if it does not. |
 | `dance`, `spin`, `jump`, `fall over`, `look around` | See "A body" below. |
+| `next track`, `pause the music`, `turn it up`, `mute the sound` | The keyboard's media keys. Whatever is already playing obeys. |
+| `take a photo`, `say cheese` | One frame from the camera, into your Pictures folder. Needs the camera switched on. |
 | `what is the weather` | A refusal, with the reason. |
 
 **Weather is matched deliberately in order to turn it down.** Every weather
@@ -277,13 +279,32 @@ source is somebody else's server and it wants your location to be useful. Left
 unmatched, the model cheerfully invents a forecast — which is worse than saying
 no, so the pet says no.
 
+**Music is one keypress, not an integration.** [media.ps1](media.ps1) taps a
+single Windows media key — the same one on your keyboard — and whatever holds the
+transport handles it: Spotify, a browser tab, the Groove app. Nothing comes back.
+The pet cannot see a track name, an artist or even whether anything was playing,
+which is exactly why it needs no account, no API key and no server. The only
+codes it will press are `0xAD`–`0xB3`, the volume and transport block, checked
+both in [media.js](media.js) and again in the script — this presses real keys on
+a real machine and the caller is a regular expression.
+
+**A photo is the one frame that gets written down.** Everything else the camera
+sees is destroyed in place (see "Noticing you"); asking for a photo out loud
+saves a single 640×480 JPEG to `Pictures\screenpet` and says the filename back.
+The filename is generated in `main.js`, never taken from the renderer, so nothing
+crossing the bridge can choose a path. It still goes nowhere near a network.
+
 **The false positives are the whole difficulty.** A skill answers *instead* of
 the model, with total confidence, and nothing anywhere reports that it did. So
 `what is the time complexity of quicksort` must not return the clock — it did,
 until the pattern was anchored to the end of the line. `spin up a server`,
 `jump to line 40` and `walk me through this` were all making the pet perform
-tricks instead of answering. Anything over 90 characters is treated as a
-question rather than a command, on the grounds that commands are short.
+tricks instead of answering. `what does the next track index do` skipped the
+song, and `take a photo of the receipt and email it` reached for the camera —
+both fixed by anchoring the pattern to the end of the line, so a command has to
+*end* after the command, give or take a `please`. Anything over 90 characters is
+treated as a question rather than a command, on the grounds that commands are
+short.
 
 Those cases are pinned in `npm test`, and the test was checked by putting the
 bug back and confirming it failed:
@@ -338,7 +359,9 @@ does, and all it *can* do:
 - that number becomes one of three words — `arrived`, `left`, `blind` — and the
   frame is discarded
 
-Nothing is stored, encoded, recognised or sent. **It cannot tell who you are**,
+Nothing is stored, encoded, recognised or sent — with exactly one exception, and
+it is the one you asked for out loud: `take a photo` keeps that single frame, in
+your Pictures folder, and nowhere else. **It cannot tell who you are**,
 and no amount of prompting will make it say, because the information is gone
 before anything else in the app can see it. The pet greets you vaguely for the
 same reason: greeting you *by name* off a motion threshold would be claiming
@@ -362,6 +385,17 @@ Verified in both directions rather than assumed:
 run 1: camera OFF   permission media ["video"] -> denied    stream:false light:false
 run 2: camera ON    permission media ["video"] -> ALLOWED   stream:true  light:true   -> arrived
 run 3: switched off                                         stream:false light:false
+```
+
+The photo path was checked end to end against the real `main.js`, with Chromium's
+fake capture device standing in for the lens so no real room was photographed to
+prove a feature works:
+
+```
+camera ON    stream:true  640x480   "take a photo" -> *click* saved screenpet-....jpg
+                                    wrote 8851 bytes, jpeg=true
+camera OFF   stream:false 0x0       "take a photo" -> my eyes are shut! switch the camera on
+                                    wrote nothing
 ```
 
 ## Conversations
@@ -708,6 +742,13 @@ exits. The one path the other two cannot reach.
   wants a face model and a model file to ship with it; this is thirty lines and
   answers the only question the pet asks.
 - **Timers do not survive a restart.** Deliberate — see "Skills".
+- **Music is blind and one-way.** A media key is a broadcast: the pet cannot say
+  what is playing, cannot pick a song, and cannot tell you whether the key did
+  anything, so its lines are written to be true either way. Each press spawns
+  PowerShell and takes about 0.8s, which is fine for something you asked for and
+  would be wrong in a loop.
+- **A photo is whatever the webcam sees.** No preview, no framing, no retake, and
+  no filter — it says "smile", waits 1.5 seconds, and keeps the frame.
 - **Skills are patterns, not intent.** They will miss phrasings that are not in
   the list, and the fix for a miss is a new pattern rather than a smarter parser.
   Missing falls through to the model, which is the safe direction.

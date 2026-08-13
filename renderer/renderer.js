@@ -382,6 +382,11 @@ window.pet.onLook(({ pet, skin, voice: on, mic, camera }) => {
 // prompting will make it say, because the information is gone before anything
 // else in this file can see it.
 //
+// One exception, below: asking for a photo out loud gets you a photo, saved to
+// your Pictures folder by main. That is the only path by which a frame leaves
+// this section, it runs once per request, and it still goes nowhere near a
+// network.
+//
 // ponytail: motion, not faces. Real presence detection wants a face model and a
 // model file to ship with it; this is 30 lines and answers the only question
 // the pet actually asks - is anyone there?
@@ -446,8 +451,11 @@ async function watchRoom(on) {
   if (!on) return stopRoom();
   if (camStream) return;
   try {
+    // 640x480 so a photo is worth keeping. Presence still samples into the 32x24
+    // canvas - drawImage does the scaling - so the motion path is unchanged and
+    // the extra pixels only exist for the shutter.
     camStream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 160, height: 120, frameRate: 5 },
+      video: { width: 640, height: 480, frameRate: 5 },
     });
   } catch {
     // Denied at the OS or Windows level, or there is no camera. Not an error
@@ -462,6 +470,18 @@ async function watchRoom(on) {
   lastMotionAt = Date.now();
   camTimer = setInterval(sampleRoom, CAM_TICK_MS);
 }
+
+// One frame, on request, into a canvas made and dropped here. Not the 32x24 one:
+// that canvas is the motion path and reusing it would mean either a useless
+// photo or a presence check reading a full-size frame.
+window.pet.onPhoto(() => {
+  if (!camStream || !camVideo.videoWidth) return window.pet.photo(null);
+  const shot = document.createElement('canvas');
+  shot.width = camVideo.videoWidth;
+  shot.height = camVideo.videoHeight;
+  shot.getContext('2d').drawImage(camVideo, 0, 0);
+  window.pet.photo(shot.toDataURL('image/jpeg', 0.9));
+});
 
 // ---- wandering -----------------------------------------------------------
 // The window never moves. Moving a transparent always-on-top window at 60fps is

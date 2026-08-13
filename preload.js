@@ -16,6 +16,10 @@ contextBridge.exposeInMainWorld('pet', {
   // renderer reduces what the camera saw to one of three words before this
   // bridge, and this is the only thing that crosses it.
   presence: (event) => ipcRenderer.send('pet:presence', String(event)),
+  // The exception, and the only one: a photo you asked for by name. Main asks,
+  // the renderer answers with exactly one frame, and main writes it to disk.
+  onPhoto: (fn) => ipcRenderer.on('pet:photo', () => fn()),
+  photo: (dataUrl) => ipcRenderer.send('pet:photo-taken', dataUrl),
   battery: (level) => ipcRenderer.send('pet:battery', level),
   chatOpen: (open) => ipcRenderer.send('pet:chat-open', !!open),
   ask: () => ipcRenderer.send('pet:ask'),
