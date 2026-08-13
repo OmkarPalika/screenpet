@@ -29,20 +29,64 @@ a need.
 
 | You do | It does |
 | --- | --- |
-| Click the pet | Headpat. Happiness and bond up, hearts. |
-| Right-click | Menu: Feed, Play, Read screen, Quit. |
-| Hover | Shows the three need bars under the pet. |
-| Walk away 5 minutes | Naps. Energy regenerates instead of draining. |
+| Click the pet | Headpat. Heart eyes, happiness and bond up. |
+| Double-click | Tickle. Wiggles and giggles. |
+| Drag it | Picks it up and moves it. Goes dizzy, complains mildly. |
+| Move the mouse | Its eyes follow the cursor. |
+| Right-click | Menu: Feed, Play, Tickle, Talk, Read screen, Settings, Quit. |
+| Hover | Perks up, and shows the three need bars. |
+| Walk away 5 minutes | Naps, with `z`s. Energy regenerates instead of draining. |
+| Come back | Notices, and says so. |
 
 A full pet refuses food and a tired pet refuses to play, and the menu greys those
 out rather than letting you find out by clicking. Every action has a cooldown so
-you cannot spam a stat to 100.
+you cannot spam a stat to 100. Being on cooldown says nothing at all — a pet that
+ignores a fourth headpat in a row has better manners than one that complains
+about it.
 
 Mood is derived from the stats, never stored, and drives both the sprite and the
 tone of answers: `sleepy`, `hungry`, `sad`, `happy`, `neutral`.
 
-Unprompted nagging is throttled to once every three hours. A pet that talks more
-than that gets uninstalled.
+Bond is the one stat that never falls, so it is the only one that says anything
+out loud — it has four milestones and that is the whole of it.
+
+Unprompted talk is throttled twice over: nagging at most once every three hours,
+and idle small talk at most once every 45 minutes and only when the pet has
+nothing to complain about. A pet that talks more than that gets uninstalled.
+
+## Faces
+
+Mood is the long run; an expression is the reaction to something that just
+happened, laid over the top and cleared after a couple of seconds.
+
+`smile` `grin` `love` `yum` `giggle` `oh` `hmm` `sulk` `dizzy`
+
+They are CSS, not sprites — the mouth is a `d: path(...)` swap and the extras
+(brows, tongue, tear, sweat, sparkle, `z`s) are `display` toggles. So they cost
+no images, and they compose with all four skins for free.
+
+Expression rules must stay **below** the mood rules in `style.css`. Both are
+`.pet[data-*]`, so they have identical specificity and source order is the only
+thing that makes a reaction beat the mood underneath it. There is a test for
+that, and another asserting every expression the code can emit has a rule to
+render it.
+
+`npm run verify:ui` writes `pet-faces.png`, which is all of them side by side
+with animations paused.
+
+## Conversations
+
+Right-click → **Talk…** and type. No screenshot, no OCR: the model is told
+plainly that it cannot see your screen, because otherwise a small model will
+cheerfully invent what is on it.
+
+The last three exchanges are kept for context **in memory only, never written to
+disk**. A desktop pet that keeps a transcript of your evening in `userData` is a
+liability, not a feature.
+
+The pet window is `focusable: false` so it can never steal focus from what you
+are actually doing, which also means it cannot receive typing. Focus is granted
+for exactly as long as the box is open and handed straight back.
 
 State lives in `pet.json` in Electron's `userData` directory. It is validated on
 load, so a corrupted or hand-edited file degrades to a fresh pet instead of
@@ -259,9 +303,15 @@ of the model call. No framework.
 npm run verify:ui
 ```
 
-Drives both real windows over real IPC — speech, all five moods, all four skins,
-stat bars, hover hit-testing, headpat, every menu item, and the whole settings
+Drives both real windows over real IPC — speech, all five moods, every
+expression, cursor tracking, all four skins, stat bars, hover hit-testing,
+headpat, tickle, drag, the chat box, every menu item, and the whole settings
 form — and fails on any console error. Writes PNGs to look at.
+
+The expression check is not just "an attribute was set". It asserts the mouth
+geometry actually changed, because the entire face system rests on CSS
+`d: path(...)` resolving; if that ever stopped working every expression would
+quietly collapse into the default one and nothing else would notice.
 
 It earns its place. It has already caught three bugs that unit tests cannot see:
 a `const pet` in `renderer.js` colliding with the `contextBridge` global and
@@ -305,8 +355,19 @@ exits. The one path the other two cannot reach.
   full-width strip along the bottom of the primary display and the pet slides
   inside it. Moving a transparent always-on-top window at 60fps is janky and
   burns CPU on an app that is idle almost all the time.
-- **No drag-to-feed, no evolution stages, no minigames.** The base loop has to be
-  pleasant before any of that is worth adding.
+- **No evolution stages and no minigames.** The base loop has to be pleasant
+  before any of that is worth adding.
+- **Chatter frequency is not configurable.** 45 minutes is a guess that felt
+  right, not a measurement. It is one constant in `pet-state.js`, and it should
+  become a setting the first time anyone says it is too much.
+- **Chat has no scrollback.** Three turns of context, no transcript, and the
+  window shows one reply at a time. That is deliberate — see above — but it does
+  mean you cannot re-read what it said.
+- **Talking takes focus for as long as the box is open.** Unavoidable: a window
+  that cannot be focused cannot be typed into.
+- **The demo stage has its own copy of the pet SVG**, because it renders a page
+  behind the pet. A test asserts the two carry the same face parts, so a drifted
+  demo fails loudly rather than quietly showing an older pet.
 - **Autostart is wired but not exercised end to end.** It is gated on
   `app.isPackaged` and only reachable from the settings window of a built app.
 - **No auto-update.** Every new version is a manual download.

@@ -33,6 +33,9 @@ html, body {
   transition: transform 2.6s cubic-bezier(0.4, 0, 0.25, 1);
 }
 
+/* Dragging must be 1:1 with the cursor; the wander easing makes it feel broken. */
+.stage.is-dragging { transition: none; }
+
 /* ---- speech bubble ---- */
 
 .bubble {
@@ -78,6 +81,9 @@ html, body {
 .bubble.is-nag { background: #fdf6e3; border-color: #ecdcb0; font-style: italic; }
 .bubble.is-nag::after { background: #fdf6e3; border-color: #ecdcb0; }
 
+.bubble.is-chat { background: #f4f8fd; border-color: #cddcec; color: #24313f; }
+.bubble.is-chat::after { background: #f4f8fd; border-color: #cddcec; }
+
 @keyframes pop {
   from { opacity: 0; transform: translateY(6px) scale(0.96); }
   to   { opacity: 1; transform: none; }
@@ -121,6 +127,25 @@ html, body {
 .menu button:hover { background: #f0e8d5; }
 .menu button:disabled { color: #b5aa96; cursor: default; background: none; }
 
+/* ---- chat box ---- */
+
+.chat { width: 230px; }
+.chat[hidden] { display: none; }
+
+.chat input {
+  width: 100%;
+  padding: 7px 11px;
+  border-radius: 999px;
+  border: 1.5px solid #cddcec;
+  background: #fff;
+  color: #24313f;
+  font: inherit;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.22);
+  outline: none;
+}
+
+.chat input:focus { border-color: #8fb4d8; }
+
 /* ---- pet ---- */
 
 .pet { position: relative; animation: bob 3.2s ease-in-out infinite; }
@@ -135,6 +160,19 @@ html, body {
 .shadow { fill: #000; opacity: 0.16; }
 .mouth  { fill: none; stroke: #3a2c1e; stroke-width: 2.6; stroke-linecap: round; }
 .lids   { display: none; stroke: #3a2c1e; stroke-width: 2.6; stroke-linecap: round; }
+
+.tongue { fill: #e2707f; display: none; }
+.brows  { display: none; stroke: #3a2c1e; stroke-width: 2.4; stroke-linecap: round; fill: none; }
+.eyes-love { display: none; fill: #f0708a; }
+.tear   { display: none; fill: #7fc7ea; }
+.sweat  { display: none; fill: #9fd4ee; }
+.spark  { display: none; fill: #ffd45e; }
+.zzz    { display: none; fill: #6c7a8c; font: 600 15px "Segoe UI", system-ui, sans-serif; }
+
+/* The gaze follows the cursor and the blink squashes the eyes. Both want the
+   transform property, and an animation wins it outright, so they live on
+   separate elements rather than fighting. */
+.gaze { transform: translate(var(--eye-x, 0px), var(--eye-y, 0px)); transition: transform 90ms linear; }
 
 .eyes { animation: blink 5.4s infinite; transform-origin: center 54px; }
 
@@ -166,10 +204,92 @@ html, body {
 .pet[data-mood="sleepy"] .lids  { display: block; }
 .pet[data-mood="sleepy"] svg    { filter: brightness(0.9); }
 .pet[data-mood="sleepy"] { animation-duration: 6s; }
+.pet[data-mood="sleepy"] .zzz { display: block; animation: drift 2.6s ease-out infinite; }
+
+.pet[data-mood="hungry"] .mouth { d: path("M53 72q7 -5 14 0"); }
+.pet[data-mood="sad"] .mouth    { d: path("M53 74q7 -7 14 0"); }
+.pet[data-mood="sad"] .tear     { display: block; animation: weep 3.4s ease-in infinite; }
+
+/* ---- expressions ---------------------------------------------------------
+
+   A reaction to something that just happened, laid over the mood and cleared
+   after a couple of seconds. These selectors have the same specificity as the
+   mood rules above, so they must stay BELOW them - source order is the only
+   thing making the reaction win. */
+
+.pet[data-expr] .mouth { transition: d 160ms ease; }
+
+.pet[data-expr="smile"] .mouth { d: path("M50 69q10 9 20 0"); }
+.pet[data-expr="smile"] .cheek { opacity: 0.7; }
+
+/* Open and filled, so a grin is not just a slightly larger smile. */
+.pet[data-expr="grin"] .mouth { d: path("M50 67q10 4 20 0q-3 15 -10 15t-10 -15z"); fill: #8a4340; }
+.pet[data-expr="grin"] .cheek { opacity: 0.85; }
+.pet[data-expr="grin"] .spark { display: block; animation: twinkle 700ms ease-in-out 3; }
+
+.pet[data-expr="love"] .eyes      { display: none; }
+.pet[data-expr="love"] .lids      { display: none; }
+.pet[data-expr="love"] .eyes-love { display: block; animation: throb 620ms ease-in-out infinite; }
+.pet[data-expr="love"] .cheek     { opacity: 0.95; }
+.pet[data-expr="love"] .mouth     { d: path("M52 69q8 8 16 0"); }
+
+.pet[data-expr="yum"] .mouth  { d: path("M52 68q8 7 16 0"); }
+.pet[data-expr="yum"] .tongue { display: block; animation: lick 420ms ease-in-out 4; }
+.pet[data-expr="yum"] .cheek  { opacity: 0.8; }
+
+/* Closed, upturned eyes - the (^ ^) face. Reuses the sleeping lids with a
+   different path rather than adding a third pair of eyes. */
+.pet[data-expr="giggle"] .eyes  { display: none; }
+.pet[data-expr="giggle"] .lids  { display: block; }
+.pet[data-expr="giggle"] .lid-l { d: path("M39 57q6 -8 12 0"); }
+.pet[data-expr="giggle"] .lid-r { d: path("M69 57q6 -8 12 0"); }
+.pet[data-expr="giggle"] .mouth { d: path("M52 68q8 9 16 0"); }
+.pet[data-expr="giggle"] .cheek { opacity: 0.9; }
+
+.pet[data-expr="oh"] .eyes   { display: block; }
+.pet[data-expr="oh"] .lids   { display: none; }
+.pet[data-expr="oh"] .eye    { rx: 7; ry: 8.5; }
+.pet[data-expr="oh"] .brows  { display: block; }
+.pet[data-expr="oh"] .brow   { transform: translateY(-4px); }
+.pet[data-expr="oh"] .mouth  { d: path("M55 70a5 5 0 1 0 10 0a5 5 0 1 0 -10 0"); }
+
+.pet[data-expr="hmm"] .brows  { display: block; }
+.pet[data-expr="hmm"] .brow-l { transform: translateY(-5px) rotate(-8deg); transform-origin: 45px 41px; }
+.pet[data-expr="hmm"] .mouth  { d: path("M55 72h11"); }
+
+.pet[data-expr="sulk"] .brows  { display: block; }
+.pet[data-expr="sulk"] .brow-l { transform: rotate(14deg); transform-origin: 45px 41px; }
+.pet[data-expr="sulk"] .brow-r { transform: rotate(-14deg); transform-origin: 75px 41px; }
+.pet[data-expr="sulk"] .mouth  { d: path("M53 74q7 -7 14 0"); }
+.pet[data-expr="sulk"] .sweat  { display: block; }
+.pet[data-expr="sulk"] .cheek  { opacity: 0.25; }
+
+.pet[data-expr="dizzy"] .eyes  { display: block; animation: spin 900ms linear infinite; transform-origin: 60px 54px; }
+.pet[data-expr="dizzy"] .lids  { display: none; }
+.pet[data-expr="dizzy"] .mouth { d: path("M52 72q4 -4 8 0t8 0"); }
+
+@keyframes throb   { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+@keyframes twinkle { 0%, 100% { opacity: 0; transform: scale(0.6); } 50% { opacity: 1; transform: scale(1); } }
+@keyframes lick    { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+@keyframes spin    { to { transform: rotate(360deg); } }
+@keyframes drift   { 0% { opacity: 0; transform: translate(0, 0) scale(0.7); }
+                     30% { opacity: 1; }
+                     100% { opacity: 0; transform: translate(6px, -18px) scale(1.2); } }
+@keyframes weep    { 0%, 60% { opacity: 0; transform: translateY(0); }
+                     75% { opacity: 1; }
+                     100% { opacity: 0; transform: translateY(12px); } }
 
 .pet.is-thinking { animation: bob 0.9s ease-in-out infinite; }
 .pet.is-eating   { animation: chew 0.32s ease-in-out 5; }
 .pet.is-playing  { animation: hop 0.42s ease-in-out 4; }
+.pet.is-tickled  { animation: wiggle 0.16s ease-in-out 8; }
+.pet.is-held     { animation: none; transform: rotate(-4deg) scale(1.04); cursor: grabbing; }
+
+@keyframes wiggle {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  25%      { transform: translateX(-4px) rotate(-5deg); }
+  75%      { transform: translateX(4px) rotate(5deg); }
+}
 
 @keyframes chew {
   0%, 100% { transform: scaleY(1); }

@@ -36,6 +36,11 @@ window.demo = {
 
   mood(m) { petEl.dataset.mood = m; },
 
+  expr(e) {
+    if (e) petEl.dataset.expr = e;
+    else delete petEl.dataset.expr;
+  },
+
   headpat() {
     for (let i = 0; i < 3; i++) {
       const h = document.createElement('span');

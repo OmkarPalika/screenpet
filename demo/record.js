@@ -79,16 +79,18 @@ app.whenReady().then(async () => {
   await beat(18);                               // idle: bobbing, blinking
   await js('demo.badge(true)');
   await beat(6);                                // hotkey pressed
-  await js('demo.thinking()');
+  await js(`demo.thinking(); demo.expr('hmm')`);
   await beat(16);                               // thinking, dots animating
   await js('demo.badge(false)');
-  await js(`demo.answer(${JSON.stringify(answer)}); demo.mood('happy')`);
+  await js(
+    `demo.answer(${JSON.stringify(answer)}); demo.mood('happy'); demo.expr('smile')`
+  );
   await beat(12);                               // answer pops in
 
   frames.push({ ...frames.at(-1), delay: 1600 }); // hold so it can be read
 
-  await js('demo.headpat()');
-  await beat(14);                               // headpat, hearts float up
+  await js(`demo.headpat(); demo.expr('love')`);
+  await beat(14);                               // headpat, heart eyes, hearts float up
   frames.push({ ...frames.at(-1), delay: 1500 });
 
   fs.writeFileSync(STILL, (await shot()).toPNG());
