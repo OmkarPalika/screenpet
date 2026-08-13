@@ -41,6 +41,17 @@ window.demo = {
     else delete petEl.dataset.expr;
   },
 
+  pet(name) { document.documentElement.dataset.pet = name; },
+
+  // The same class the renderer toggles; which movement it produces is the
+  // stylesheet's business here exactly as it is in the app.
+  quirk() {
+    petEl.classList.remove('is-idling');
+    void petEl.offsetWidth;
+    petEl.classList.add('is-idling');
+    setTimeout(() => petEl.classList.remove('is-idling'), 2600);
+  },
+
   headpat() {
     for (let i = 0; i < 3; i++) {
       const h = document.createElement('span');
