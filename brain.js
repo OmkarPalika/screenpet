@@ -166,6 +166,29 @@ function hasEnoughText(ocrText) {
   return cleaned.length >= MIN_SCREEN_TEXT || cleaned.includes('?');
 }
 
+// Ollama sizes the KV cache from the model's own default context window, not
+// from the prompt, and some defaults are enormous: phi4-mini-reasoning defaults
+// to 131072 tokens, which asks for 21GB for a 3.8B model, spills off an 8GB card
+// and gets the process OOM-killed. Measured on an RTX 5050 8GB: capping this
+// took llama3.1:8b from 35.0s at 74% CPU to 11.5s entirely on the GPU, and
+// mistral-nemo:12b from 104.8s to 18.7s.
+//
+// 4096 rather than something tighter because cleanOcr caps screen text at 4000
+// characters, and that plus the prompt and the answer has to fit.
+const NUM_CTX = Number(process.env.SCREENPET_NUM_CTX || 4096);
+
+// Almost all the remaining wall time is loading the model, not running it. On
+// the same machine: load_duration 8.35s, prompt_eval 0.21s, eval 1.17s for a
+// 44-token answer. Ollama unloads after five idle minutes by default, so a pet
+// asked twice an hour pays that load every single time - 12.6s cold against
+// 1.2s warm. The timer resets on each use, so this keeps the model resident
+// while you are actually using it and lets it go half an hour after you stop.
+//
+// The cost is real and it is VRAM: llama3.1:8b holds ~5.3GB of an 8GB card for
+// that half hour. SCREENPET_KEEP_ALIVE=5m restores Ollama's default, and '0'
+// unloads immediately after every answer.
+const KEEP_ALIVE = process.env.SCREENPET_KEEP_ALIVE || '30m';
+
 /** Shared transport. Returns an answer string, never throws. */
 async function generate(body, opts = {}) {
   const fetchImpl = opts.fetch || globalThis.fetch;
@@ -176,7 +199,12 @@ async function generate(body, opts = {}) {
     const res = await fetchImpl(`${endpoint}/api/generate`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ stream: false, ...body }),
+      body: JSON.stringify({
+        stream: false,
+        keep_alive: KEEP_ALIVE,
+        options: { num_ctx: NUM_CTX },
+        ...body,
+      }),
       signal: controller.signal,
     });
     if (!res.ok) throw new Error(`Ollama returned ${res.status}`);
