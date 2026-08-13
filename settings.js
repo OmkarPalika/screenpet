@@ -29,6 +29,9 @@ const DEFAULTS = {
   // The microphone is opt-in and stays that way. A desktop pet that starts
   // listening because it shipped that way is not a pet, it is an incident.
   mic: false,
+  // Same rule, more so. The camera only ever answers "did anything move", but
+  // the permission it needs is the whole camera, so it ships off.
+  camera: false,
   autostart: false,
   ollama: 'http://127.0.0.1:11434',
 };
@@ -68,12 +71,44 @@ function load(raw) {
     pet: PETS.includes(s.pet) ? s.pet : DEFAULTS.pet,
     skin: SKINS.includes(s.skin) ? s.skin : DEFAULTS.skin,
     voice: typeof s.voice === 'boolean' ? s.voice : DEFAULTS.voice,
-    // Anything but a literal true leaves the microphone shut. A hand-edited
-    // "mic": "yes" must not be the thing that opens it.
+    // Anything but a literal true leaves these shut. A hand-edited "mic": "yes"
+    // or a 1 left over from some other config format must not be the thing that
+    // opens a microphone or a camera.
     mic: s.mic === true,
+    camera: s.camera === true,
     autostart: typeof s.autostart === 'boolean' ? s.autostart : DEFAULTS.autostart,
     ollama: validEndpoint(s.ollama) ? s.ollama : DEFAULTS.ollama,
   };
+}
+
+/**
+ * Deny every browser permission, then allow exactly one.
+ *
+ * Electron's default handler grants most requests to a page it loaded itself,
+ * which is fine right up until it is not. The camera is the only permission this
+ * app has any use for; it is only wanted when the user switched it on; and it is
+ * only ever video. Everything else - geolocation, notifications, the microphone
+ * through getUserMedia, and whatever Chromium adds in a future version - is
+ * refused without having to be listed.
+ *
+ * Lives here rather than in main.js because it is a decision about settings, and
+ * here it can be tested without booting Electron.
+ *
+ * @param {object} current  loaded settings
+ * @param {string} permission  Electron's permission name
+ * @param {object} details  the request/check details, whose shape differs:
+ *   setPermissionRequestHandler passes a `mediaTypes` list,
+ *   setPermissionCheckHandler passes a single `mediaType`. Reading only one
+ *   shape silently denies half the calls.
+ */
+function allowPermission(current, permission, details) {
+  if (permission !== 'media') return false;
+  if (!current || current.camera !== true) return false;
+  if (!details) return false;
+  if (Array.isArray(details.mediaTypes)) {
+    return details.mediaTypes.length === 1 && details.mediaTypes[0] === 'video';
+  }
+  return details.mediaType === 'video';
 }
 
 /** Merge a partial update from the settings window, validating as we go. */
@@ -81,4 +116,6 @@ function merge(current, patch) {
   return load({ ...current, ...(patch && typeof patch === 'object' ? patch : {}) });
 }
 
-module.exports = { DEFAULTS, SKINS, PETS, load, merge, validHotkey, validEndpoint };
+module.exports = {
+  DEFAULTS, SKINS, PETS, load, merge, validHotkey, validEndpoint, allowPermission,
+};

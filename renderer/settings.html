@@ -76,6 +76,17 @@
       machine; no audio is recorded, saved or sent anywhere.
     </p>
 
+    <label class="check">
+      <input id="camera" type="checkbox" />
+      <span>Notice when I am at the desk</span>
+    </label>
+    <p class="hint">
+      Uses the camera to tell whether anything moved, and nothing else. Frames are
+      shrunk to 32×24, compared with the one before, and discarded — it cannot
+      recognise a face, and nothing is saved or sent. A green dot on the pet shows
+      whenever the camera is open.
+    </p>
+
     <div class="row">
       <span class="status" id="status"></span>
       <button id="close" class="ghost">Close</button>

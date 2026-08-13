@@ -171,6 +171,13 @@ const LINES = {
   // The microphone is open. A label, not a speech - it is on screen for as long
   // as it takes you to say one sentence.
   listening: ['I am all ears', '*ears up*', 'go on then', 'listening'],
+  // The camera noticed the room. Vague on purpose - it detects movement, not
+  // people, and a pet that greets you by name off a motion threshold would be
+  // claiming something it cannot know.
+  arrived: ['oh! hello', 'there you are', 'welcome back', 'I thought I heard someone'],
+  left: ['I will be here', '*settles down to wait*', 'off you go then', 'holding the desk'],
+  blind: ['I cannot see anything. is the camera covered?', 'no camera for me, it seems'],
+
   // ...and nothing came back. Not an error: a room can just be quiet.
   deaf: [
     'I did not catch that',
@@ -298,6 +305,11 @@ const EXPRESSIONS = {
   milestone: 'joy',
   doze: 'doze',
   listen: 'listen',
+  arrived: 'joy',
+  left: 'smile',
+  blind: 'curious',
+  // A timer coming due. Loud on purpose: the whole point is being noticed.
+  ring: 'joy',
   // Heard the microphone open and got nothing back. A head tilt, not a failure.
   curious: 'curious',
   // Every other spoken reply, so a long conversation is not one fixed smile.

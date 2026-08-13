@@ -389,6 +389,123 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   );
 }
 
+// ===== skills ==============================================================
+
+// These run INSTEAD of the model, with total confidence and no way for the user
+// to tell they did. So the false positives matter more than the matches: a
+// pattern that fires on a real question replaces a correct answer with a dice
+// roll, and nothing anywhere would report it.
+{
+  const skills = require('./skills');
+  const at = (h, m) => new Date(2026, 7, 13, h, m);
+  const fixed = (r) => () => r;
+  const ctx = { now: at(14, 5), rand: fixed(0.5), battery: { percent: 42, charging: false } };
+  const name = (t, c = ctx) => (skills.match(t, c) || {}).name || null;
+
+  // --- what must NEVER be a skill ---
+  for (const question of [
+    'what is the time complexity of quicksort',
+    'what is the date format used here',
+    'how do I set a timer in JavaScript?',
+    'spin up a server on port 3000',
+    'jump to line 40 of this file',
+    'walk me through this function',
+    'explain how the timer in this code fires twice on mount',
+    'why does my alarm clock app drift',
+    'is this rock solid enough to ship',
+  ]) {
+    assert.strictEqual(name(question), null, `a skill hijacked: ${question}`);
+  }
+
+  // A long message is a question, not a command, whatever words are in it.
+  assert.strictEqual(name(`dance ${'x'.repeat(skills.MAX_COMMAND_CHARS)}`), null);
+
+  // --- durations ---
+  assert.strictEqual(skills.duration('in 5 minutes'), 300000);
+  assert.strictEqual(skills.duration('half an hour'), 1800000);
+  assert.strictEqual(skills.duration('for 90 seconds'), 90000);
+  assert.strictEqual(skills.duration('twenty mins'), 1200000);
+  assert.strictEqual(skills.duration('no numbers here'), null);
+  assert.strictEqual(skills.duration('in 0 minutes'), null, 'a zero timer is not a timer');
+  assert.strictEqual(skills.duration('in 500 hours'), null, 'a timer past a day is a calendar');
+
+  // Reading a duration back must not round it into a different promise.
+  assert.strictEqual(skills.spoken(90000), '1 minute 30 seconds');
+  assert.strictEqual(skills.spoken(60000), '1 minute');
+  assert.strictEqual(skills.spoken(5400000), '1 hour 30 minutes');
+  assert.strictEqual(skills.spoken(1000), '1 second');
+
+  // --- timers ---
+  const timer = skills.match('remind me to stretch in 20 minutes', ctx);
+  assert.strictEqual(timer.name, 'timer');
+  assert.strictEqual(timer.timer.ms, 1200000);
+  assert.ok(/stretch/.test(timer.timer.say), 'the reminder forgot what it was for');
+  assert.ok(/20 minutes/.test(timer.say), `did not confirm the delay: ${timer.say}`);
+  // A timing word with no duration is a question about timers, not a timer.
+  assert.strictEqual(name('set a timer'), null);
+
+  // --- the clock, anchored ---
+  assert.strictEqual(name('what time is it'), 'time');
+  assert.strictEqual(name('what time is it?'), 'time');
+  assert.strictEqual(name('what day is it'), 'date');
+
+  // --- battery, including having none ---
+  assert.ok(/42%/.test(skills.match('how is my battery', ctx).say));
+  assert.ok(/plug in/i.test(
+    skills.match('battery?', { ...ctx, battery: { percent: 9, charging: false } }).say
+  ));
+  assert.ok(/cannot find/i.test(skills.match('battery?', { ...ctx, battery: null }).say));
+
+  // --- rock, paper, scissors actually plays ---
+  const throwOf = { rock: 0, paper: 0.4, scissors: 0.9 };
+  for (const [mine, r] of Object.entries(throwOf)) {
+    for (const yours of ['rock', 'paper', 'scissors']) {
+      const out = skills.match(yours, { ...ctx, rand: fixed(r) });
+      assert.strictEqual(out.name, 'rps');
+      const beats = { rock: 'scissors', paper: 'rock', scissors: 'paper' };
+      const expected = mine === yours ? 'draw' : (beats[mine] === yours ? 'pet' : 'you');
+      const got = /a draw/.test(out.say) ? 'draw' : (/I win/.test(out.say) ? 'pet' : 'you');
+      assert.strictEqual(got, expected, `${mine} vs ${yours} scored as ${got}`);
+    }
+  }
+
+  // --- weather is refused, not answered ---
+  const weather = skills.match('what is the weather today', ctx);
+  assert.strictEqual(weather.name, 'weather');
+  assert.ok(!/\d/.test(weather.say), 'the weather skill invented a number');
+
+  // --- every skill stays inside the vocabulary the renderer implements ---
+  const rjs = require('fs').readFileSync('./renderer/renderer.js', 'utf8');
+  const moves = (rjs.match(/const MOVE_MS = \{([^}]+)\}/) || [])[1] || '';
+  const faces = new Set(Object.values(pets.EXPRESSIONS));
+  for (const [move] of skills.MOVE_WORDS) {
+    assert.ok(new RegExp(`\\b${move}:`).test(moves), `move "${move}" has no animation`);
+    assert.ok(skills.MOVE_LINES[move], `move "${move}" has nothing to say`);
+    assert.ok(faces.has(skills.MOVE_EXPR[move]), `move "${move}" wears an unknown face`);
+  }
+  const css = require('fs').readFileSync('./renderer/style.css', 'utf8');
+  for (const [move] of skills.MOVE_WORDS) {
+    assert.ok(css.includes(`[data-move="${move}"]`), `move "${move}" has no rule in style.css`);
+  }
+
+  // A skill's face has to be one the stylesheet draws, or the pet answers
+  // wearing nothing.
+  for (const skill of skills.SKILLS) {
+    const probe = {
+      timer: 'set a timer for 5 minutes', time: 'what time is it', date: 'what day is it',
+      battery: 'battery?', coin: 'flip a coin', dice: 'roll a dice', rps: 'rock',
+      move: 'dance', weather: 'weather?',
+    }[skill.name];
+    assert.ok(probe, `no probe for skill "${skill.name}"`);
+    const out = skills.match(probe, ctx);
+    assert.strictEqual(out && out.name, skill.name, `probe for "${skill.name}" hit ${out && out.name}`);
+    assert.ok(out.say, `skill "${skill.name}" said nothing`);
+    if (out.expr) {
+      assert.ok(css.includes(`[data-expr="${out.expr}"]`), `"${skill.name}" wears unknown face ${out.expr}`);
+    }
+  }
+}
+
 // ===== voice ===============================================================
 
 // The whole feature turns on one claim: neither direction of speech leaves the
@@ -582,6 +699,45 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(cfg.load({ mic: true }).mic, true);
   assert.strictEqual(cfg.load({ voice: 'loud' }).voice, cfg.DEFAULTS.voice);
   assert.strictEqual(cfg.load({ voice: false }).voice, false);
+
+  // The camera gets the same literal-true rule as the microphone.
+  assert.strictEqual(cfg.DEFAULTS.camera, false, 'the camera ships switched on');
+  for (const truthy of ['yes', 1, 'true', {}, []]) {
+    assert.strictEqual(cfg.load({ camera: truthy }).camera, false, `camera opened for ${JSON.stringify(truthy)}`);
+  }
+  assert.strictEqual(cfg.load({ camera: true }).camera, true);
+
+  // --- the permission gate ---
+  // Electron's default handler grants most of what a page it loaded asks for.
+  // This replaces it, so every "no" below is load-bearing: a regression here is
+  // a desktop pet that can be talked into opening a microphone.
+  const on = cfg.load({ camera: true });
+  const off = cfg.load({ camera: false });
+  const video = { mediaTypes: ['video'] };
+
+  assert.strictEqual(cfg.allowPermission(on, 'media', video), true, 'the camera never opens');
+  assert.strictEqual(cfg.allowPermission(on, 'media', { mediaType: 'video' }), true,
+    'the check handler shape is refused, so Chromium sees a denial either way');
+
+  assert.strictEqual(cfg.allowPermission(off, 'media', video), false, 'camera opened while switched off');
+  for (const [permission, details] of [
+    ['media', { mediaTypes: ['audio'] }],
+    ['media', { mediaTypes: ['video', 'audio'] }],
+    ['media', { mediaType: 'audio' }],
+    ['media', { mediaType: 'unknown' }],
+    ['media', null],
+    ['geolocation', video],
+    ['notifications', video],
+    ['midi', video],
+    ['clipboard-read', video],
+    ['openExternal', video],
+    ['something-chromium-adds-later', video],
+  ]) {
+    assert.strictEqual(
+      cfg.allowPermission(on, permission, details), false,
+      `granted ${permission} ${JSON.stringify(details)} with the camera on`
+    );
+  }
 
   // merge keeps what it is not told about, and still validates what it is.
   const merged = cfg.merge(cfg.load({ skin: 'mint' }), { model: 'x', hotkey: 'Ctrl+' });
