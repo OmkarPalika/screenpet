@@ -6,7 +6,7 @@
 const bubble = document.getElementById('bubble');
 const bubbleText = document.getElementById('bubble-text');
 const badge = document.getElementById('badge');
-const hearts = document.getElementById('hearts');
+const fx = document.getElementById('fx');
 const petEl = document.getElementById('pet');
 const petLayer = document.getElementById('pet-layer');
 
@@ -52,15 +52,20 @@ window.demo = {
     setTimeout(() => petEl.classList.remove('is-idling'), 2600);
   },
 
-  headpat() {
-    for (let i = 0; i < 3; i++) {
-      const h = document.createElement('span');
-      h.className = 'heart';
-      h.textContent = '♥';
-      h.style.left = `${28 + i * 26}px`;
-      h.style.animationDelay = `${i * 90}ms`;
-      hearts.append(h);
-      setTimeout(() => h.remove(), 1100);
+  // Same shape as the renderer's rain(): the stylesheet decides how a falling
+  // thing moves, this only picks what falls and from where.
+  rain(chars, count = 5) {
+    for (let i = 0; i < count; i++) {
+      const el = document.createElement('span');
+      el.className = 'drop';
+      el.textContent = chars[i % chars.length];
+      el.style.left = `${4 + Math.random() * 92}px`;
+      el.style.setProperty('--fall', `${38 + Math.random() * 38}px`);
+      el.style.animationDelay = `${i * (70 + Math.random() * 60)}ms`;
+      fx.append(el);
+      setTimeout(() => el.remove(), 2600);
     }
   },
+
+  headpat() { window.demo.rain(['💕', '💖', '💗']); },
 };

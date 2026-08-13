@@ -319,6 +319,58 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     'mood rules sit below the expression rules and would win the cascade'
   );
   assert.strictEqual(pets.expressionFor('nothing-like-this'), null);
+
+  // Every expression that drops emoji must name characters in the renderer, and
+  // every set it names must belong to a real expression - a typo either way is
+  // silent, and shows up as a feeling with no rain or rain with no feeling.
+  const rjs = require('fs').readFileSync('./renderer/renderer.js', 'utf8');
+  const emoji = rjs.slice(rjs.indexOf('const EMOJI'), rjs.indexOf('const rand'));
+  const known = new Set(Object.values(pets.EXPRESSIONS));
+  for (const feeling of ['love', 'shy', 'joy', 'rage', 'cry', 'annoyed', 'proud']) {
+    assert.ok(new RegExp(`\\b${feeling}:`).test(emoji), `"${feeling}" drops no emoji`);
+    assert.ok(known.has(feeling), `"${feeling}" has emoji but no event reaches it`);
+  }
+  // The cursor-tracking faces must stay quiet: hovering fires 'smile' constantly
+  // and confetti on every mouse move is unbearable.
+  for (const quiet of ['smile', 'hmm', 'oh']) {
+    assert.ok(!new RegExp(`\\b${quiet}:`).test(emoji), `"${quiet}" rains, and it fires on hover`);
+  }
+
+  // The bow belongs to the cute half of the range only.
+  const bow = css.slice(css.indexOf('.pet[data-expr="love"] .bow'), css.indexOf('@keyframes bow-on'));
+  for (const cute of ['love', 'shy', 'giggle', 'proud', 'joy']) {
+    assert.ok(bow.includes(`[data-expr="${cute}"] .bow`), `${cute} does not wear the bow`);
+  }
+  for (const notCute of ['rage', 'cry', 'annoyed', 'sulk']) {
+    assert.ok(!bow.includes(`[data-expr="${notCute}"] .bow`), `${notCute} should not wear a bow`);
+  }
+  assert.ok(
+    require('fs').readFileSync('./renderer/pets.css', 'utf8').includes('.bow      { display: none; }'),
+    'the bow is not hidden by default, so every pet wears one always'
+  );
+}
+
+// --- the poke ladder ---
+{
+  // Keep poking and the pet works through the whole range rather than giggling
+  // forever. The last rung has to hold: there is nothing past crying.
+  const seen = [0, 1, 2, 3, 4, 5, 6, 99].map((n) => pets.pokeStep(n).event);
+  assert.deepStrictEqual(
+    seen,
+    ['tickle', 'tickle', 'bashful', 'annoy', 'rage', 'upset', 'upset', 'upset']
+  );
+
+  // Every rung names a real line bank and a real expression, or the pet reaches
+  // that step and says nothing with a blank face.
+  for (const [event, kind] of pets.POKE_LADDER) {
+    assert.ok(pets.expressionFor(event), `poke step "${event}" has no expression`);
+    assert.ok(pets.line(kind, 0), `poke step "${kind}" has no lines`);
+  }
+
+  // Bouts. Come back later and you are forgiven; keep going and you are not.
+  assert.strictEqual(pets.samePokeBout(0, 5000), false, 'a first poke is not a continuation');
+  assert.strictEqual(pets.samePokeBout(1000, 1000 + pets.POKE_WINDOW_MS - 1), true);
+  assert.strictEqual(pets.samePokeBout(1000, 1000 + pets.POKE_WINDOW_MS), false);
 }
 
 // --- the demo stage draws the same pet the app does ---

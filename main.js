@@ -25,6 +25,7 @@ let visionModel = null; // resolved model name, or null for the OCR path
 let busy = false;
 let lastPath = 'ocr'; // which tier actually answered, for the smoke check
 let lineIndex = 0;
+let chats = 0;
 let saveTimer = null;
 let quitting = false;
 let wasAsleep = false;
@@ -172,7 +173,15 @@ function tick() {
       talk(pets.mood(state, { asleep: napping }), { tone: 'nag' });
     } else if (pets.shouldChatter(state, now, { asleep: napping })) {
       state.lastChatAt = now;
-      talk('idle');
+      // Every other one is a compliment rather than small talk - and then the
+      // pet is immediately embarrassed about having said it, which is the whole
+      // joke. Praise on every chatter would be flattery and stop landing.
+      if (chats++ % 2) {
+        talk('praised', { event: 'praise' });
+        setTimeout(() => talk('bashful', { event: 'bashful' }), 3200);
+      } else {
+        talk('idle');
+      }
     }
   }
 
@@ -308,15 +317,32 @@ app.whenReady().then(async () => {
 const SAID = { feed: 'fed', pet: 'patted', play: 'played', tickle: 'tickled' };
 const REFUSED = { feed: 'full', play: 'tired' };
 
+// How far up the poke ladder this bout has climbed. In memory only and on
+// purpose: a tantrum should not survive a restart, and forgiveness on relaunch
+// is the right default for something that lives on your taskbar.
+let pokes = 0;
+let lastPokeAt = 0;
+
 ipcMain.on('pet:act', (_e, name) => {
+  const now = Date.now();
   const before = state.bond;
-  const result = pets.act(state, name, Date.now());
+  const result = pets.act(state, name, now);
   state = result.state;
   pushState({ acted: result.ok ? name : null });
 
-  if (result.ok) {
+  // Tickling is the one you can do over and over, so it is the one that
+  // escalates. Refusals count too - the cooldown is what spamming it produces,
+  // and a pet that ignores the fourth poke entirely feels broken rather than
+  // patient.
+  if (name === 'tickle') {
+    pokes = pets.samePokeBout(lastPokeAt, now) ? pokes + 1 : 0;
+    lastPokeAt = now;
+    const { event, kind } = pets.pokeStep(pokes);
+    talk(kind, { event, tone: pokes >= 3 ? 'nag' : 'chat' });
+  } else if (result.ok) {
     // A bond milestone outranks the usual line - it only happens four times.
-    talk(SAID[name], { event: name, text: pets.milestone(before, state.bond) });
+    const reached = pets.milestone(before, state.bond);
+    talk(SAID[name], { event: reached ? 'milestone' : name, text: reached });
   } else if (REFUSED[name] && result.reason !== 'not yet') {
     talk(REFUSED[name], { event: 'refuse', tone: 'nag' });
   }
