@@ -388,6 +388,95 @@ html, body {
                      75% { opacity: 1; }
                      100% { opacity: 0; transform: translateY(12px); } }
 
+/* ---- body movements ------------------------------------------------------
+
+   The face is `data-expr` on .pet; the body is `data-move` on the svg inside
+   it. Two elements, two animation properties, so the pet can be furious AND
+   dancing - which is funnier than either on its own. Putting both on .pet would
+   mean one silently cancelling the other, because an animation owns the whole
+   transform property and the last rule to win simply replaces the other. */
+
+.pet[data-move] svg { transform-origin: 60px 96px; } /* feet, not centre */
+
+.pet[data-move="walk"]   svg { animation: walk 620ms ease-in-out infinite; }
+.pet[data-move="dance"]  svg { animation: dance 640ms ease-in-out 4; }
+.pet[data-move="spin"]   svg { animation: turn 620ms cubic-bezier(0.5, 0, 0.5, 1) 2; }
+.pet[data-move="jump"]   svg { animation: leap 520ms cubic-bezier(0.3, 0, 0.4, 1) 2; }
+.pet[data-move="topple"] svg { animation: topple 2.4s cubic-bezier(0.4, 0, 0.3, 1); }
+.pet[data-move="peek"]   svg { animation: peek 2.2s ease-in-out; }
+
+/* A step cycle: rock onto one side, lift, rock onto the other. The squash on
+   the down beats is what stops it reading as a slide with a wobble on top. */
+@keyframes walk {
+  0%, 100% { transform: translateY(0) rotate(-3deg) scaleY(1); }
+  25%      { transform: translateY(-6px) rotate(0deg) scaleY(1.03); }
+  50%      { transform: translateY(0) rotate(3deg) scaleY(0.97); }
+  75%      { transform: translateY(-6px) rotate(0deg) scaleY(1.03); }
+}
+
+@keyframes dance {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  20%      { transform: translate(-7px, -4px) rotate(-11deg); }
+  40%      { transform: translate(0, -9px) rotate(0deg) scaleY(1.07); }
+  60%      { transform: translate(7px, -4px) rotate(11deg); }
+  80%      { transform: translate(0, -2px) rotate(0deg) scaleY(0.94); }
+}
+
+/* rotateY rather than rotate: it turns away and comes back, instead of
+   cartwheeling along the taskbar. */
+@keyframes turn {
+  from { transform: perspective(320px) rotateY(0deg); }
+  to   { transform: perspective(320px) rotateY(360deg); }
+}
+
+@keyframes leap {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  15%      { transform: translateY(2px) scale(1.1, 0.86); }
+  45%      { transform: translateY(-34px) scale(0.93, 1.12); }
+  80%      { transform: translateY(2px) scale(1.08, 0.9); }
+}
+
+/* Over, a beat on the floor, then back up. The beat is the joke - without the
+   pause it looks like a glitch rather than a pratfall. */
+@keyframes topple {
+  0%   { transform: rotate(0deg) translateY(0); }
+  18%  { transform: rotate(-14deg) translateY(0); }
+  32%  { transform: rotate(84deg) translateY(13px); }
+  38%  { transform: rotate(78deg) translateY(13px); }
+  72%  { transform: rotate(78deg) translateY(13px); }
+  88%  { transform: rotate(-8deg) translateY(0); }
+  100% { transform: rotate(0deg) translateY(0); }
+}
+
+/* The shadow is drawn inside the svg, so a movement that turns the body turns
+   the shadow with it - and a shadow standing on its edge is worse than none.
+   Same origin, opposite angle, so it cancels exactly and the shadow stays flat
+   on the floor while everything above it goes over. */
+.pet[data-move="topple"] .shadow {
+  transform-origin: 60px 96px;
+  animation: topple-shadow 2.4s cubic-bezier(0.4, 0, 0.3, 1);
+}
+
+@keyframes topple-shadow {
+  0%   { transform: rotate(0deg); }
+  18%  { transform: rotate(14deg); }
+  32%  { transform: rotate(-84deg); }
+  38%  { transform: rotate(-78deg); }
+  72%  { transform: rotate(-78deg); }
+  88%  { transform: rotate(8deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* Looks left, holds, looks right, holds. The holds are what make it read as
+   looking at something rather than shaking its head. */
+@keyframes peek {
+  0%, 100% { transform: rotate(0deg) translateX(0); }
+  20%      { transform: rotate(-12deg) translateX(-5px); }
+  45%      { transform: rotate(-12deg) translateX(-5px); }
+  60%      { transform: rotate(12deg) translateX(5px); }
+  85%      { transform: rotate(12deg) translateX(5px); }
+}
+
 /* Speaking out loud. A class rather than an expression on purpose: the pet has
    to keep whatever face it was making while it says the line, and an expression
    would replace it - a raging pet that goes blank the moment it opens its mouth
@@ -450,6 +539,29 @@ html, body {
   62%  { opacity: 1; transform: translateY(var(--fall, 56px)) scale(1) rotate(6deg); }
   100% { opacity: 0; transform: translateY(calc(var(--fall, 56px) + 10px)) scale(0.92) rotate(12deg); }
 }
+
+/* ---- camera indicator ----------------------------------------------------
+
+   Shown for exactly as long as the stream is open. Windows has its own
+   indicator, but a pet that can see the room should say so on its own face
+   rather than making you go and check the system tray. */
+
+.cam {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  margin-left: 30px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #46c46b;
+  box-shadow: 0 0 6px #46c46b;
+  animation: cam-pulse 2.4s ease-in-out infinite;
+}
+
+.cam[hidden] { display: none; }
+
+@keyframes cam-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
 
 /* ---- stat bars, only while hovered ---- */
 

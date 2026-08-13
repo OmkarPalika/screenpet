@@ -148,12 +148,37 @@ function speak(text, kind) {
   speechSynthesis.speak(u);
 }
 
-window.pet.onSay(({ text, kind, expr }) => {
+// ---- body movements ------------------------------------------------------
+// The face is an expression on .pet; this is the body, on the svg inside it.
+// Separate elements on purpose - see the note in style.css. A movement plays
+// under any face, so the pet can lose at rock-paper-scissors, sulk about it and
+// fall over all at once.
+
+// How long each one runs, so the attribute comes off when the animation ends
+// rather than at some guessed constant.
+const MOVE_MS = { walk: 2600, dance: 2600, spin: 1240, jump: 1040, topple: 2400, peek: 2200 };
+const MOVES = Object.keys(MOVE_MS);
+
+let moveTimer = null;
+
+function move(name) {
+  clearTimeout(moveTimer);
+  if (!MOVE_MS[name]) { delete petEl.dataset.move; return; }
+  // Same restart trick the expressions use: asking for the movement it is
+  // already doing has to visibly do something.
+  delete petEl.dataset.move;
+  void petEl.offsetWidth;
+  petEl.dataset.move = name;
+  moveTimer = setTimeout(() => { delete petEl.dataset.move; }, MOVE_MS[name]);
+}
+
+window.pet.onSay(({ text, kind, expr, move: movement }) => {
   busy = kind === 'thinking';
   petEl.classList.toggle('is-thinking', busy);
   // Thinking holds its face until the answer lands, so no timeout on it.
   if (busy) express('hmm', 600000);
   else express(expr || null, Math.min(20000, Math.max(2600, text.length * 55)));
+  if (movement) move(movement);
   say(text, { kind, sticky: busy });
   speak(text, kind);
 });
@@ -336,7 +361,7 @@ chatInput.addEventListener('keydown', (e) => {
 // How the pet looks and sounds. Species and palette hang off the root element:
 // the shape rules in pets.css are plain descendant selectors, so they work
 // anywhere they are set.
-window.pet.onLook(({ pet, skin, voice: on, mic }) => {
+window.pet.onLook(({ pet, skin, voice: on, mic, camera }) => {
   document.documentElement.dataset.pet = pet;
   document.documentElement.dataset.skin = skin;
   voiceOn = !!on;
@@ -344,7 +369,99 @@ window.pet.onLook(({ pet, skin, voice: on, mic }) => {
   // No microphone, no button. An entry that only tells you the feature is off
   // is a worse answer than the entry not being there.
   menu.querySelector('[data-listen]').hidden = !mic;
+  watchRoom(!!camera);
 });
+
+// ---- the room ------------------------------------------------------------
+//
+// Opt-in, off by default, and deliberately incapable of more than it needs.
+// Frames are drawn to a 32x24 canvas - 768 pixels - reduced to a single number
+// (how much changed since the last one) and thrown away. Nothing is stored,
+// nothing is recognised, nothing is encoded, nothing is sent. It can tell that
+// something moved in front of the laptop. It cannot tell who, and no amount of
+// prompting will make it say, because the information is gone before anything
+// else in this file can see it.
+//
+// ponytail: motion, not faces. Real presence detection wants a face model and a
+// model file to ship with it; this is 30 lines and answers the only question
+// the pet actually asks - is anyone there?
+
+const camEl = document.getElementById('cam');
+const camVideo = document.getElementById('cam-video');
+const camCanvas = document.getElementById('cam-canvas');
+
+const CAM_TICK_MS = 800;
+// Mean absolute difference per pixel, 0..255. Below this is sensor noise and
+// the light changing; a person shifting in a chair is comfortably above it.
+const MOTION = 6;
+// Quiet for this long and you have gone, rather than merely sitting still.
+const GONE_MS = 120000;
+
+let camStream = null;
+let camTimer = null;
+let camPrev = null;
+let present = false;
+let lastMotionAt = 0;
+
+function stopRoom() {
+  clearInterval(camTimer);
+  camTimer = null;
+  if (camStream) camStream.getTracks().forEach((t) => t.stop());
+  camStream = null;
+  camVideo.srcObject = null;
+  camPrev = null;
+  present = false;
+  camEl.hidden = true;
+}
+
+function sampleRoom() {
+  const c = camCanvas.getContext('2d', { willReadFrequently: true });
+  c.drawImage(camVideo, 0, 0, camCanvas.width, camCanvas.height);
+  const { data } = c.getImageData(0, 0, camCanvas.width, camCanvas.height);
+
+  const frame = new Uint8Array(data.length / 4);
+  for (let i = 0; i < frame.length; i++) {
+    const p = i * 4;
+    frame[i] = (data[p] + data[p + 1] + data[p + 2]) / 3;
+  }
+
+  if (camPrev) {
+    let diff = 0;
+    for (let i = 0; i < frame.length; i++) diff += Math.abs(frame[i] - camPrev[i]);
+    diff /= frame.length;
+
+    const now = Date.now();
+    if (diff > MOTION) {
+      lastMotionAt = now;
+      if (!present) { present = true; window.pet.presence('arrived'); }
+    } else if (present && now - lastMotionAt > GONE_MS) {
+      present = false;
+      window.pet.presence('left');
+    }
+  }
+  camPrev = frame;
+}
+
+async function watchRoom(on) {
+  if (!on) return stopRoom();
+  if (camStream) return;
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 160, height: 120, frameRate: 5 },
+    });
+  } catch {
+    // Denied at the OS or Windows level, or there is no camera. Not an error
+    // worth a red bubble - the pet just cannot see, and says so once.
+    camStream = null;
+    window.pet.presence('blind');
+    return;
+  }
+  camVideo.srcObject = camStream;
+  await camVideo.play();
+  camEl.hidden = false;
+  lastMotionAt = Date.now();
+  camTimer = setInterval(sampleRoom, CAM_TICK_MS);
+}
 
 // ---- wandering -----------------------------------------------------------
 // The window never moves. Moving a transparent always-on-top window at 60fps is
@@ -362,7 +479,12 @@ const idle = () =>
   !hovered && !busy && !held && bubble.hidden && menu.hidden && chatForm.hidden;
 
 function wander() {
-  if (idle()) setX(Math.random() * (window.innerWidth - stage.offsetWidth));
+  if (idle()) {
+    setX(Math.random() * (window.innerWidth - stage.offsetWidth));
+    // The stage transition is what moves it; this is what makes it look like
+    // walking rather than sliding, and it runs for exactly that long.
+    move('walk');
+  }
   setTimeout(wander, 25000 + Math.random() * 45000);
 }
 
@@ -371,14 +493,41 @@ function wander() {
 // when. Far enough apart that it never reads as a loop.
 const QUIRK_MS = 2600;
 
+// Which of the whole-body movements the pet does unprompted. Dancing is not on
+// the list: a pet that breaks into a dance at nobody is unsettling rather than
+// charming, so that one stays something you ask for.
+const IDLE_MOVES = ['peek', 'jump', 'spin'];
+
 function quirk() {
   if (idle()) {
-    petEl.classList.remove('is-idling');
-    void petEl.offsetWidth; // restart, rather than waiting out the old run
-    petEl.classList.add('is-idling');
-    setTimeout(() => petEl.classList.remove('is-idling'), QUIRK_MS);
+    // Most of the time the small species quirk, occasionally a whole movement.
+    // Every time would make the taskbar busy; never would waste the body.
+    if (Math.random() < 0.3) {
+      move(IDLE_MOVES[Math.floor(Math.random() * IDLE_MOVES.length)]);
+    } else {
+      petEl.classList.remove('is-idling');
+      void petEl.offsetWidth; // restart, rather than waiting out the old run
+      petEl.classList.add('is-idling');
+      setTimeout(() => petEl.classList.remove('is-idling'), QUIRK_MS);
+    }
   }
   setTimeout(quirk, 9000 + Math.random() * 14000);
+}
+
+// ---- battery -------------------------------------------------------------
+// Only the main process runs skills, and only the renderer can read this, so it
+// is pushed rather than asked for. Level and charging state, nothing else.
+
+if (navigator.getBattery) {
+  navigator.getBattery().then((b) => {
+    const report = () => window.pet.battery({
+      percent: Math.round(b.level * 100),
+      charging: b.charging,
+    });
+    report();
+    b.addEventListener('levelchange', report);
+    b.addEventListener('chargingchange', report);
+  }).catch(() => {}); // no battery, or a desktop - the skill says so
 }
 
 // Start somewhere on the right, where a taskbar pet belongs.

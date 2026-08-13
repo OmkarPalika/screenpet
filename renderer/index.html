@@ -42,6 +42,8 @@
 
       <div id="pet" class="pet" data-mood="neutral">
         <div id="fx" class="fx"></div>
+        <!-- Lit only while the camera stream is actually open. -->
+        <div id="cam" class="cam" hidden title="camera on"></div>
         <svg viewBox="0 0 120 110" width="120" height="110" aria-hidden="true">
           <ellipse class="shadow" cx="60" cy="102" rx="34" ry="6" />
           <!-- Behind the body on purpose: a tail drawn in front looks stuck on. -->
@@ -110,6 +112,12 @@
         </div>
       </div>
     </div>
+
+    <!-- The camera pipeline, off screen and deliberately tiny. The video is
+         never shown and the canvas is 32x24 - see "the room" in renderer.js for
+         what is and is not done with the frames. -->
+    <video id="cam-video" width="160" height="120" muted playsinline hidden></video>
+    <canvas id="cam-canvas" width="32" height="24" hidden></canvas>
 
     <script src="renderer.js"></script>
   </body>

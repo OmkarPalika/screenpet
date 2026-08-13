@@ -2,7 +2,7 @@
 
 const {
   app, BrowserWindow, Tray, Menu, globalShortcut, desktopCapturer, screen,
-  ipcMain, powerMonitor, nativeImage,
+  ipcMain, powerMonitor, nativeImage, session,
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -10,6 +10,7 @@ const { recognise } = require('./ocr');
 const { listen } = require('./speech');
 const { ask, askVision, chat, detectVisionModel, listModels, hasEnoughText } = require('./brain');
 const pets = require('./pet-state');
+const skills = require('./skills');
 const config = require('./settings');
 
 const STAGE_H = 300;
@@ -63,6 +64,21 @@ function savePet() {
 const asleep = () => powerMonitor.getSystemIdleTime() >= IDLE_SLEEP_S;
 const endpoint = () => settings.ollama;
 
+// ---- permissions ------------------------------------------------------------
+
+// Deny by default; config.allowPermission owns the one exception and is tested
+// on its own. Both handlers are installed because Chromium consults them in
+// different situations and leaving either at Electron's default undoes the other.
+function lockPermissions() {
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, done, details) => {
+    done(config.allowPermission(settings, permission, details));
+  });
+
+  session.defaultSession.setPermissionCheckHandler((_wc, permission, _origin, details) =>
+    config.allowPermission(settings, permission, details)
+  );
+}
+
 // ---- windows ----------------------------------------------------------------
 
 function createWindow() {
@@ -95,7 +111,7 @@ function openSettings() {
   if (settingsWin && !settingsWin.isDestroyed()) return settingsWin.focus();
   settingsWin = new BrowserWindow({
     width: 460,
-    height: 980,
+    height: 820,
     resizable: false,
     title: 'screenpet',
     icon: path.join(__dirname, 'icon.png'),
@@ -161,13 +177,13 @@ function pushState(extra = {}) {
  * One door for everything the pet says off its own bat, so the line bank and the
  * face that goes with it can never drift apart.
  */
-function talk(kind, { event = null, text = null, tone = 'chat' } = {}) {
+function talk(kind, { event = null, text = null, tone = 'chat', move = null } = {}) {
   // The smoke check exits on the first thing the pet says, and it is checking
   // the answer, not the small talk.
   if (process.env.SCREENPET_SMOKE) return;
   const said = text || pets.line(kind, lineIndex++, settings.pet);
   if (!said) return;
-  send('pet:say', { text: said, kind: tone, expr: pets.expressionFor(event) });
+  send('pet:say', { text: said, kind: tone, expr: pets.expressionFor(event), move });
 }
 
 function tick() {
@@ -275,9 +291,41 @@ async function answerScreen() {
 // where every answer wears the same smile stops looking like a conversation.
 let replies = 0;
 
+// What the renderer last reported, since only it can read the battery. Null
+// until it says otherwise, and the skill answers honestly in that case.
+let battery = null;
+
+// Pending timers, in memory and on purpose. A reminder that survives a restart
+// needs a file on disk with your notes in it, and this app does not keep one.
+const timers = new Set();
+
+function startTimer({ ms, say }) {
+  const id = setTimeout(() => {
+    timers.delete(id);
+    send('pet:say', { text: say, kind: 'nag', expr: pets.expressionFor('ring'), move: 'jump' });
+  }, ms);
+  timers.add(id);
+}
+
+/**
+ * Skills answer before the model does, so "set a timer for five minutes" is
+ * exact and instant rather than a small model's best guess at what you meant.
+ * Returns true if it handled the message.
+ */
+function runSkill(text) {
+  const skill = skills.match(text, { now: new Date(), battery });
+  if (!skill) return false;
+  // Not through talk(): these are answers to something you asked for, and the
+  // wording comes from skills.js rather than the line bank.
+  send('pet:say', { text: skill.say, kind: 'chat', expr: skill.expr, move: skill.move });
+  if (skill.timer) startTimer(skill.timer);
+  return true;
+}
+
 async function replyTo(message) {
   const text = String(message || '').trim();
   if (!text || busy) return;
+  if (runSkill(text)) return;
   busy = true;
   send('pet:say', { text: 'thinking', kind: 'thinking' });
   try {
@@ -357,6 +405,7 @@ function sendLook() {
     skin: settings.skin,
     voice: settings.voice,
     mic: settings.mic,
+    camera: settings.camera,
   });
 }
 
@@ -381,6 +430,9 @@ async function saveSettings(patch) {
 app.whenReady().then(async () => {
   settings = config.load(readJson('settings.json'));
   state = pets.load(readJson('pet.json'), Date.now());
+
+  // Before any window exists, so nothing can ask for anything in the gap.
+  lockPermissions();
 
   createWindow();
   createTray();
@@ -466,6 +518,20 @@ ipcMain.on('pet:chat-open', (_e, open) => {
 ipcMain.on('pet:chat', (_e, text) => replyTo(text));
 ipcMain.on('pet:listen', listenAndReply);
 
+// Three words, never a frame. The renderer reduces what the camera saw to one
+// of these before it crosses the bridge; see "the room" in renderer.js.
+ipcMain.on('pet:presence', (_e, event) => {
+  if (!['arrived', 'left', 'blind'].includes(event)) return;
+  if (busy) return; // do not talk over an answer you are waiting for
+  talk(event, { event, move: event === 'arrived' ? 'jump' : null });
+});
+
+ipcMain.on('pet:battery', (_e, level) => {
+  const ok = level && Number.isFinite(level.percent)
+    && level.percent >= 0 && level.percent <= 100;
+  battery = ok ? { percent: Math.round(level.percent), charging: !!level.charging } : null;
+});
+
 // The renderer owns hit-testing because only it knows where the pet is standing.
 ipcMain.on('pet:interactive', (_e, interactive) => {
   if (win && !win.isDestroyed()) win.setIgnoreMouseEvents(!interactive, { forward: true });
@@ -495,6 +561,7 @@ ipcMain.on('config:close', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  for (const id of timers) clearTimeout(id);
   clearTimeout(saveTimer);
   writeJson('pet.json', state);
 });

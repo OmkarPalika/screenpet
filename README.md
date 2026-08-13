@@ -256,6 +256,114 @@ Accuracy is SAPI's, which is fair for plain sentences and poor for technical
 words. Swapping in whisper.cpp would fix that at the cost of a binary and a model
 download; the trade is noted in `listen.ps1` rather than taken.
 
+## Skills
+
+Some things a model should not be asked to do. These are matched in
+[skills.js](skills.js) **before** anything reaches Ollama, so they are instant,
+exact, and identical every time:
+
+| Say | Get |
+| --- | --- |
+| `set a timer for 5 minutes`, `wake me in half an hour` | A timer. `remind me to stretch in 20 minutes` keeps the reason and says it back when it fires. |
+| `what time is it`, `what day is it` | The clock, from your machine. |
+| `battery?` | Level and whether it is charging. |
+| `flip a coin`, `roll a d20` | A result, and a spin while you get it. |
+| `rock` / `paper` / `scissors` | An actual game. It dances if it wins and falls over if it does not. |
+| `dance`, `spin`, `jump`, `fall over`, `look around` | See "A body" below. |
+| `what is the weather` | A refusal, with the reason. |
+
+**Weather is matched deliberately in order to turn it down.** Every weather
+source is somebody else's server and it wants your location to be useful. Left
+unmatched, the model cheerfully invents a forecast — which is worse than saying
+no, so the pet says no.
+
+**The false positives are the whole difficulty.** A skill answers *instead* of
+the model, with total confidence, and nothing anywhere reports that it did. So
+`what is the time complexity of quicksort` must not return the clock — it did,
+until the pattern was anchored to the end of the line. `spin up a server`,
+`jump to line 40` and `walk me through this` were all making the pet perform
+tricks instead of answering. Anything over 90 characters is treated as a
+question rather than a command, on the grounds that commands are short.
+
+Those cases are pinned in `npm test`, and the test was checked by putting the
+bug back and confirming it failed:
+
+```
+AssertionError: a skill hijacked: what is the time complexity of quicksort
+```
+
+Timers live in memory only. One that survived a restart would mean a file on
+disk with your notes in it, and this app does not keep one.
+
+## A body
+
+Six whole-body movements, separate from the twenty-one faces:
+
+`walk` `dance` `spin` `jump` `topple` `peek`
+
+**The face and the body are different axes on purpose.** An expression is
+`data-expr` on `.pet`; a movement is `data-move` on the `svg` inside it. Two
+elements, two `animation` properties — so the pet can lose at rock-paper-scissors,
+sulk about it and fall over at the same time. Putting both on one element means
+whichever rule wins silently cancels the other, and the pet goes blank every
+time it moves. There is a test that sets a movement on a raging pet and asserts
+the anger mark is still there.
+
+Wandering now walks rather than glides: the stage was always sliding along a CSS
+transition, and the step cycle runs for exactly as long as that transition takes.
+Idle quirks pick a whole movement about a third of the time. Dancing is not among
+them — a pet that breaks into a dance at nobody is unsettling rather than
+charming, so that one stays something you ask for.
+
+`npm run verify:ui` writes `pet-moves.png`, each movement paused partway through
+at the frame that has to look right: the apex of the jump, the pet on the floor.
+
+One thing that only a render would have caught: **the shadow is drawn inside the
+svg**, so toppling turned it over too and the pet fell next to a shadow standing
+on its edge. It is now counter-rotated about the same origin, which cancels
+exactly. Then the contact sheet kept showing the bug after it was fixed, because
+the sheet blanks every descendant animation and only the body's was being put
+back — the still was wrong, not the stylesheet.
+
+## Noticing you
+
+Off by default, and the least capable thing that answers the question.
+
+With `Notice when I am at the desk` switched on, the pet greets you when you sit
+down and settles to wait when you have been gone two minutes. That is all it
+does, and all it *can* do:
+
+- frames go to a **32×24** canvas — 768 pixels
+- each is reduced to **one number**: how much changed since the last one
+- that number becomes one of three words — `arrived`, `left`, `blind` — and the
+  frame is discarded
+
+Nothing is stored, encoded, recognised or sent. **It cannot tell who you are**,
+and no amount of prompting will make it say, because the information is gone
+before anything else in the app can see it. The pet greets you vaguely for the
+same reason: greeting you *by name* off a motion threshold would be claiming
+something it does not know.
+
+A green dot on the pet is lit for exactly as long as the stream is open.
+
+**The permission gate is the real control.** Electron's default handler grants
+most of what a page it loaded asks for; this app replaces it with a deny-by-all
+rule and exactly one exception — `media`, video only, and only with the setting
+on. Geolocation, notifications, the microphone through `getUserMedia`, and
+anything Chromium adds in future are refused without being listed. It lives in
+[settings.js](settings.js) as a pure function so the whole truth table is
+testable without booting Electron, and both of Electron's handlers are installed,
+because they are told the media type differently and wiring only one undoes the
+other.
+
+Verified in both directions rather than assumed:
+
+```
+run 1: camera OFF   permission media ["video"] -> denied    stream:false light:false
+run 2: camera ON    permission media ["video"] -> ALLOWED   stream:true  light:true   -> arrived
+run 3: switched off                                         stream:false light:false
+```
+
 ## Conversations
 
 Right-click → **Talk…** and type. No screenshot, no OCR: the model is told
@@ -290,6 +398,7 @@ and quit it — the pet has no taskbar button by design.
 | Skin | Butter, mint, blossom or slate. Applies to whichever pet you picked. |
 | Speak replies out loud | On by default. Mute from the tray without opening this window. |
 | Let me talk to it | Off by default. Adds `Listen…` to the pet's menu. |
+| Notice when I am at the desk | Off by default. Motion only — see "Noticing you". |
 | Start with Windows | Packaged builds only — in development this would register `electron.exe`. |
 
 Settings live in `settings.json` next to `pet.json` in Electron's `userData`.
@@ -589,6 +698,14 @@ exits. The one path the other two cannot reach.
 
 ## Known ceilings
 
+- **Presence is motion, not people.** A still person reads as an empty room after
+  two minutes, and a curtain moving reads as company. Real presence detection
+  wants a face model and a model file to ship with it; this is thirty lines and
+  answers the only question the pet asks.
+- **Timers do not survive a restart.** Deliberate — see "Skills".
+- **Skills are patterns, not intent.** They will miss phrasings that are not in
+  the list, and the fix for a miss is a new pattern rather than a smarter parser.
+  Missing falls through to the model, which is the safe direction.
 - **The confidence gate is calibrated against noise, not against speech.** 0.30
   clears the measured floor (0.029) by an order of magnitude, but nobody has
   spoken a clear sentence into it on a quiet headset and checked what score comes

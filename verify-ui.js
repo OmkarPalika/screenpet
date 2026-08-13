@@ -476,6 +476,56 @@ app.whenReady().then(async () => {
   win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', voice: false, mic: false });
   await settle();
 
+  // --- body movements -------------------------------------------------------
+  // The face and the body are separate axes, and the point of separating them is
+  // that both can run at once. If a movement ever lands on .pet instead of the
+  // svg inside it, one animation silently replaces the other and the pet stops
+  // reacting while it moves - which is exactly the bug this checks for.
+  const moves = await js(`Object.keys(MOVE_MS)`);
+  check(moves.length >= 6, `only ${moves.length} movements defined`);
+
+  for (const name of moves) {
+    win.webContents.send('pet:say', { text: 'watch', kind: 'chat', expr: 'rage', move: name });
+    await settle();
+    const got = await js(
+      `(() => ({ move: document.getElementById('pet').dataset.move,
+                 anim: getComputedStyle(document.querySelector('.pet svg')).animationName,
+                 expr: document.getElementById('pet').dataset.expr,
+                 anger: getComputedStyle(document.querySelector('.anger')).display }))()`
+    );
+    check(got.move === name, `movement not applied: wanted ${name}, got ${got.move}`);
+    check(got.anim !== 'none', `${name} set no animation on the body`);
+    // The face has to survive the movement. A pet that goes blank while it moves
+    // is the collision this design exists to avoid.
+    check(got.expr === 'rage', `${name} wiped the expression (${got.expr})`);
+    check(got.anger === 'block', `${name} wiped the angry face's anger mark`);
+  }
+
+  // An unknown movement must clear rather than stick a bad attribute on.
+  await js(`move('moonwalk')`);
+  check(
+    !(await js(`document.getElementById('pet').dataset.move || ''`)),
+    'an unknown movement was applied anyway'
+  );
+  win.webContents.send('pet:say', { text: 'ok', kind: 'chat', expr: 'smile' });
+  await settle();
+
+  // --- the camera -----------------------------------------------------------
+  // Not switched on here: getUserMedia in a test would prompt, and the point
+  // being checked is that it stays shut and says so.
+  check(!(await shownOnScreen('cam')), 'the camera light is on before anyone enabled it');
+  check(
+    !(await js(`!!document.getElementById('cam-video').srcObject`)),
+    'a camera stream is open with the camera switched off'
+  );
+  // The frames never get anywhere near full size: whatever the sensor gives, the
+  // canvas everything is measured from is 32x24.
+  const canvas = await js(
+    `(() => { const c = document.getElementById('cam-canvas');
+              return { w: c.width, h: c.height }; })()`
+  );
+  check(canvas.w <= 64 && canvas.h <= 48, `camera canvas is ${canvas.w}x${canvas.h}, too big to be blind`);
+
   // --- contact sheets ------------------------------------------------------
   // Assertions above prove each face and each species changes something. These
   // are here so a human can see whether the something looks like a feeling, or
@@ -556,6 +606,42 @@ app.whenReady().then(async () => {
     }
   }`);
 
+  // Movements are time-based, so unlike the faces they show nothing at all in a
+  // still. Each is caught partway through instead: a negative delay seeks into
+  // the animation, and pausing holds it there. The moment picked for each is the
+  // one that has to look right - the apex of the jump, the pet on the floor.
+  const movesAt = [
+    ['walk', '-0.30s'], ['dance', '-0.26s'], ['spin', '-0.20s'],
+    ['jump', '-0.23s'], ['topple', '-0.95s'], ['peek', '-0.55s'],
+  ];
+  await sheet('pet-moves.png', [920, 260], `(source, box, clone) => {
+    box.style.display = 'flex';
+    box.style.flexWrap = 'wrap';
+    for (const [name, at] of ${JSON.stringify(movesAt)}) {
+      const cell = document.createElement('div');
+      cell.style.width = '150px';
+      cell.style.textAlign = 'center';
+      const p = clone(source, cell);
+      p.dataset.move = name;
+      // clone() blanks every descendant animation so the faces sit still. Both
+      // halves of a movement need theirs back: the body, and the shadow that
+      // counter-rotates against it. Restoring only the body made this sheet
+      // report a shadow standing on its edge that the app does not actually
+      // have - the still was wrong, not the stylesheet.
+      for (const el of [p.querySelector('svg'), p.querySelector('.shadow')]) {
+        el.style.animation = '';
+        el.style.animationDelay = at;
+        el.style.animationPlayState = 'paused';
+      }
+      const label = document.createElement('div');
+      label.textContent = name;
+      label.style.fontSize = '11px';
+      label.style.color = '#8a7f6d';
+      cell.append(label);
+      box.append(cell);
+    }
+  }`);
+
   const allSpecies = ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon'];
   await sheet('pet-species.png', [760, 500], `(source, box, clone) => {
     box.style.display = 'grid';
@@ -591,7 +677,7 @@ app.whenReady().then(async () => {
   });
 
   const sw = new BrowserWindow({
-    width: 460, height: 980, show: true, // must match openSettings() in main.js
+    width: 460, height: 820, show: true, // must match openSettings() in main.js
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       backgroundThrottling: false,

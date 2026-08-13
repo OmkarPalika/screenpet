@@ -22,7 +22,8 @@
 }
 
 body {
-  padding: 18px 24px 14px;
+  /* The bottom clears the fixed button row that sits over it. */
+  padding: 18px 24px 72px;
   background: var(--bg);
   color: var(--fg);
   font: 13px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
@@ -111,13 +112,24 @@ code { font-family: Consolas, ui-monospace, monospace; font-size: 11px; }
 
 /* ---- footer ---- */
 
+/* Pinned, not merely last. Every setting added used to mean a taller window,
+   and the window is not resizable - so it only had to outgrow the screen once
+   for Save to become permanently unreachable. Now the content scrolls under a
+   row that never leaves.
+   `fixed`, not `sticky`: sticky cannot lift an element past its own containing
+   block, and this row is the last child of body - already sitting at the bottom
+   of it, with nowhere to stick to. */
 .row {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   gap: 9px;
-  margin-top: 16px;
-  padding-top: 14px;
+  padding: 12px 24px;
   border-top: 1px solid var(--line);
+  background: var(--bg);
 }
 
 .status { flex: 1; color: var(--muted); font-size: 12px; }

@@ -12,6 +12,11 @@ contextBridge.exposeInMainWorld('pet', {
   react: (event) => ipcRenderer.send('pet:react', String(event)),
   chat: (text) => ipcRenderer.send('pet:chat', String(text)),
   listen: () => ipcRenderer.send('pet:listen'),
+  // 'arrived' | 'left' | 'blind'. Never a frame, never a measurement - the
+  // renderer reduces what the camera saw to one of three words before this
+  // bridge, and this is the only thing that crosses it.
+  presence: (event) => ipcRenderer.send('pet:presence', String(event)),
+  battery: (level) => ipcRenderer.send('pet:battery', level),
   chatOpen: (open) => ipcRenderer.send('pet:chat-open', !!open),
   ask: () => ipcRenderer.send('pet:ask'),
   settings: () => ipcRenderer.send('pet:settings'),

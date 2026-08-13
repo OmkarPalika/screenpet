@@ -8,6 +8,7 @@ const skinsBox = el('skins');
 const autostart = el('autostart');
 const voice = el('voice');
 const mic = el('mic');
+const camera = el('camera');
 const status = el('status');
 const saveBtn = el('save');
 
@@ -113,6 +114,7 @@ saveBtn.addEventListener('click', async () => {
     skin,
     voice: voice.checked,
     mic: mic.checked,
+    camera: camera.checked,
     autostart: autostart.checked,
   });
   current = res.settings;
@@ -121,6 +123,7 @@ saveBtn.addEventListener('click', async () => {
   // would be worse than showing the user it did not stick.
   hotkeyInput.value = current.hotkey;
   voice.checked = current.voice;
+  camera.checked = current.camera;
   mic.checked = current.mic;
   status.textContent = 'Saved.';
 });
@@ -151,6 +154,7 @@ el('close').addEventListener('click', () => window.config.close());
 
   hotkeyInput.value = current.hotkey;
   voice.checked = current.voice;
+  camera.checked = current.camera;
   mic.checked = current.mic;
   autostart.checked = current.autostart;
   autostart.disabled = !data.packaged;
