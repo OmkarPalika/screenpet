@@ -234,7 +234,12 @@ chatInput.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') openChat(false);
 });
 
-window.pet.onSkin((skin) => { document.documentElement.dataset.skin = skin; });
+// Species and palette both hang off the root element: the shape rules in
+// pets.css are plain descendant selectors, so they work anywhere they are set.
+window.pet.onLook(({ pet, skin }) => {
+  document.documentElement.dataset.pet = pet;
+  document.documentElement.dataset.skin = skin;
+});
 
 // ---- wandering -----------------------------------------------------------
 // The window never moves. Moving a transparent always-on-top window at 60fps is

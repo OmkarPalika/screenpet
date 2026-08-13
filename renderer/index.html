@@ -7,6 +7,7 @@
       content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:"
     />
     <title>screenpet</title>
+    <link rel="stylesheet" href="pets.css" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
@@ -41,12 +42,15 @@
         <div id="hearts" class="hearts"></div>
         <svg viewBox="0 0 120 110" width="120" height="110" aria-hidden="true">
           <ellipse class="shadow" cx="60" cy="102" rx="34" ry="6" />
+          <!-- Behind the body on purpose: a tail drawn in front looks stuck on. -->
+          <path class="tail" d="" />
+          <path class="crest" d="" />
           <path
             class="body"
             d="M60 14c26 0 42 18 42 42 0 24-16 40-42 40S18 80 18 56c0-24 16-42 42-42z"
           />
-          <path class="ear" d="M28 26c6-10 16-12 20-4-8 2-15 8-20 12z" />
-          <path class="ear" d="M92 26c-6-10-16-12-20-4 8 2 15 8 20 12z" />
+          <path class="ear ear-l" d="M28 26c6-10 16-12 20-4-8 2-15 8-20 12z" />
+          <path class="ear ear-r" d="M92 26c-6-10-16-12-20-4 8 2 15 8 20 12z" />
 
           <!-- Everything that follows the cursor sits in .gaze. The blink lives
                on .eyes and an animation owns the whole transform property, so
@@ -83,6 +87,7 @@
           <path class="sweat" d="M94 38q4 8 0 10-4-2 0-10z" />
           <text class="zzz" x="93" y="30">z</text>
           <path class="spark" d="M99 30l2 6 6 2-6 2-2 6-2-6-6-2 6-2z" />
+          <path class="whiskers" d="" />
         </svg>
 
         <!-- Widths are set from JS. Inline style attributes would need

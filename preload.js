@@ -7,7 +7,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('pet', {
   onSay: (fn) => ipcRenderer.on('pet:say', (_e, payload) => fn(payload)),
   onStats: (fn) => ipcRenderer.on('pet:stats', (_e, payload) => fn(payload)),
-  onSkin: (fn) => ipcRenderer.on('pet:skin', (_e, skin) => fn(skin)),
+  onLook: (fn) => ipcRenderer.on('pet:look', (_e, look) => fn(look)),
   act: (name) => ipcRenderer.send('pet:act', name),
   react: (event) => ipcRenderer.send('pet:react', String(event)),
   chat: (text) => ipcRenderer.send('pet:chat', String(text)),

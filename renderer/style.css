@@ -1,11 +1,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-/* ---- skins: one palette swap, so moods stay filters rather than 4x5 rules ---- */
-
-:root                    { --body: #f2b45c; --ear: #e09c3e; --cheek: #f08a7a; }
-[data-skin="mint"]       { --body: #7fd1b0; --ear: #5fb896; --cheek: #ef9a8e; }
-[data-skin="blossom"]    { --body: #f3a3bd; --ear: #dd88a6; --cheek: #dd5f7f; }
-[data-skin="slate"]      { --body: #9aa8bd; --ear: #7d8b9f; --cheek: #e28a7a; }
+/* Palette, ink and species shapes live in pets.css, which the settings window
+   and the demo stage load too. This file is layout, moods and expressions. */
 
 html, body {
   width: 100%;
@@ -151,23 +147,6 @@ html, body {
 .pet { position: relative; animation: bob 3.2s ease-in-out infinite; }
 
 .pet svg { transition: filter 400ms ease; }
-
-.body   { fill: var(--body); }
-.ear    { fill: var(--ear); }
-.eye    { fill: #3a2c1e; }
-.glint  { fill: #fff; }
-.cheek  { fill: var(--cheek); opacity: 0.55; }
-.shadow { fill: #000; opacity: 0.16; }
-.mouth  { fill: none; stroke: #3a2c1e; stroke-width: 2.6; stroke-linecap: round; }
-.lids   { display: none; stroke: #3a2c1e; stroke-width: 2.6; stroke-linecap: round; }
-
-.tongue { fill: #e2707f; display: none; }
-.brows  { display: none; stroke: #3a2c1e; stroke-width: 2.4; stroke-linecap: round; fill: none; }
-.eyes-love { display: none; fill: #f0708a; }
-.tear   { display: none; fill: #7fc7ea; }
-.sweat  { display: none; fill: #9fd4ee; }
-.spark  { display: none; fill: #ffd45e; }
-.zzz    { display: none; fill: #6c7a8c; font: 600 15px "Segoe UI", system-ui, sans-serif; }
 
 /* The gaze follows the cursor and the blink squashes the eyes. Both want the
    transform property, and an animation wins it outright, so they live on

@@ -4,12 +4,17 @@
 
 const SKINS = ['butter', 'mint', 'blossom', 'slate'];
 
+// Species and skin are orthogonal on purpose: every pet works in every palette,
+// because the difference is shape and the palette is three CSS variables.
+const PETS = ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon'];
+
 const DEFAULTS = {
   model: 'llama3.1:8b',
   // 'auto' picks a vision-capable model if Ollama has one, 'off' forces the OCR
   // path, anything else is treated as an explicit model name.
   vision: 'auto',
   hotkey: 'CommandOrControl+Shift+Space',
+  pet: 'blob',
   skin: 'butter',
   autostart: false,
   ollama: 'http://127.0.0.1:11434',
@@ -47,6 +52,7 @@ function load(raw) {
     model: str(s.model) || DEFAULTS.model,
     vision: str(s.vision) || DEFAULTS.vision,
     hotkey: validHotkey(s.hotkey) ? s.hotkey : DEFAULTS.hotkey,
+    pet: PETS.includes(s.pet) ? s.pet : DEFAULTS.pet,
     skin: SKINS.includes(s.skin) ? s.skin : DEFAULTS.skin,
     autostart: typeof s.autostart === 'boolean' ? s.autostart : DEFAULTS.autostart,
     ollama: validEndpoint(s.ollama) ? s.ollama : DEFAULTS.ollama,
@@ -58,4 +64,4 @@ function merge(current, patch) {
   return load({ ...current, ...(patch && typeof patch === 'object' ? patch : {}) });
 }
 
-module.exports = { DEFAULTS, SKINS, load, merge, validHotkey, validEndpoint };
+module.exports = { DEFAULTS, SKINS, PETS, load, merge, validHotkey, validEndpoint };

@@ -54,6 +54,25 @@ Unprompted talk is throttled twice over: nagging at most once every three hours,
 and idle small talk at most once every 45 minutes and only when the pet has
 nothing to complain about. A pet that talks more than that gets uninstalled.
 
+## Pets
+
+Six of them: **blob**, **cat**, **pup**, **bun**, **bird**, **dragon**. Pick one
+in Settings, next to the four skins. They are orthogonal — every pet works in
+every palette, so it is 24 combinations, not six.
+
+Every species keeps the **same face rig**: same classes, same coordinates. Only
+ears, body outline and extras (tail, crest, whiskers) change. That is the whole
+trick — all nine expressions work on all six pets without a single extra rule,
+and a seventh pet is one CSS block, not a new sprite sheet.
+
+Shapes live in `renderer/pets.css`, which the pet window, the settings previews
+and the demo stage all load. One definition per pet, so the picker previews are
+drawn by the same rules as the real thing and cannot disagree with it. A test
+asserts no species rule sneaks into `style.css`, which only the pet window
+loads — a shape hiding in there would render correctly and preview as a blob.
+
+`npm run verify:ui` writes `pet-species.png`: every pet in every skin.
+
 ## Faces
 
 Mood is the long run; an expression is the reaction to something that just
@@ -102,7 +121,8 @@ and quit it — the pet has no taskbar button by design.
 | Model | Picked from what Ollama actually has installed. |
 | Diagrams and images | `Auto` uses a vision model if one exists, `Off` forces text-only. |
 | Hotkey | Validated before saving; a malformed accelerator would crash the app on launch. |
-| Skin | Butter, mint, blossom or slate. |
+| Pet | Blob, cat, pup, bun, bird or dragon. Previews are the real thing. |
+| Skin | Butter, mint, blossom or slate. Applies to whichever pet you picked. |
 | Start with Windows | Packaged builds only — in development this would register `electron.exe`. |
 
 Settings live in `settings.json` next to `pet.json` in Electron's `userData`.
@@ -304,14 +324,18 @@ npm run verify:ui
 ```
 
 Drives both real windows over real IPC — speech, all five moods, every
-expression, cursor tracking, all four skins, stat bars, hover hit-testing,
-headpat, tickle, drag, the chat box, every menu item, and the whole settings
-form — and fails on any console error. Writes PNGs to look at.
+expression, cursor tracking, all six species, all four skins, stat bars, hover
+hit-testing, headpat, tickle, drag, the chat box, every menu item, and the whole
+settings form — and fails on any console error. Writes PNGs to look at.
 
-The expression check is not just "an attribute was set". It asserts the mouth
-geometry actually changed, because the entire face system rests on CSS
-`d: path(...)` resolving; if that ever stopped working every expression would
-quietly collapse into the default one and nothing else would notice.
+The expression and species checks are not just "an attribute was set". They
+assert the mouth and ear geometry actually changed, because both systems rest on
+CSS `d: path(...)` resolving; if that ever stopped working every face and every
+pet would quietly collapse into the default one and nothing else would notice.
+
+It also fails loudly on an unhandled rejection. A selector that matches nothing
+rejects `executeJavaScript`, which used to abort the run silently and leave the
+app sitting there with a window open — a hang tells you nothing.
 
 It earns its place. It has already caught three bugs that unit tests cannot see:
 a `const pet` in `renderer.js` colliding with the `contextBridge` global and
@@ -366,8 +390,13 @@ exits. The one path the other two cannot reach.
 - **Talking takes focus for as long as the box is open.** Unavoidable: a window
   that cannot be focused cannot be typed into.
 - **The demo stage has its own copy of the pet SVG**, because it renders a page
-  behind the pet. A test asserts the two carry the same face parts, so a drifted
-  demo fails loudly rather than quietly showing an older pet.
+  behind the pet, and the settings previews have a third. A test asserts all
+  three carry the same face and species slots, so drift fails loudly rather than
+  quietly showing an older pet.
+- **Species are shape only, not behaviour.** The cat does not act any more like a
+  cat than the blob does. Per-species lines and idle animations would be the
+  obvious next thing, and are not there.
+- **The demo GIF records the blob**, whichever pet you have chosen.
 - **Autostart is wired but not exercised end to end.** It is gated on
   `app.isPackaged` and only reachable from the settings window of a built app.
 - **No auto-update.** Every new version is a manual download.
