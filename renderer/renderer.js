@@ -42,20 +42,25 @@ function say(text, { kind = 'answer', sticky = false } = {}) {
 // smile, hmm, oh - get no rain, which is what keeps it from becoming wallpaper:
 // the pet reacts to the cursor constantly and confetti every time would be
 // exhausting.
+// Each feeling has more than one way of showing up, picked at random per burst.
+// The same five hearts every single headpat stops being a reaction and becomes
+// a loading spinner, so the happy end gets confetti and party poppers some of
+// the time instead of flowers.
 const EMOJI = {
-  love:    ['💕', '💖', '💗'],
-  shy:     ['🌸', '💗'],
-  giggle:  ['😆', '💫'],
-  proud:   ['✨', '⭐'],
-  joy:     ['🎉', '✨', '🌟'],
-  yum:     ['🍪', '✨'],
-  annoyed: ['💢'],
-  rage:    ['💢', '🔥'],
-  cry:     ['💧', '💔'],
-  sulk:    ['💧'],
+  love:    [['💕', '💖', '💗'], ['💘', '💞'], ['🎀', '💕', '🌷']],
+  shy:     [['🌸', '💗'], ['🎀', '🌷'], ['✨', '🌸']],
+  giggle:  [['😆', '💫'], ['🎉', '😆'], ['🍬', '💫']],
+  proud:   [['✨', '⭐'], ['🎊', '✨'], ['🏆', '✨']],
+  joy:     [['🎉', '🎊', '✨'], ['🎉', '🥳', '🎊'], ['🍾', '🎉', '🌟'], ['🎆', '✨', '🎉']],
+  yum:     [['🍪', '✨'], ['🍰', '💕'], ['🍓', '✨']],
+  annoyed: [['💢']],
+  rage:    [['💢', '🔥'], ['💢', '⚡']],
+  cry:     [['💧', '💔'], ['💧', '🥺']],
+  sulk:    [['💧'], ['🌧️']],
 };
 
 const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+const pick = (sets) => sets[Math.floor(Math.random() * sets.length)];
 
 /** Drop a handful of `chars` in from above the pet's head. */
 function rain(chars, count = 5) {
@@ -85,7 +90,7 @@ function express(name, ms = 2600) {
   delete petEl.dataset.expr;
   void petEl.offsetWidth;
   petEl.dataset.expr = name;
-  if (EMOJI[name]) rain(EMOJI[name], name === 'rage' || name === 'joy' ? 7 : 5);
+  if (EMOJI[name]) rain(pick(EMOJI[name]), name === 'rage' || name === 'joy' ? 7 : 5);
   exprTimer = setTimeout(() => { delete petEl.dataset.expr; }, ms);
 }
 

@@ -70,6 +70,18 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(toReadingOrder([]), '');
 }
 
+// --- unquote: the model narrating dialogue rather than speaking ---
+{
+  const { unquote } = require('./brain');
+  assert.strictEqual(unquote('"Hey there!'), 'Hey there!');       // opened, never closed
+  assert.strictEqual(unquote('"Hey there!"'), 'Hey there!');
+  assert.strictEqual(unquote('  “Hello”  '), 'Hello');
+  // Quotes that are part of the answer must survive untouched.
+  assert.strictEqual(unquote('It prints "hello" twice.'), 'It prints "hello" twice.');
+  assert.strictEqual(unquote('391.'), '391.');
+  assert.strictEqual(unquote(''), '');
+}
+
 // --- stripThinking ---
 {
   assert.strictEqual(stripThinking('<think>hmm 17*23</think>The answer is 391.'), 'The answer is 391.');
@@ -336,6 +348,18 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.ok(!new RegExp(`\\b${quiet}:`).test(emoji), `"${quiet}" rains, and it fires on hover`);
   }
 
+  // Every feeling needs more than one way of showing up, or the same five hearts
+  // on every headpat stop reading as a reaction and start reading as a spinner.
+  // Rage and annoyance are exempt: being cross is not a mood with variations.
+  for (const varied of ['love', 'shy', 'joy', 'proud', 'yum', 'giggle']) {
+    const sets = (emoji.match(new RegExp(`\\b${varied}:\\s*\\[(.+?)\\],\\n`, 's')) || [])[1] || '';
+    assert.ok(
+      (sets.match(/\[/g) || []).length > 1,
+      `"${varied}" always drops the same emoji`
+    );
+  }
+  assert.ok(/🎉|🎊|🍾|🎆/.test(emoji), 'nothing ever celebrates');
+
   // The bow belongs to the cute half of the range only.
   const bow = css.slice(css.indexOf('.pet[data-expr="love"] .bow'), css.indexOf('@keyframes bow-on'));
   for (const cute of ['love', 'shy', 'giggle', 'proud', 'joy']) {
@@ -515,6 +539,15 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   const spy = async () => { called = true; return ok(); };
   assert.strictEqual(await ask('   \n  ', { fetch: spy }), EMPTY_SCREEN);
   assert.strictEqual(called, false, 'called the model on an empty screen');
+
+  // Nothing to answer must come back as nothing, not as prose. The pet's voice
+  // lives in the line bank; a sentence invented here would be a second, blander
+  // personality in the one file that is supposed to have none.
+  assert.strictEqual(EMPTY_SCREEN, '', 'brain.js is writing the pet\'s dialogue');
+  const blank = async () => ({ ok: true, json: async () => ({ response: '   ' }) });
+  assert.strictEqual(await ask('what is on screen', { fetch: blank }), '');
+  assert.ok(pets.line('nothing', 0), 'no cute line for a screen with no question');
+  assert.ok(pets.expressionFor('nothing'), 'the no-question line has no face');
 
   // Secrets must be redacted in the body actually sent.
   let sent = '';

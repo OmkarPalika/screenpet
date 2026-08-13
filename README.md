@@ -138,13 +138,22 @@ range only — `love` `shy` `giggle` `proud` `joy` — and a test asserts `rage`
 `cry` never get one. A pet in tears wearing a party bow is a different feeling
 entirely.
 
-**Emoji rain.** Each feeling drops a handful of emoji in from above the head:
-💕 for love, 🌸 for shy, 💢🔥 for rage, 💧💔 for crying. One mechanism for all of
-them — the renderer picks the characters, fall depth and stagger, the stylesheet
-says only how a falling thing moves, and a new feeling clears whatever is still
-in the air. `smile`, `hmm` and `oh` deliberately drop nothing: they fire on
-hover, and confetti on every mouse move would be unbearable. There is a test for
-that specifically.
+**Emoji rain.** Each feeling drops a handful of emoji in from above the head, and
+each has **several sets picked at random per burst** — a headpat is 💕💖💗 or
+💘💞 or 🎀💕🌷, and joy might be 🎉🎊✨, 🥳, 🍾 or 🎆. The same five hearts every
+single time stops reading as a reaction and starts reading as a loading spinner.
+Rage and annoyance are the exceptions and stay fixed; being cross is not a mood
+with variations.
+
+One mechanism for all of it — the renderer picks the set, fall depth and stagger,
+the stylesheet says only how a falling thing moves, and a new feeling clears
+whatever is still in the air. `smile`, `hmm` and `oh` deliberately drop nothing:
+they fire on hover, and confetti on every mouse move would be unbearable. There
+are tests for both the variety and the silence.
+
+The bubble sits at `z-index: 1` so the rain falls *behind* it. The drops start
+74px above the pet's head, which is exactly where the speech bubble is, and
+without this a heart lands on top of the answer.
 
 Expression rules must stay **below** the mood rules in `style.css`. Both are
 `.pet[data-*]`, so they have identical specificity and source order is the only
@@ -155,11 +164,46 @@ render it.
 `npm run verify:ui` writes `pet-faces.png`, which is all of them side by side
 with animations paused.
 
+## How it talks
+
+The pet answers like a pet, not like a search result:
+
+> Oh, sweetie! 17 times 23 is… *pounces* …391!
+>
+> It would return 13.50 for that item! 💸
+
+**The answer itself is not negotiable.** The prompt says to give it plainly and
+completely, never to hide it or hint at it, and caps the affection at one
+flourish. Both clauses are load-bearing: this same file used to open with "you
+are a desktop pet" and produced 79–240 character replies that narrated the screen
+and talked about themselves, which is why the wording was stripped back to
+something that answered but sounded like a lookup. The current version measured
+**9/9 correct across three screens**, three runs each, with the voice back.
+Re-measure before editing it.
+
+**A screen with no question is not a failure.** It used to say `I could not read
+any text on screen` or `I cannot find a clear question`, which is technically
+true and reads like a broken tool. Now:
+
+> Oh, just reminders! No questions here today.
+
+Two layers do that. The prompt forbids refusal wording outright, and if the model
+returns nothing at all, `brain.js` returns an empty string rather than a sentence
+— the pet's voice lives in the line bank in `pet-state.js`, and a fallback
+written in `brain.js` would be a second, blander personality in the one file
+that is meant to have none.
+
+Small models like to wrap a reply in quotation marks, often opening one they
+never close. `unquote` strips that: it is the model narrating a line of dialogue,
+not the pet speaking. Quotes inside an answer survive.
+
 ## Conversations
 
 Right-click → **Talk…** and type. No screenshot, no OCR: the model is told
 plainly that it cannot see your screen, because otherwise a small model will
-cheerfully invent what is on it.
+cheerfully invent what is on it. Same rule as above — fond and playful, but a
+factual question still gets a real answer (`Tokyo is the capital! Got any other
+questions for your favourite desk buddy?`).
 
 The last three exchanges are kept for context **in memory only, never written to
 disk**. A desktop pet that keeps a transcript of your evening in `userData` is a
