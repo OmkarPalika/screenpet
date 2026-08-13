@@ -121,8 +121,11 @@ menu.addEventListener('click', (e) => {
   menu.hidden = true;
   if (btn.dataset.act) window.pet.act(btn.dataset.act);
   else if (btn.hasAttribute('data-ask')) window.pet.ask();
+  else if (btn.hasAttribute('data-settings')) window.pet.settings();
   else if (btn.hasAttribute('data-quit')) window.pet.quit();
 });
+
+window.pet.onSkin((skin) => { document.documentElement.dataset.skin = skin; });
 
 // ---- wandering -----------------------------------------------------------
 // The window never moves. Moving a transparent always-on-top window at 60fps is

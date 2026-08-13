@@ -175,6 +175,46 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(pets.nagLine('neutral', 0), '');
 }
 
+// ===== settings ============================================================
+
+{
+  const cfg = require('./settings');
+
+  assert.deepStrictEqual(cfg.load(null), cfg.DEFAULTS);
+  assert.deepStrictEqual(cfg.load('nonsense'), cfg.DEFAULTS);
+
+  // A malformed accelerator would throw inside globalShortcut.register and take
+  // the app down on launch, so it must never survive validation.
+  for (const bad of ['', '   ', 'Ctrl++', 'Ctrl+', null, 42, 'a'.repeat(80)]) {
+    assert.strictEqual(cfg.load({ hotkey: bad }).hotkey, cfg.DEFAULTS.hotkey, `accepted ${bad}`);
+  }
+  assert.strictEqual(cfg.load({ hotkey: 'Alt+Shift+P' }).hotkey, 'Alt+Shift+P');
+
+  // Endpoint must stay on loopback. A remote one turns the privacy claim into a
+  // lie, so it is not a supported configuration even if hand-edited into the file.
+  for (const bad of [
+    'http://evil.example.com:11434',
+    'https://1.2.3.4',
+    'http://127.0.0.1.evil.com',
+    'ftp://127.0.0.1',
+    'not a url',
+    '',
+  ]) {
+    assert.strictEqual(cfg.load({ ollama: bad }).ollama, cfg.DEFAULTS.ollama, `accepted ${bad}`);
+  }
+  assert.strictEqual(cfg.load({ ollama: 'http://localhost:1234' }).ollama, 'http://localhost:1234');
+
+  assert.strictEqual(cfg.load({ skin: 'chartreuse' }).skin, cfg.DEFAULTS.skin);
+  assert.strictEqual(cfg.load({ skin: 'mint' }).skin, 'mint');
+  assert.strictEqual(cfg.load({ autostart: 'yes' }).autostart, false);
+
+  // merge keeps what it is not told about, and still validates what it is.
+  const merged = cfg.merge(cfg.load({ skin: 'mint' }), { model: 'x', hotkey: 'Ctrl+' });
+  assert.strictEqual(merged.skin, 'mint');
+  assert.strictEqual(merged.model, 'x');
+  assert.strictEqual(merged.hotkey, cfg.DEFAULTS.hotkey, 'merge let a bad hotkey through');
+}
+
 // ===== ask (async, last) ===================================================
 
 (async () => {
@@ -209,6 +249,52 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 
   const slow = async () => { const e = new Error('aborted'); e.name = 'AbortError'; throw e; };
   assert.match(await ask('hi', { fetch: slow }), /too long/);
+
+  // --- vision tier ---------------------------------------------------------
+  const { askVision, detectVisionModel, listModels } = require('./brain');
+
+  const fakeOllama = (models, caps = {}) => async (url, init) => {
+    if (url.endsWith('/api/tags')) {
+      return { ok: true, json: async () => ({ models: models.map((n) => ({ name: n })) }) };
+    }
+    if (url.endsWith('/api/show')) {
+      const { model } = JSON.parse(init.body);
+      return { ok: true, json: async () => ({ capabilities: caps[model] || ['completion'] }) };
+    }
+    return { ok: true, json: async () => ({ response: 'ok' }) };
+  };
+
+  // Ask Ollama what a model can do rather than pattern-matching its name.
+  assert.strictEqual(
+    await detectVisionModel({ fetch: fakeOllama(['llama3.1:8b', 'moondream'], { moondream: ['completion', 'vision'] }) }),
+    'moondream'
+  );
+  assert.strictEqual(await detectVisionModel({ fetch: fakeOllama(['llama3.1:8b']) }), null);
+  // Ollama down, or too old to report capabilities: fall back to OCR, never throw.
+  const boom = async () => { throw new Error('ECONNREFUSED'); };
+  assert.strictEqual(await detectVisionModel({ fetch: boom }), null);
+  assert.deepStrictEqual(await listModels({ fetch: boom }), []);
+  assert.deepStrictEqual(await listModels({ fetch: fakeOllama(['a', 'b']) }), ['a', 'b']);
+
+  let vbody = null;
+  const grab = async (_url, init) => {
+    vbody = JSON.parse(init.body);
+    return { ok: true, json: async () => ({ response: 'a triangle' }) };
+  };
+  assert.strictEqual(await askVision('BASE64PNG', { fetch: grab, model: 'moondream' }), 'a triangle');
+  assert.deepStrictEqual(vbody.images, ['BASE64PNG'], 'image was not sent to the model');
+  assert.strictEqual(vbody.model, 'moondream');
+
+  // A blank capture must not cost an inference call either.
+  let visionCalled = false;
+  const vspy = async () => { visionCalled = true; return grab(); };
+  assert.strictEqual(await askVision('', { fetch: vspy }), EMPTY_SCREEN);
+  assert.strictEqual(visionCalled, false);
+
+  // Vision answers carry mood the same way, and still cannot decline.
+  await askVision('X', { fetch: grab, mood: 'sleepy' });
+  assert.ok(vbody.prompt.includes('sleepy'), 'mood did not reach the vision prompt');
+  assert.ok(vbody.prompt.includes('Answer correctly regardless of your mood'));
 
   console.log('all checks passed');
 })();

@@ -97,6 +97,26 @@ app.whenReady().then(async () => {
   );
   check(lids.eyes === 'none' && lids.lids === 'block', 'sleepy pet did not close its eyes');
 
+  // --- skins repaint the pet, and moods stay filters so they compose --------
+  const fill = () => js(`getComputedStyle(document.querySelector('.body')).fill`);
+  const butter = await fill();
+  win.webContents.send('pet:skin', 'mint');
+  await settle();
+  const mint = await fill();
+  check(mint !== butter, 'skin change did not repaint the pet');
+  check(mint === 'rgb(127, 209, 176)', `mint skin wrong: ${mint}`);
+
+  // A mood on top of a skin must tint, not overwrite the palette.
+  win.webContents.send('pet:stats', { fullness: 60, happiness: 10, energy: 70, bond: 0, mood: 'sad' });
+  await settle();
+  check(await fill() === mint, 'mood overwrote the skin colour instead of filtering it');
+  check(
+    (await js(`getComputedStyle(document.querySelector('.pet svg')).filter`)) !== 'none',
+    'sad mood applied no filter'
+  );
+  win.webContents.send('pet:skin', 'butter');
+  await settle();
+
   // --- interaction wiring, asserted over real IPC -------------------------
   await js(
     `(() => { const r = document.getElementById('pet').getBoundingClientRect();
@@ -142,13 +162,88 @@ app.whenReady().then(async () => {
   check(disabled.feed, 'Feed stayed enabled on a full pet');
   check(disabled.play, 'Play stayed enabled on an exhausted pet');
 
+  // --- settings window ----------------------------------------------------
+  let saved = null;
+  ipcMain.handle('config:get', async () => ({
+    settings: {
+      model: 'llama3.1:8b', vision: 'auto', hotkey: 'CommandOrControl+Shift+Space',
+      skin: 'butter', autostart: false, ollama: 'http://127.0.0.1:11434',
+    },
+    skins: ['butter', 'mint', 'blossom', 'slate'],
+    models: ['llama3.1:8b', 'mistral:7b'],
+    visionModel: null,
+    packaged: false,
+  }));
+  ipcMain.handle('config:save', async (_e, patch) => {
+    saved = patch;
+    return { settings: { ...patch, ollama: 'http://127.0.0.1:11434' }, visionModel: null };
+  });
+
+  const sw = new BrowserWindow({
+    width: 460, height: 660, show: true, // must match openSettings() in main.js
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      backgroundThrottling: false,
+    },
+  });
+  sw.webContents.on('console-message', (e) => {
+    if (e.level === 'error') errors.push(`settings: ${e.message}`);
+  });
+  await sw.loadFile(path.join(__dirname, 'renderer', 'settings.html'));
+  await settle();
+  const sjs = (src) => sw.webContents.executeJavaScript(src);
+
+  check(
+    (await sjs(`document.querySelectorAll('#model option').length`)) === 2,
+    'settings did not list the installed models'
+  );
+  check(
+    (await sjs(`document.querySelectorAll('#skins .swatch').length`)) === 4,
+    'settings did not render the skin swatches'
+  );
+  check(
+    (await sjs(`document.getElementById('vision-hint').classList.contains('warn')`)),
+    'settings did not warn that no vision model is installed'
+  );
+  check(
+    await sjs(`document.getElementById('autostart').disabled`),
+    'autostart was offered in an unpackaged build, where it would register electron.exe'
+  );
+  // The window is not resizable, so anything below the fold is unreachable.
+  check(
+    await sjs(
+      `document.getElementById('save').getBoundingClientRect().bottom <= window.innerHeight`
+    ),
+    'Save button falls outside the settings window - it is not resizable, so it cannot be reached'
+  );
+  fs.writeFileSync(path.join(__dirname, 'pet-settings.png'), (await sw.webContents.capturePage()).toPNG());
+
+  // A malformed accelerator must not be savable - registering one throws.
+  await sjs(
+    `(() => { const h = document.getElementById('hotkey');
+       h.value = 'Ctrl+'; h.dispatchEvent(new Event('input')); })()`
+  );
+  await settle();
+  check(await sjs(`document.getElementById('save').disabled`), 'a bad hotkey was still savable');
+
+  await sjs(
+    `(() => { const h = document.getElementById('hotkey');
+       h.value = 'Alt+Shift+P'; h.dispatchEvent(new Event('input'));
+       document.querySelector('[data-skin="blossom"]').click();
+       document.getElementById('save').click(); })()`
+  );
+  await settle();
+  check(saved !== null, 'Save sent nothing to the main process');
+  check(saved && saved.hotkey === 'Alt+Shift+P', `hotkey not saved: ${saved && saved.hotkey}`);
+  check(saved && saved.skin === 'blossom', `skin not saved: ${saved && saved.skin}`);
+
   // --- report -------------------------------------------------------------
   const all = [...errors, ...problems];
   if (all.length) {
     console.error('FAIL\n - ' + all.join('\n - '));
     return app.exit(1);
   }
-  console.log('ok - speech, moods, bars, hover, headpat, menu and IPC all good.');
-  console.log('wrote pet-preview.png, pet-hungry.png, pet-menu.png');
+  console.log('ok - speech, moods, skins, bars, hover, headpat, menu, settings and IPC all good.');
+  console.log('wrote pet-preview.png, pet-hungry.png, pet-menu.png, pet-settings.png');
   app.exit(0);
 });
