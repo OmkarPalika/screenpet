@@ -583,15 +583,20 @@ Rebuilds `demo/screenpet-demo.gif` and a still for store listings.
 
 The recorder does not touch your actual screen — it renders a mock quiz page in
 its own window, so nothing personal ends up in the clip. Everything else is real:
-the pet, the bubble and the animations are the app's own stylesheet, the idle
-quirk is the same `is-idling` class the renderer toggles, and the answer comes
-from capturing that page, running it through Windows OCR and asking the local
-model, exactly as the app does. If the model is unreachable the recorder fails
-rather than writing a hard-coded answer.
+the pet, the bubble and every animation are the app's own stylesheet, the walk is
+the same `data-move` attribute and the same CSS transition the renderer uses, and
+the answer comes from capturing that page, running it through Windows OCR and
+asking the local model, exactly as the app does. If the model is unreachable the
+recorder fails rather than writing a hard-coded answer.
 
-Beats: idle → stretch and tail flick → hotkey → thinking → answer → headpat.
-Whatever the model says that run is what goes in the clip, including the run
-where it answered on two lines.
+Beats: idle → walks across → looks around → walks back → hotkey → thinking →
+answer → headpat → shy → dance. Whatever the model says that run is what goes in
+the clip.
+
+**The walk back is not padding.** The bubble hangs off the pet, so answering from
+the middle of the stage puts the reply straight across the question it is
+answering — which the first take did, and which is only visible by looking at the
+frame rather than at the code.
 
 ## Build
 

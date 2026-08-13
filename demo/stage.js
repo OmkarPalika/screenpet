@@ -52,9 +52,31 @@ window.demo = {
     setTimeout(() => petEl.classList.remove('is-idling'), 2600);
   },
 
+  // Whole-body movements, the same data-move attribute the renderer sets. The
+  // animations come from the app's stylesheet, so what the clip shows is what
+  // the app does.
+  move(name, ms = 2400) {
+    delete petEl.dataset.move;
+    void petEl.offsetWidth;
+    petEl.dataset.move = name;
+    setTimeout(() => { delete petEl.dataset.move; }, ms);
+  },
+
+  // The app walks by translating the stage under a CSS transition and running
+  // the step cycle for exactly as long as it lasts. Same here, so the walk in
+  // the clip is the walk in the app rather than a slide staged for the camera.
+  walkTo(x, ms = 2200) {
+    petLayer.style.transition = `transform ${ms}ms cubic-bezier(0.4, 0, 0.25, 1)`;
+    petLayer.style.transform = `translateX(${x}px)`;
+    window.demo.move('walk', ms);
+  },
+
   // Same shape as the renderer's rain(): the stylesheet decides how a falling
   // thing moves, this only picks what falls and from where.
   rain(chars, count = 5) {
+    // One feeling at a time, the same rule the renderer follows - without this
+    // the hearts are still falling through the confetti.
+    fx.replaceChildren();
     for (let i = 0; i < count; i++) {
       const el = document.createElement('span');
       el.className = 'drop';
