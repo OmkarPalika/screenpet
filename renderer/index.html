@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:"
+    />
+    <title>screenpet</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="bubble" class="bubble" hidden><span id="bubble-text"></span></div>
+
+    <div id="pet" class="pet">
+      <svg viewBox="0 0 120 110" width="120" height="110" aria-hidden="true">
+        <ellipse class="shadow" cx="60" cy="102" rx="34" ry="6" />
+        <path
+          class="body"
+          d="M60 14c26 0 42 18 42 42 0 24-16 40-42 40S18 80 18 56c0-24 16-42 42-42z"
+        />
+        <path class="ear" d="M28 26c6-10 16-12 20-4-8 2-15 8-20 12z" />
+        <path class="ear" d="M92 26c-6-10-16-12-20-4 8 2 15 8 20 12z" />
+        <g class="eyes">
+          <ellipse class="eye" cx="45" cy="54" rx="6" ry="7" />
+          <ellipse class="eye" cx="75" cy="54" rx="6" ry="7" />
+          <circle class="glint" cx="47" cy="51" r="2" />
+          <circle class="glint" cx="77" cy="51" r="2" />
+        </g>
+        <ellipse class="cheek" cx="34" cy="66" rx="6" ry="4" />
+        <ellipse class="cheek" cx="86" cy="66" rx="6" ry="4" />
+        <path class="mouth" d="M53 70q7 7 14 0" />
+      </svg>
+    </div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>
