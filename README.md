@@ -283,18 +283,36 @@ Default model is `llama3.1:8b`. Pull it if you do not have it:
 ollama pull llama3.1:8b
 ```
 
-**Bigger is not better here, and reasoning beats size.** Five models were given
-the same screenshot of a `map`/`filter` chain and asked what it prints. Only one
-got it right, and it was the smallest: `phi4-mini-reasoning:3.8b` answered `2`.
-`mistral-nemo:12b` said `1`, a 15.9B model said `1`, `llama3.1:8b` said `0` while
-asserting in the same breath that the array had three elements. The reasoning
-model spent 992 characters getting there and `stripThinking` cut it to `2`.
+**Bigger is not better here, and reasoning beats size.** Eight models were given
+the same screenshot of a `map`/`filter` chain and asked what it prints, twice
+each, on two inputs. `ocr` is what the app really receives — Windows OCR drops
+the `= [1, 2, 3]`, so it is **unanswerable** and the only correct move is to say
+so. `control` puts the array back, and the answer is `2`.
 
-An earlier note here claimed the opposite — that reasoning models were too slow
-to use. That was the `num_ctx` bug below, not the reasoning.
+| model | control (`2`) | ocr (unanswerable) | warm |
+| --- | --- | --- | --- |
+| `deepseek-r1:8b` | **2/2** | **2/2 said the data was missing** | 6–12s |
+| `qwen3:8b` | **2/2** | 1/2 | 6–10s |
+| `phi4-mini-reasoning:3.8b` | **2/2** | 0/2 — invented the array | 6–67s |
+| `llama3.1:8b` | 0/2 | 0/2 | 1–3s |
+| `mistral-nemo:12b` | 0/2 | 0/2 | 19s |
+| `ultra-horror` (15.9B) | 0/2 | 0/2 | 23s |
+| `mistral:7b` | 0/2 | 0/2 | 9s |
 
-`llama3.1:8b` remains the default because it is the one most people already have
-and it is fine on prose. If you ask the pet about code, pull the reasoning model.
+Two things fall out of that. Size does nothing: a 15.9B model and a 12B model
+both got it wrong, and every model that got it right was 8B or smaller. And the
+second column is the one that matters — **`deepseek-r1:8b` is the only model
+that noticed it had been handed damaged input**, both times, rather than
+answering anyway. `phi4-mini-reasoning` did the opposite and quietly assumed the
+array was `[1, 2, 3]`, spending 13,000 characters of thinking and 67 seconds to
+reach a confident answer about data it had never seen.
+
+`llama3.1:8b` remains the default: it is the one most people already have, it is
+fine on prose, and at 1–3s warm it is three times faster than anything here. If
+you ask the pet about code, pull `deepseek-r1:8b`.
+
+An earlier note here claimed reasoning models were too slow to use. That was the
+`num_ctx` bug below, not the reasoning.
 
 ## Keys
 
@@ -470,14 +488,16 @@ exits. The one path the other two cannot reach.
   turns a blank into a confident wrong answer, 3/3 runs, complete with
   fabricated reasoning. A blank is worse than useless but it is honest, so the
   blank stays until a vision model that can read a diagram is worth requiring.
-- **Code screens read badly, and the model answers anyway.** Windows OCR is
+- **Code screens read badly, and most models answer anyway.** Windows OCR is
   trained on prose and silently drops code punctuation: `const a = [1, 2, 3];`
   comes back as `const a`, and `{x: 1, y: 2}` disappears entirely. Tested at 16,
   20, 28 and 36px — font size does not help. The model is then asked what a
-  program prints while never having been shown the data, and it guesses rather
-  than declining; adding *"say so if the text is too garbled to answer"* to the
-  prompt was measured and did not change that. Treat any answer about code on
-  screen as unverified.
+  program prints while never having been shown the data. Whether it declines is
+  entirely a property of the model, not of the prompt: adding *"say so if the
+  text is too garbled to answer"* was measured on `llama3.1:8b` and changed
+  nothing, while `deepseek-r1:8b` says `undefined … its initial assignment is
+  missing` without being asked to. With the default model, treat any answer
+  about code on screen as unverified.
 - **Multiple choice is the weak spot.** `llama3.1:8b` gets the arithmetic right
   consistently and then maps it to the wrong option letter often enough to
   matter — in testing it answered `391` correctly and labelled it `D` in the same
