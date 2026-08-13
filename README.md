@@ -160,6 +160,15 @@ for it.
 model answers. Runs on any machine, no GPU, no download beyond the text model.
 Secrets are redacted before the text reaches the model.
 
+Reading order is reconstructed rather than taken from the OCR engine.
+`OcrResult.Text` stringifies fragments in the engine's order, not the page's: on
+a four-line code block it returns `const a`, `const b`, `const c`, `if (a[0]`
+and only then the right-hand half of each of those rows, so the model receives
+every left column before any right one. `ocr.ps1` emits each fragment with its
+bounding box and `toReadingOrder` in [ocr.js](ocr.js) groups fragments whose
+vertical centres overlap into a row, top to bottom, left to right within a row.
+Nav bars, tables and option grids all read correctly because of it.
+
 **Tier 2 — vision, only when there is no text to read.** If OCR comes back with
 almost nothing, the screen is probably a diagram, a photo, a game or a video, and
 the screenshot itself goes to a vision model instead. Detection asks Ollama which
@@ -396,11 +405,29 @@ exits. The one path the other two cannot reach.
   mood after the task makes it reply with nothing.
 - **A screen with both a diagram and plenty of text takes the text path**, so the
   diagram is not looked at. Pick a vision model explicitly if that is your case.
+- **Diagrams do not really work, including the geometry case the vision tier was
+  built for.** A right triangle labelled 9, 12 and `x` with the caption `Find x.`
+  routes to vision correctly and then moondream returns an empty string for
+  `buildVisionPrompt`, so the pet says it came up blank. Asking it to
+  `Describe this image.` instead does produce text — and that text is not
+  trustworthy: on a four-bar chart it reported three bars, in the wrong order,
+  and invented that they measured *the number of days in each month*. Feeding
+  that description to the text model to answer from was tried and rejected: it
+  turns a blank into a confident wrong answer, 3/3 runs, complete with
+  fabricated reasoning. A blank is worse than useless but it is honest, so the
+  blank stays until a vision model that can read a diagram is worth requiring.
+- **Code screens read badly, and the model answers anyway.** Windows OCR is
+  trained on prose and silently drops code punctuation: `const a = [1, 2, 3];`
+  comes back as `const a`, and `{x: 1, y: 2}` disappears entirely. Tested at 16,
+  20, 28 and 36px — font size does not help. The model is then asked what a
+  program prints while never having been shown the data, and it guesses rather
+  than declining; adding *"say so if the text is too garbled to answer"* to the
+  prompt was measured and did not change that. Treat any answer about code on
+  screen as unverified.
 - **Multiple choice is the weak spot.** `llama3.1:8b` gets the arithmetic right
   consistently and then maps it to the wrong option letter often enough to
   matter — in testing it answered `391` correctly and labelled it `D` in the same
-  breath. OCR reading a two-column option grid out of order makes it worse. Use a
-  larger model if you rely on the letter rather than the value.
+  breath. Use a larger model if you rely on the letter rather than the value.
 - **OCR misreads some glyphs.** `Question 4 of 10` comes back as `4 of IO`. It
   has not affected an answer yet, but it is there in every capture.
 - **The pet hides for the capture**, which is a visible flicker.

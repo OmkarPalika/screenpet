@@ -5,6 +5,7 @@
 
 const assert = require('assert');
 const { redact, stripThinking, cleanOcr, buildPrompt, ask, EMPTY_SCREEN } = require('./brain');
+const { toReadingOrder } = require('./ocr');
 const pets = require('./pet-state');
 
 const HOUR = 3600000;
@@ -31,6 +32,42 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   }
   const plain = 'What is 17 * 23 ? A) 391 B) 371 C) 411';
   assert.strictEqual(redact(plain), plain);
+}
+
+// ===== ocr: reading order ==================================================
+
+// These boxes are what Windows OCR actually returned for a four-line code block
+// (probed, not invented). The engine hands back the left of every row before the
+// right of any of them, which is why the model was answering about code it had
+// never been shown.
+{
+  const code = [
+    { top: 271, bottom: 288, left: 151, text: 'const a' },
+    { top: 311, bottom: 328, left: 151, text: 'const b' },
+    { top: 351, bottom: 368, left: 151, text: 'const c' },
+    { top: 390, bottom: 408, left: 151, text: 'if (ace]' },
+    { top: 317, bottom: 324, left: 261, text: '= a.map(n n * 2)' },
+    { top: 389, bottom: 413, left: 316, text: '3) { b. push(4); }' },
+  ];
+  assert.strictEqual(
+    toReadingOrder(code),
+    'const a\nconst b = a.map(n n * 2)\nconst c\nif (ace] 3) { b. push(4); }'
+  );
+
+  // Rows group by their own height, so a heading and body text each keep their
+  // own scale instead of a pixel constant deciding for both.
+  const mixedScale = [
+    { top: 10, bottom: 60, left: 40, text: 'Heading' },
+    { top: 20, bottom: 55, left: 300, text: 'continues' },
+    { top: 80, bottom: 92, left: 40, text: 'small print' },
+    { top: 96, bottom: 108, left: 40, text: 'second line' },
+  ];
+  assert.strictEqual(
+    toReadingOrder(mixedScale),
+    'Heading continues\nsmall print\nsecond line'
+  );
+
+  assert.strictEqual(toReadingOrder([]), '');
 }
 
 // --- stripThinking ---
