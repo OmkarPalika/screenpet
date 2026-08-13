@@ -153,7 +153,7 @@ function talk(kind, { event = null, text = null, tone = 'chat' } = {}) {
   // The smoke check exits on the first thing the pet says, and it is checking
   // the answer, not the small talk.
   if (process.env.SCREENPET_SMOKE) return;
-  const said = text || pets.line(kind, lineIndex++);
+  const said = text || pets.line(kind, lineIndex++, settings.pet);
   if (!said) return;
   send('pet:say', { text: said, kind: tone, expr: pets.expressionFor(event) });
 }

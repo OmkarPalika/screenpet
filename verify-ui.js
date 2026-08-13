@@ -53,9 +53,14 @@ app.whenReady().then(async () => {
 
   await win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   const js = (src) => win.webContents.executeJavaScript(src);
-  const shot = async (name) => fs.writeFileSync(
-    path.join(__dirname, name), (await win.webContents.capturePage()).toPNG()
-  );
+  const shot = async (name) => {
+    try {
+      fs.writeFileSync(path.join(__dirname, name), (await win.webContents.capturePage()).toPNG());
+    } catch (err) {
+      // capturePage reports GPU failures with no clue which capture it was.
+      throw new Error(`capturePage failed writing ${name}: ${err.message}`);
+    }
+  };
   const settle = () => new Promise((r) => setTimeout(r, 250));
   const shownOnScreen = async (id) =>
     (await js(`getComputedStyle(document.getElementById('${id}')).display`)) !== 'none';
@@ -151,6 +156,34 @@ app.whenReady().then(async () => {
       check(await earD() !== blobEars, `${species} wears the default ears`);
     }
   }
+
+  // --- idle quirks ---------------------------------------------------------
+  // Each species must move differently while nothing is happening. Checking the
+  // resolved animation-name catches the failure that matters: a rule that never
+  // matches leaves the pet on the default squish and looks unfinished.
+  const quirks = new Set();
+  for (const s of ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon']) {
+    win.webContents.send('pet:look', { pet: s, skin: 'butter' });
+    await settle();
+    const got = await js(
+      `(() => { const p = document.getElementById('pet');
+         p.classList.add('is-idling');
+         const of = (sel) => getComputedStyle(document.querySelector(sel)).animationName;
+         const out = { body: of('#pet'), gaze: of('.gaze'), tail: of('.tail') };
+         p.classList.remove('is-idling');
+         return out; })()`
+    );
+    check(got.body !== 'bob' && got.body !== 'none', `${s} has no idle quirk (${got.body})`);
+    check(got.gaze === 'glance', `${s} does not look around while idle (${got.gaze})`);
+    quirks.add(`${got.body}/${got.tail}`);
+  }
+  check(quirks.size >= 5, `six species share too few idle quirks: ${[...quirks].join(', ')}`);
+
+  // The quirk has to end, or the pet never goes back to its resting bob.
+  check(
+    (await js(`getComputedStyle(document.getElementById('pet')).animationName`)) === 'bob',
+    'the pet did not settle back into its bob after a quirk'
+  );
 
   // A bird has no ears at all - the rule that hides them must reach both.
   win.webContents.send('pet:look', { pet: 'bird', skin: 'butter' });
@@ -336,86 +369,97 @@ app.whenReady().then(async () => {
     'chat box kept the last message in it'
   );
 
-  // --- the whole face sheet, in one image ---------------------------------
-  // Assertions above prove each expression changes something. This is here so a
-  // human can see whether the something looks like a feeling or like a glitch.
-  const faces = ['blank', 'smile', 'grin', 'love', 'yum', 'giggle', 'oh', 'hmm', 'sulk', 'dizzy'];
-  win.setContentSize(660, 460); // the whole sheet, or it silently crops
+  // --- contact sheets ------------------------------------------------------
+  // Assertions above prove each face and each species changes something. These
+  // are here so a human can see whether the something looks like a feeling, or
+  // like a pet, rather than like a glitch.
+  //
+  // Each sheet gets its own window. Resizing and reloading the window under test
+  // to build them made capturePage fail with UnknownVizError on the second one,
+  // and it left the main window with its #stage torn out for every later check.
+
   // Built with cloneNode and individual style setters, never innerHTML or
   // cssText: the CSP forbids style attributes, and the live pet carries one
   // (the gaze offset), so cloning its markup as text trips the policy.
-  await js(
-    `(() => {
-       const source = document.getElementById('pet');
-       const row = document.createElement('div');
-       row.style.display = 'flex';
-       row.style.flexWrap = 'wrap';
-       for (const f of ${JSON.stringify(faces)}) {
-         const cell = document.createElement('div');
-         cell.style.width = '124px';
-         cell.style.textAlign = 'center';
-         const p = source.cloneNode(true);
-         p.removeAttribute('id');
-         p.removeAttribute('style');
-         p.style.animation = 'none';
-         // Descendants too, or the sheet catches each face at a random frame of
-         // its own animation and the geometry cannot be judged.
-         for (const el of p.querySelectorAll('*')) el.style.animation = 'none';
-         p.dataset.mood = 'neutral';
-         if (f === 'blank') delete p.dataset.expr; else p.dataset.expr = f;
-         const label = document.createElement('div');
-         label.textContent = f;
-         label.style.fontSize = '11px';
-         label.style.color = '#8a7f6d';
-         label.style.marginTop = '-8px';
-         cell.append(p, label);
-         row.append(cell);
-       }
-       document.getElementById('stage').remove();
-       document.body.style.background = '#fffdf7';
-       document.body.append(row);
-     })()`
-  );
-  await settle();
-  await shot('pet-faces.png');
-  await win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
-  await settle();
+  const CLONE = `(source, cell) => {
+    const p = source.cloneNode(true);
+    p.removeAttribute('id');
+    p.removeAttribute('style');
+    p.style.animation = 'none';
+    // Descendants too, or the sheet catches each pet at a random frame of its
+    // own animation and the geometry cannot be judged.
+    for (const el of p.querySelectorAll('*')) el.style.animation = 'none';
+    p.dataset.mood = 'neutral';
+    cell.append(p);
+    return p;
+  }`;
 
-  // --- and every species, in every skin ------------------------------------
-  const species = ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon'];
-  const skins = ['butter', 'mint', 'blossom', 'slate'];
-  await js(
-    `(() => {
-       const source = document.getElementById('pet');
-       const grid = document.createElement('div');
-       grid.style.display = 'grid';
-       grid.style.gridTemplateColumns = 'repeat(${species.length}, 124px)';
-       for (const skin of ${JSON.stringify(skins)}) {
-         for (const s of ${JSON.stringify(species)}) {
-           const cell = document.createElement('div');
-           cell.dataset.pet = s;
-           cell.dataset.skin = skin;
-           cell.style.textAlign = 'center';
-           const p = source.cloneNode(true);
-           p.removeAttribute('id');
-           p.removeAttribute('style');
-           p.style.animation = 'none';
-           for (const el of p.querySelectorAll('*')) el.style.animation = 'none';
-           p.dataset.mood = 'neutral';
-           cell.append(p);
-           grid.append(cell);
-         }
-       }
-       document.getElementById('stage').remove();
-       document.body.style.background = '#fffdf7';
-       document.body.append(grid);
-     })()`
-  );
-  win.setContentSize(760, 480);
-  await settle();
-  await shot('pet-species.png');
-  await win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
-  await settle();
+  async function sheet(name, [w, h], build) {
+    const sw = new BrowserWindow({
+      width: w, height: h, show: true, backgroundColor: '#fffdf7',
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        backgroundThrottling: false,
+      },
+    });
+    sw.webContents.on('console-message', (e) => {
+      if (e.level === 'error') errors.push(`${name}: ${e.message}`);
+    });
+    await sw.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+    sw.setContentSize(w, h);
+    await sw.webContents.executeJavaScript(
+      `(() => { const clone = ${CLONE};
+         const source = document.getElementById('pet');
+         const box = document.createElement('div');
+         (${build})(source, box, clone);
+         document.getElementById('stage').remove();
+         document.body.style.background = '#fffdf7';
+         document.body.append(box); })()`
+    );
+    await settle();
+    try {
+      fs.writeFileSync(path.join(__dirname, name), (await sw.webContents.capturePage()).toPNG());
+    } catch (err) {
+      throw new Error(`capturePage failed writing ${name}: ${err.message}`);
+    }
+    sw.destroy();
+  }
+
+  const faces = ['blank', 'smile', 'grin', 'love', 'yum', 'giggle', 'oh', 'hmm', 'sulk', 'dizzy'];
+  await sheet('pet-faces.png', [660, 320], `(source, box, clone) => {
+    box.style.display = 'flex';
+    box.style.flexWrap = 'wrap';
+    for (const f of ${JSON.stringify(faces)}) {
+      const cell = document.createElement('div');
+      cell.style.width = '124px';
+      cell.style.textAlign = 'center';
+      const p = clone(source, cell);
+      if (f !== 'blank') p.dataset.expr = f;
+      const label = document.createElement('div');
+      label.textContent = f;
+      label.style.fontSize = '11px';
+      label.style.color = '#8a7f6d';
+      label.style.marginTop = '-8px';
+      cell.append(label);
+      box.append(cell);
+    }
+  }`);
+
+  const allSpecies = ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon'];
+  await sheet('pet-species.png', [760, 500], `(source, box, clone) => {
+    box.style.display = 'grid';
+    box.style.gridTemplateColumns = 'repeat(6, 124px)';
+    for (const skin of ['butter', 'mint', 'blossom', 'slate']) {
+      for (const s of ${JSON.stringify(allSpecies)}) {
+        const cell = document.createElement('div');
+        cell.dataset.pet = s;
+        cell.dataset.skin = skin;
+        cell.style.textAlign = 'center';
+        clone(source, cell);
+        box.append(cell);
+      }
+    }
+  }`);
 
   // --- settings window ----------------------------------------------------
   let saved = null;

@@ -224,6 +224,35 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   }
 }
 
+// --- species voices, with the shared bank underneath ---
+{
+  const cfg = require('./settings');
+
+  for (const [species, bank] of Object.entries(pets.SPECIES_LINES)) {
+    assert.ok(cfg.PETS.includes(species), `SPECIES_LINES has "${species}", which is not a pet`);
+    for (const [kind, lines] of Object.entries(bank)) {
+      // A species kind with no shared equivalent means a typo silently creates a
+      // bank nothing ever reads from.
+      assert.ok(pets.LINES[kind], `"${species}" writes lines for "${kind}", which is not a kind`);
+      assert.ok(lines.length > 0, `"${species}" has an empty ${kind} bank`);
+      for (const l of lines) assert.ok(l.trim().length > 0, `"${species}" has a blank ${kind} line`);
+      assert.strictEqual(pets.line(kind, 0, species), lines[0]);
+      assert.strictEqual(pets.line(kind, lines.length, species), lines[0], 'index must wrap');
+    }
+  }
+
+  // Every pet has a voice; a species with no bank would silently be the blob.
+  for (const pet of cfg.PETS) {
+    assert.ok(pets.SPECIES_LINES[pet], `"${pet}" has no lines of its own`);
+  }
+
+  // Anything a species has no opinion about falls through to the shared bank.
+  assert.strictEqual(pets.line('woke', 0, 'cat'), pets.LINES.woke[0]);
+  assert.strictEqual(pets.line('idle', 0, 'griffin'), pets.LINES.idle[0], 'unknown species must fall back');
+  assert.strictEqual(pets.line('idle', 0), pets.LINES.idle[0], 'no species must fall back');
+  assert.notStrictEqual(pets.line('idle', 0, 'cat'), pets.line('idle', 0, 'dragon'));
+}
+
 // --- greetings cover the whole clock, with no gap at midnight ---
 {
   const seen = new Set();
@@ -303,6 +332,18 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   for (const html of ['./renderer/index.html', './renderer/settings.html', './demo/stage.html']) {
     assert.ok(fs.readFileSync(html, 'utf8').includes('pets.css'), `${html} does not load pets.css`);
   }
+
+  // Every species has an idle quirk of its own. Without one it falls back to the
+  // default squish, which is the blob's, and the pet reads as unfinished.
+  for (const pet of cfg.PETS) {
+    assert.ok(
+      css.includes(`[data-pet="${pet}"] .pet.is-idling`),
+      `species "${pet}" has no idle quirk`
+    );
+  }
+  // A tail that rotates has to say where from, or it swings about its own centre
+  // and detaches from the body. Verified by freezing the wag mid-swing.
+  assert.ok(/\.tail\s*\{[^}]*transform-origin/.test(css), 'the tail rotates about no fixed point');
 }
 
 // --- bond milestones fire once, on the way up ---

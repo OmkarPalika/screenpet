@@ -65,7 +65,9 @@ window.pet.onStats((s) => {
     el.style.width = `${Math.round(s[el.dataset.bar])}%`;
   }
   if (s.acted) {
-    petEl.classList.remove('is-eating', 'is-playing', 'is-tickled');
+    // is-idling too: a quirk already in flight outranks the action animation on
+    // species whose idle rule is the more specific one.
+    petEl.classList.remove('is-eating', 'is-playing', 'is-tickled', 'is-idling');
     void petEl.offsetWidth; // restart the animation
     if (s.acted === 'feed') petEl.classList.add('is-eating');
     if (s.acted === 'play') petEl.classList.add('is-playing');
@@ -253,12 +255,30 @@ function setX(x) {
   stage.style.transform = `translateX(${Math.round(stageX)}px)`;
 }
 
+const idle = () =>
+  !hovered && !busy && !held && bubble.hidden && menu.hidden && chatForm.hidden;
+
 function wander() {
-  const idle = !hovered && !busy && !held && bubble.hidden && menu.hidden && chatForm.hidden;
-  if (idle) setX(Math.random() * (window.innerWidth - stage.offsetWidth));
+  if (idle()) setX(Math.random() * (window.innerWidth - stage.offsetWidth));
   setTimeout(wander, 25000 + Math.random() * 45000);
+}
+
+// A quirk while nothing is happening - a stretch, a wag, a hop, depending on
+// what the pet is. Which one is entirely pets.css's business; this only decides
+// when. Far enough apart that it never reads as a loop.
+const QUIRK_MS = 2600;
+
+function quirk() {
+  if (idle()) {
+    petEl.classList.remove('is-idling');
+    void petEl.offsetWidth; // restart, rather than waiting out the old run
+    petEl.classList.add('is-idling');
+    setTimeout(() => petEl.classList.remove('is-idling'), QUIRK_MS);
+  }
+  setTimeout(quirk, 9000 + Math.random() * 14000);
 }
 
 // Start somewhere on the right, where a taskbar pet belongs.
 setX(window.innerWidth - stage.offsetWidth - 40);
 setTimeout(wander, 12000);
+setTimeout(quirk, 5000);

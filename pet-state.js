@@ -172,9 +172,53 @@ const LINES = {
   ],
 };
 
+// What each species says instead, where it has an opinion. Deliberately partial:
+// only the kinds a pet says often enough for its voice to register. Everything
+// else falls through to the shared bank above, so adding a seventh species means
+// writing the lines you actually have, not filling in a 15-cell grid.
+const SPECIES_LINES = {
+  blob: {
+    idle: ['just vibing', 'I am a shape with opinions', 'nothing to report', 'the desktop is calm today'],
+    fed: ['absorbed, thank you', 'blorp'],
+    patted: ['*wobbles happily*', 'squish'],
+    played: ['bounced well, I thought', 'more bouncing'],
+  },
+  cat: {
+    idle: ['mrrp', 'I have selected this spot', 'watching a pixel', 'I could nap. I might nap.'],
+    fed: ['acceptable', 'you may serve me again'],
+    patted: ['*purrs*', 'you may continue'],
+    played: ['I allowed that', 'chase it again'],
+  },
+  pup: {
+    idle: ['is it walk time? no? okay', 'best desktop ever', 'I sat. did you see me sit?', 'waiting. very good at waiting.'],
+    fed: ['gone. it is gone.', 'best food. every time.'],
+    patted: ['*tail goes wild*', 'again again again'],
+    played: ['that was the best thing', 'again? again.'],
+  },
+  bun: {
+    idle: ['*nose twitch*', 'ears up, all clear', 'I have checked the corners', 'nothing is chasing us'],
+    fed: ['*chomp chomp chomp*', 'greens next time?'],
+    patted: ['ears down, that is the good spot', '*thump*'],
+    played: ['I got very far very fast', 'binky'],
+  },
+  bird: {
+    idle: ['*preens*', 'I have surveyed the desk', 'chirp', 'the window looks nice from here'],
+    fed: ['*peck peck*', 'seeds would also work'],
+    patted: ['*fluffs up*', 'careful, feathers'],
+    played: ['flap flap flap', 'again, but higher'],
+  },
+  dragon: {
+    idle: ['guarding your files', 'my hoard is this folder', 'small smoke, nothing serious', 'the desk is secure'],
+    fed: ['barely a snack', 'acceptable tribute'],
+    patted: ['*rumbles*', 'you have earned that'],
+    played: ['I used only a little fire', 'again, mortal'],
+  },
+};
+
 /** Index is passed in rather than random so the caller stays deterministic. */
-function line(kind, index = 0) {
-  const lines = LINES[kind] || [];
+function line(kind, index = 0, species = null) {
+  const own = species && SPECIES_LINES[species] && SPECIES_LINES[species][kind];
+  const lines = own || LINES[kind] || [];
   return lines.length ? lines[index % lines.length] : '';
 }
 
@@ -224,5 +268,5 @@ module.exports = {
   fresh, load, tick, act, mood, shouldNag, shouldChatter,
   line, greetKind, expressionFor, milestone,
   ACTIONS, DECAY, SLEEP_ENERGY_GAIN, MAX_DECAY_HOURS, NAG_INTERVAL_MS, CHATTER_INTERVAL_MS,
-  LINES, EXPRESSIONS, BOND_TIERS,
+  LINES, SPECIES_LINES, EXPRESSIONS, BOND_TIERS,
 };
