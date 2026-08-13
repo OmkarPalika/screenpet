@@ -277,11 +277,14 @@ npm install
 npm start
 ```
 
-Default model is `llama3.1:8b`. Pull it if you do not have it:
+Default model is `deepseek-r1:8b`. Pull it if you do not have it:
 
 ```bash
-ollama pull llama3.1:8b
+ollama pull deepseek-r1:8b
 ```
+
+If you skip this the pet says so plainly and repeats the command back to you,
+rather than claiming Ollama is down.
 
 **Bigger is not better here, and reasoning beats size.** Eight models were given
 the same screenshot of a `map`/`filter` chain and asked what it prints, twice
@@ -307,9 +310,16 @@ answering anyway. `phi4-mini-reasoning` did the opposite and quietly assumed the
 array was `[1, 2, 3]`, spending 13,000 characters of thinking and 67 seconds to
 reach a confident answer about data it had never seen.
 
-`llama3.1:8b` remains the default: it is the one most people already have, it is
-fine on prose, and at 1–3s warm it is three times faster than anything here. If
-you ask the pet about code, pull `deepseek-r1:8b`.
+**`deepseek-r1:8b` is the default**, on the strength of that second column. It is
+three to four times slower than `llama3.1:8b` (6–12s warm against 1–3s) and that
+is a real cost on every question. What it buys is a pet that tells you when it
+has been handed something it cannot actually read, instead of answering anyway —
+and on a tool whose entire job is answering what is on your screen, a confident
+wrong answer is worse than a slow right one.
+
+If you would rather have the speed and do not mind that, `llama3.1:8b` is one
+dropdown away in Settings. It is fine on prose; it is the code and the damaged
+screens where it invents things.
 
 An earlier note here claimed reasoning models were too slow to use. That was the
 `num_ctx` bug below, not the reasoning.
@@ -496,9 +506,9 @@ exits. The one path the other two cannot reach.
   entirely a property of the model, not of the prompt: adding *"say so if the
   text is too garbled to answer"* was measured on `llama3.1:8b` and changed
   nothing, while `deepseek-r1:8b` says `undefined … its initial assignment is
-  missing` without being asked to. With the default model, treat any answer
-  about code on screen as unverified.
-- **Multiple choice is the weak spot.** `llama3.1:8b` gets the arithmetic right
+  missing` without being asked to. Picking that model as the default is the whole
+  mitigation; switch to a faster one in Settings and this ceiling comes back.
+- **Multiple choice is the weak spot on the smaller models.** `llama3.1:8b` gets the arithmetic right
   consistently and then maps it to the wrong option letter often enough to
   matter — in testing it answered `391` correctly and labelled it `D` in the same
   breath. Use a larger model if you rely on the letter rather than the value.
