@@ -37,4 +37,22 @@ $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
 if ($null -eq $engine) { throw 'No OCR engine available for your Windows display languages.' }
 
 $res = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
-[Console]::Out.Write($res.Text)
+
+# Emit one fragment per recognised line with its box, and let ocr.js put them in
+# reading order. $res.Text will not do it: on a code block the engine returns
+# "const a", "const b", "const c", "= a.map(n n * 2)" as separate lines and
+# stringifies them in its own order, so the left of every row arrives before the
+# right of any of them.
+$frags = foreach ($line in $res.Lines) {
+    if ($line.Words.Count -eq 0) { continue }
+    $tops = @($line.Words | ForEach-Object { $_.BoundingRect.Y })
+    $bottoms = @($line.Words | ForEach-Object { $_.BoundingRect.Y + $_.BoundingRect.Height })
+    [pscustomobject]@{
+        top    = ($tops | Measure-Object -Minimum).Minimum
+        bottom = ($bottoms | Measure-Object -Maximum).Maximum
+        left   = ($line.Words | ForEach-Object { $_.BoundingRect.X } | Measure-Object -Minimum).Minimum
+        text   = (($line.Words | ForEach-Object { $_.Text }) -join ' ')
+    }
+}
+
+[Console]::Out.Write((ConvertTo-Json -Compress -Depth 3 -InputObject @($frags)))
