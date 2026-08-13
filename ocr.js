@@ -3,7 +3,10 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
-const SCRIPT = path.join(__dirname, 'ocr.ps1');
+// PowerShell cannot read a file from inside an asar archive, so ocr.ps1 is
+// listed in asarUnpack and lives beside it in app.asar.unpacked. In development
+// __dirname contains no 'app.asar' and this is a no-op.
+const SCRIPT = path.join(__dirname, 'ocr.ps1').replace('app.asar', 'app.asar.unpacked');
 
 // Windows 5.1 PowerShell specifically: the WinRT type projections ocr.ps1 relies
 // on are not present in PowerShell 7+.

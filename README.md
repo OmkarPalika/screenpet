@@ -3,8 +3,9 @@
 A desktop pet that reads your screen and answers the question on it. Nothing
 leaves your machine.
 
-Phase 2. The pet has a care loop, lives in the tray, has a settings window and
-four skins, and will use a vision model for diagrams if you have one installed.
+Phase 3. The pet has a care loop, lives in the tray, has a settings window and
+four skins, uses a vision model when there is no text to read, and builds into a
+Windows installer.
 
 ## The one rule
 
@@ -172,6 +173,51 @@ see above. The remaining env vars are development knobs only:
 | `SCREENPET_SMOKE` | unset | Answer once, print, exit. |
 | `SCREENPET_MODEL` / `SCREENPET_OLLAMA` | — | Defaults for direct `brain.js` calls in tests. The app reads `settings.json`. |
 
+## Build
+
+```bash
+npm run dist
+```
+
+Produces two artifacts in `dist/`, each about 95MB:
+
+| File | For |
+| --- | --- |
+| `screenpet-<version>-setup.exe` | NSIS installer, per-user, choosable install directory |
+| `screenpet-<version>-portable.exe` | Single file, no install |
+
+`npm run pack` produces `dist/win-unpacked/` only, which is what a Steam depot
+would upload.
+
+**`ocr.ps1` is in `asarUnpack`, and must stay there.** PowerShell cannot read a
+file from inside an asar archive, so packaging it normally breaks OCR in the
+built app while development keeps working — the worst kind of failure. `ocr.js`
+rewrites `app.asar` to `app.asar.unpacked` in the script path, which is a no-op
+in development. The packaged build has been run and confirmed to OCR correctly
+from the unpacked location.
+
+**The build is unsigned.** Windows SmartScreen will warn on first run and some
+users will not get past that. Shipping properly needs an Authenticode
+certificate; an EV one avoids the reputation-building period. That is a purchase
+and an identity check, not a code change.
+
+## Shipping
+
+What is done: the app builds, installs, runs from the installed location, and
+autostart is wired to `setLoginItemSettings` (packaged builds only).
+
+What is left, and none of it is code:
+
+- A code signing certificate, or accept the SmartScreen warning
+- Steamworks account and the $100 app fee, store page, depot upload
+- Or itch.io, which has no fee and no signing expectation — a better first stop
+- Screenshots and a capture of the pet answering something, which is the entire
+  pitch and cannot be conveyed in text
+
+Steam is the one storefront in this category with any precedent for paid desktop
+companions, at roughly $5 with skins as the only upsell that has historically
+worked. That was the reasoning behind building the demo before the app.
+
 ## Verify the privacy claim
 
 Do not take the above on trust. Block the app's outbound network access in
@@ -235,8 +281,11 @@ exits. The one path the other two cannot reach.
   full-width strip along the bottom of the primary display and the pet slides
   inside it. Moving a transparent always-on-top window at 60fps is janky and
   burns CPU on an app that is idle almost all the time.
-- **No drag-to-feed, no evolution stages, no skins, no minigames.** The base loop
-  has to be pleasant before any of that is worth adding.
+- **No drag-to-feed, no evolution stages, no minigames.** The base loop has to be
+  pleasant before any of that is worth adding.
+- **Autostart is wired but not exercised end to end.** It is gated on
+  `app.isPackaged` and only reachable from the settings window of a built app.
+- **No auto-update.** Every new version is a manual download.
 - **`ocr.ps1` needs Windows PowerShell 5.1**, not PowerShell 7 — the WinRT type
   projections it uses do not exist in 7.
 - **Slow on CPU.** Measured end to end at 69s on this machine including Electron
