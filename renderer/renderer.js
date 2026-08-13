@@ -4,7 +4,7 @@ const stage = document.getElementById('stage');
 const bubble = document.getElementById('bubble');
 const bubbleText = document.getElementById('bubble-text');
 const menu = document.getElementById('menu');
-const hearts = document.getElementById('hearts');
+const fx = document.getElementById('fx');
 const chatForm = document.getElementById('chat');
 const chatInput = document.getElementById('chat-input');
 // Not `pet`: contextBridge already exposes a global by that name, and a
@@ -38,10 +38,54 @@ function say(text, { kind = 'answer', sticky = false } = {}) {
 // A reaction laid over the mood, then cleared. Only one at a time, on purpose:
 // two faces fighting over the same 40 pixels reads as a glitch, not a feeling.
 
+// What falls out of the sky for each feeling. Expressions with nothing here -
+// smile, hmm, oh - get no rain, which is what keeps it from becoming wallpaper:
+// the pet reacts to the cursor constantly and confetti every time would be
+// exhausting.
+const EMOJI = {
+  love:    ['💕', '💖', '💗'],
+  shy:     ['🌸', '💗'],
+  giggle:  ['😆', '💫'],
+  proud:   ['✨', '⭐'],
+  joy:     ['🎉', '✨', '🌟'],
+  yum:     ['🍪', '✨'],
+  annoyed: ['💢'],
+  rage:    ['💢', '🔥'],
+  cry:     ['💧', '💔'],
+  sulk:    ['💧'],
+};
+
+const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+
+/** Drop a handful of `chars` in from above the pet's head. */
+function rain(chars, count = 5) {
+  // One feeling at a time, same rule the face follows. Without this a fast poke
+  // sequence leaves hearts still falling through the tantrum.
+  fx.replaceChildren();
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('span');
+    el.className = 'drop';
+    el.textContent = chars[i % chars.length];
+    // CSSOM setters rather than a style attribute: the CSP is style-src 'self',
+    // which permits these and blocks the attribute.
+    el.style.left = `${rand(4, 96).toFixed(0)}px`;
+    el.style.setProperty('--fall', `${rand(38, 76).toFixed(0)}px`);
+    el.style.animationDelay = `${(i * rand(70, 130)).toFixed(0)}ms`;
+    el.style.fontSize = `${rand(12, 19).toFixed(0)}px`;
+    fx.append(el);
+    setTimeout(() => el.remove(), 2600);
+  }
+}
+
 function express(name, ms = 2600) {
   clearTimeout(exprTimer);
   if (!name) { delete petEl.dataset.expr; return; }
+  // Re-triggering the same expression should re-run its animations, otherwise a
+  // second poke while the first is still showing changes nothing on screen.
+  delete petEl.dataset.expr;
+  void petEl.offsetWidth;
   petEl.dataset.expr = name;
+  if (EMOJI[name]) rain(EMOJI[name], name === 'rage' || name === 'joy' ? 7 : 5);
   exprTimer = setTimeout(() => { delete petEl.dataset.expr; }, ms);
 }
 
@@ -72,7 +116,6 @@ window.pet.onStats((s) => {
     if (s.acted === 'feed') petEl.classList.add('is-eating');
     if (s.acted === 'play') petEl.classList.add('is-playing');
     if (s.acted === 'tickle') petEl.classList.add('is-tickled');
-    if (s.acted === 'pet') popHearts();
   }
   refreshMenu(s);
 });
@@ -80,18 +123,6 @@ window.pet.onStats((s) => {
 function refreshMenu(s) {
   menu.querySelector('[data-act="feed"]').disabled = s.fullness >= 92;
   menu.querySelector('[data-act="play"]').disabled = s.energy < 20;
-}
-
-function popHearts() {
-  for (let i = 0; i < 3; i++) {
-    const h = document.createElement('span');
-    h.className = 'heart';
-    h.textContent = '♥';
-    h.style.left = `${28 + i * 26}px`;
-    h.style.animationDelay = `${i * 90}ms`;
-    hearts.append(h);
-    setTimeout(() => h.remove(), 1100);
-  }
 }
 
 // ---- hit testing ---------------------------------------------------------

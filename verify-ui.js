@@ -269,6 +269,12 @@ app.whenReady().then(async () => {
     sulk: { sel: '.sweat', prop: 'display', want: 'block' },
     oh: { sel: '.brows', prop: 'display', want: 'block' },
     giggle: { sel: '.lids', prop: 'display', want: 'block' },
+    shy: { sel: '.bow', prop: 'display', want: 'block' },
+    proud: { sel: '.spark', prop: 'display', want: 'block' },
+    joy: { sel: '.mouth', prop: 'fill', want: 'rgb(138, 67, 64)' },
+    annoyed: { sel: '.anger', prop: 'display', want: 'block' },
+    rage: { sel: '.anger', prop: 'display', want: 'block' },
+    cry: { sel: '.tear', prop: 'display', want: 'block' },
   })) {
     win.webContents.send('pet:say', { text: 'hello', kind: 'chat', expr });
     await settle();
@@ -280,6 +286,42 @@ app.whenReady().then(async () => {
     check(got.value === expected.want, `${expr} did not show ${expected.sel} (${got.value})`);
     if (expr === 'love') await shot('pet-love.png');
   }
+
+  // --- emoji rain -----------------------------------------------------------
+  // A feeling with emoji drops them; one without stays quiet. The second half
+  // matters more: 'smile' fires on every hover, and confetti on mouse move would
+  // make the pet unusable.
+  const drops = () => js(`document.querySelectorAll('#fx .drop').length`);
+  win.webContents.send('pet:say', { text: 'yay', kind: 'chat', expr: 'joy' });
+  await settle();
+  check(await drops() > 0, 'joy dropped no emoji');
+  check(
+    (await js(`getComputedStyle(document.querySelector('#fx .drop')).animationName`)) === 'drop-in',
+    'the emoji are in the DOM but not falling'
+  );
+  await shot('pet-rain.png');
+
+  // One feeling at a time: a new one clears whatever is still falling, rather
+  // than raining hearts through a tantrum.
+  win.webContents.send('pet:say', { text: 'grr', kind: 'chat', expr: 'rage' });
+  await settle();
+  check(
+    await js(`[...document.querySelectorAll('#fx .drop')].every((d) => '💢🔥'.includes(d.textContent))`),
+    'a new feeling left the old one still falling'
+  );
+
+  // Re-triggering the same feeling must re-run it, or a second poke mid-tantrum
+  // changes nothing on screen. Measured by the animation clock going backwards.
+  const age = () => js(`document.querySelector('#fx .drop').getAnimations()[0].currentTime`);
+  await new Promise((r) => setTimeout(r, 400));
+  const aged = await age();
+  win.webContents.send('pet:say', { text: 'grr', kind: 'chat', expr: 'rage' });
+  await settle();
+  check(await age() < aged, 'the same expression twice in a row did nothing the second time');
+
+  win.webContents.send('pet:say', { text: 'hi', kind: 'chat', expr: 'smile' });
+  await new Promise((r) => setTimeout(r, 2800)); // outlast the drops already falling
+  check(await drops() === 0, 'smile rains, and smile fires on every hover');
 
   // An expression must beat the mood it is laid over - same specificity, so this
   // is only true while the expression rules sit below the mood rules.
@@ -425,8 +467,11 @@ app.whenReady().then(async () => {
     sw.destroy();
   }
 
-  const faces = ['blank', 'smile', 'grin', 'love', 'yum', 'giggle', 'oh', 'hmm', 'sulk', 'dizzy'];
-  await sheet('pet-faces.png', [660, 320], `(source, box, clone) => {
+  const faces = [
+    'blank', 'smile', 'grin', 'love', 'yum', 'giggle', 'oh', 'hmm', 'sulk', 'dizzy',
+    'shy', 'proud', 'joy', 'annoyed', 'rage', 'cry',
+  ];
+  await sheet('pet-faces.png', [660, 500], `(source, box, clone) => {
     box.style.display = 'flex';
     box.style.flexWrap = 'wrap';
     for (const f of ${JSON.stringify(faces)}) {

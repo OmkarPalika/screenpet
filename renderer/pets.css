@@ -31,6 +31,13 @@
 .sweat  { display: none; fill: #9fd4ee; }
 .spark  { display: none; fill: #ffd45e; }
 .zzz    { display: none; fill: #6c7a8c; font: 600 15px "Segoe UI", system-ui, sans-serif; }
+.anger  { display: none; fill: none; stroke: #e2483f; stroke-width: 2.6; stroke-linecap: round; }
+
+/* Worn rather than drawn into any body, so all six species can put it on and
+   nobody has to redraw it six times. */
+.bow      { display: none; }
+.bow-loop { fill: #f4849c; }
+.bow-knot { fill: #e0637f; }
 
 /* Species parts. Empty and hidden by default; each species fills in what it
    needs. The tail and crest are drawn before the body in the markup so they sit

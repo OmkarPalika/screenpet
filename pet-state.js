@@ -164,6 +164,27 @@ const LINES = {
   dragged: ['wheee', 'put me down gently', 'I liked it over there'],
 
   woke: ['oh, you are back', 'I was resting my eyes', 'hello again'],
+
+  // The pet says nice things about you, unprompted. Kept vague on purpose - it
+  // cannot see what you are doing, and a compliment about work it has not seen
+  // is a lie with a smiley face on it.
+  praised: [
+    'you are doing better than you think',
+    'for what it is worth, I am impressed',
+    'you have been at this a while. that counts for something',
+    'genuinely, nice work',
+    'I would not have figured that out',
+  ],
+  // Said straight after a compliment, because giving one is embarrassing.
+  bashful: ['...anyway', 'do not make it weird', 'forget I said anything', '*looks away*'],
+
+  // The poke ladder. Three separate banks because "stop" and "STOP" and
+  // "*sniffles*" are three different feelings, not one with more exclamation marks.
+  shyly: ['oh - hello', 'that is a lot of attention', '*hides*', 'you are very close'],
+  annoyed: ['okay, that is enough', 'I felt that one', 'please stop poking me', 'we have discussed this'],
+  raging: ['THAT IS IT', 'you are doing this ON PURPOSE', 'I am extremely cross', 'RUDE'],
+  crying: ['*sniffles*', 'you were mean to me', 'I need a minute', '*small sad noise*'],
+
   idle: [
     'poke me if you need an answer',
     'I am watching the screen, not judging it',
@@ -245,9 +266,49 @@ const EXPRESSIONS = {
   chat: 'smile',
   greet: 'grin',
   wake: 'oh',
+  praise: 'proud',
+  bashful: 'shy',
+  milestone: 'joy',
+  // The poke ladder below resolves to these.
+  annoy: 'annoyed',
+  rage: 'rage',
+  upset: 'cry',
 };
 
 const expressionFor = (event) => EXPRESSIONS[event] || null;
+
+// Keep poking and the pet stops finding it funny. Two giggles, then it gets shy,
+// then cross, then furious, then it cries and you have to leave it alone - which
+// is the whole point: an escalation with a floor at the bottom reads as a
+// creature with feelings, where one that giggles forever reads as a button.
+//
+// Each rung is [event, line bank]. The event resolves through EXPRESSIONS above,
+// so the face and the words can never drift apart.
+const POKE_LADDER = [
+  ['tickle', 'tickled'],
+  ['tickle', 'tickled'],
+  ['bashful', 'shyly'],
+  ['annoy', 'annoyed'],
+  ['rage', 'raging'],
+  ['upset', 'crying'],
+];
+
+// Pokes further apart than this are a different bout, not the same one. Long
+// enough to cover the tickle cooldown, short enough that coming back after a
+// meeting does not resume mid-tantrum.
+const POKE_WINDOW_MS = 12000;
+
+/**
+ * How the pet takes the nth poke of a bout. Pure: the caller owns the counting.
+ * @returns {{event: string, kind: string}}
+ */
+function pokeStep(count) {
+  const [event, kind] = POKE_LADDER[Math.min(Math.max(count, 0), POKE_LADDER.length - 1)];
+  return { event, kind };
+}
+
+/** Same bout, or has enough time passed to forgive you? */
+const samePokeBout = (last, now) => last > 0 && now - last < POKE_WINDOW_MS;
 
 // Bond is the only stat that never falls, so it is the only one that can carry
 // a milestone worth saying out loud.
@@ -266,7 +327,7 @@ function milestone(before, after) {
 
 module.exports = {
   fresh, load, tick, act, mood, shouldNag, shouldChatter,
-  line, greetKind, expressionFor, milestone,
+  line, greetKind, expressionFor, milestone, pokeStep, samePokeBout,
   ACTIONS, DECAY, SLEEP_ENERGY_GAIN, MAX_DECAY_HOURS, NAG_INTERVAL_MS, CHATTER_INTERVAL_MS,
-  LINES, SPECIES_LINES, EXPRESSIONS, BOND_TIERS,
+  LINES, SPECIES_LINES, EXPRESSIONS, BOND_TIERS, POKE_LADDER, POKE_WINDOW_MS,
 };
