@@ -53,7 +53,7 @@ function fillSkins(skins) {
 function showVision(visionModel) {
   const hint = el('vision-hint');
   hint.textContent = visionModel
-    ? `Using ${visionModel} for screenshots with diagrams or handwriting.`
+    ? `Windows OCR reads text; ${visionModel} steps in when there is none to read.`
     : 'No vision-capable model installed, so text is read with Windows OCR. '
       + 'Pull one (for example moondream) to handle diagrams.';
   hint.classList.toggle('warn', !visionModel);

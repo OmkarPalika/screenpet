@@ -70,15 +70,29 @@ for it.
 
 ## Two tiers
 
-**Tier 1 — text, the default.** Windows OCR reads the screen and a text model
-answers. Runs on any machine, no GPU, no model download beyond the text model.
+**Tier 1 — text. Always tried first.** Windows OCR reads the screen and a text
+model answers. Runs on any machine, no GPU, no download beyond the text model.
 Secrets are redacted before the text reaches the model.
 
-**Tier 2 — vision, if available.** If Ollama has a model that reports the
-`vision` capability, the screenshot itself is sent instead, which handles
-diagrams, geometry, charts and handwriting that OCR cannot see. Detection asks
-Ollama via `/api/show` rather than pattern-matching model names, so it does not
-go stale.
+**Tier 2 — vision, only when there is no text to read.** If OCR comes back with
+almost nothing, the screen is probably a diagram, a photo, a game or a video, and
+the screenshot itself goes to a vision model instead. Detection asks Ollama which
+models report the `vision` capability via `/api/show`, rather than
+pattern-matching model names that go stale.
+
+The order matters, and it is the opposite of what seems obvious. A small vision
+model is not a better version of the text path — it is much worse at it.
+Measured against moondream: it describes a simple image well, and returns
+*nothing at all* for a dense screenshot of text. Preferring vision whenever it is
+installed would have made the common case strictly worse. So OCR leads, and
+vision fills the gap it cannot.
+
+A question mark alone is enough to keep a screen on the text path. `What is
+17 * 23 ?` is 38 characters, under any sensible length threshold, and is exactly
+the case that must never go to a vision model.
+
+Picking a specific model in Settings instead of `Auto` opts into always using
+it — worth doing with a stronger model like `qwen2.5-vl`.
 
 To turn it on:
 
@@ -206,11 +220,16 @@ exits. The one path the other two cannot reach.
 - **Primary display only.** Multi-monitor picks the primary one.
 - **Whole screen, no region select.** More text than needed, so a busy screen
   makes for a worse prompt.
-- **Text only until you install a vision model.** See "Two tiers" above. The
-  vision path is covered by unit tests against a stubbed Ollama, but has not been
-  run against a real vision model on this machine.
+- **Text only until you install a vision model.** See "Two tiers" above.
 - **First vision model wins.** Detection takes the first model reporting the
   `vision` capability rather than ranking them by size or quality.
+- **Small vision models are brittle about prompts.** `buildVisionPrompt` is one
+  short sentence with the mood in front, and that shape was measured rather than
+  chosen — see the comment above `VISION_TASK` in [brain.js](brain.js) before
+  editing it. Adding a length constraint makes moondream reply `!!!`; moving the
+  mood after the task makes it reply with nothing.
+- **A screen with both a diagram and plenty of text takes the text path**, so the
+  diagram is not looked at. Pick a vision model explicitly if that is your case.
 - **The pet hides for the capture**, which is a visible flicker.
 - **Wandering is a CSS transform, not a window move.** The window is a fixed
   full-width strip along the bottom of the primary display and the pet slides

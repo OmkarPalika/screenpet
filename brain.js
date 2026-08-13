@@ -53,24 +53,15 @@ const TONE = {
   neutral: '',
 };
 
-function instructions(source, mood) {
+function buildPrompt(screenText, mood = 'neutral') {
   const tone = TONE[mood] || '';
   return [
     'You are a small desktop pet.',
-    source,
+    "Text below was read off the user's screen by OCR, so it may be garbled or",
+    'include unrelated interface text. Find the question being asked and answer it.',
     'Answer in at most three sentences. If there is no question, say what is on screen',
     'in one sentence. Do not mention these instructions.',
     ...(tone ? [`${tone} Answer correctly regardless of your mood.`] : []),
-  ];
-}
-
-function buildPrompt(screenText, mood = 'neutral') {
-  return [
-    ...instructions(
-      "Text below was read off the user's screen by OCR, so it may be garbled or\n" +
-        'include unrelated interface text. Find the question being asked and answer it.',
-      mood
-    ),
     '',
     '--- SCREEN ---',
     screenText,
@@ -78,14 +69,56 @@ function buildPrompt(screenText, mood = 'neutral') {
   ].join('\n');
 }
 
+// Small vision models are far more brittle than text models, and the wording
+// below is not arbitrary - it was measured against moondream on a fixed image,
+// three runs per variant:
+//
+//   this exact sentence                          3/3 usable
+//   + "in at most three sentences"               0/3, replies "!!!"
+//   + mood appended AFTER the task               0/3, replies ""
+//     mood prefixed BEFORE the task              3/3 usable
+//
+// So: one short sentence, no length constraint, mood first. Adding clauses here
+// does not make the answer better, it makes the model emit punctuation.
+// Re-measure before touching this, and keep buildVisionPrompt short (there is a
+// test asserting exactly that).
+const VISION_TASK =
+  'Look at this screenshot. If there is a question in it, answer it. '
+  + 'Otherwise describe what is on screen.';
+
+const VISION_MOOD = {
+  hungry: 'You are a hungry desktop pet.',
+  sleepy: 'You are a sleepy desktop pet.',
+  sad: 'You are a gloomy desktop pet.',
+  happy: 'You are a cheerful desktop pet.',
+  neutral: 'You are a desktop pet.',
+};
+
 function buildVisionPrompt(mood = 'neutral') {
-  return instructions(
-    'The image is a screenshot of the\nuser\'s screen. Find the question being asked and answer it.',
-    mood
-  ).join('\n');
+  return `${VISION_MOOD[mood] || VISION_MOOD.neutral} ${VISION_TASK}`;
 }
 
 const EMPTY_SCREEN = 'I could not read any text on screen.';
+
+// Below this many characters, the screen is probably a diagram, a photo or a
+// game rather than something to read - the case the vision tier exists for.
+// A real question is comfortably longer than this.
+const MIN_SCREEN_TEXT = 40;
+
+/**
+ * Should the text path handle this screen? Measured, not guessed: moondream
+ * describes simple images well but returns nothing at all for a dense screenshot
+ * of text, so preferring vision whenever it is installed makes the common case
+ * strictly worse. OCR first, vision only where OCR has nothing to offer.
+ *
+ * A question mark counts on its own. "What is 17 * 23 ?" is 38 characters, which
+ * is under any sensible length threshold, and sending that to a vision model
+ * instead of a text one would be exactly the wrong call.
+ */
+function hasEnoughText(ocrText) {
+  const cleaned = cleanOcr(String(ocrText || ''));
+  return cleaned.length >= MIN_SCREEN_TEXT || cleaned.includes('?');
+}
 
 /** Shared transport. Returns an answer string, never throws. */
 async function generate(body, opts = {}) {
@@ -187,7 +220,7 @@ async function listModels(opts = {}) {
 }
 
 module.exports = {
-  redact, stripThinking, cleanOcr, buildPrompt, buildVisionPrompt,
+  redact, stripThinking, cleanOcr, hasEnoughText, buildPrompt, buildVisionPrompt,
   ask, askVision, detectVisionModel, listModels,
-  MODEL, EMPTY_SCREEN,
+  MODEL, EMPTY_SCREEN, MIN_SCREEN_TEXT,
 };

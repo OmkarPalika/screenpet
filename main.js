@@ -7,7 +7,7 @@ const {
 const path = require('path');
 const fs = require('fs');
 const { recognise } = require('./ocr');
-const { ask, askVision, detectVisionModel, listModels } = require('./brain');
+const { ask, askVision, detectVisionModel, listModels, hasEnoughText } = require('./brain');
 const pets = require('./pet-state');
 const config = require('./settings');
 
@@ -23,6 +23,7 @@ let state = null;
 let settings = null;
 let visionModel = null; // resolved model name, or null for the OCR path
 let busy = false;
+let lastPath = 'ocr'; // which tier actually answered, for the smoke check
 let nagIndex = 0;
 let saveTimer = null;
 let quitting = false;
@@ -188,11 +189,20 @@ async function answerScreen() {
     const png = await grabScreen();
     // Mood is passed for tone only. Nothing here can refuse to answer.
     const mood = pets.mood(state, { asleep: asleep() });
-    const answer = visionModel
+
+    // OCR first. On 'auto' the vision model is a fallback for screens with no
+    // text to read, not the preferred path - a small vision model is far worse
+    // than OCR at dense text. Naming a model explicitly opts into always using it.
+    const alwaysVision = settings.vision !== 'auto' && settings.vision !== 'off';
+    const ocrText = alwaysVision ? '' : await recognise(png);
+    const useVision = visionModel && (alwaysVision || !hasEnoughText(ocrText));
+    lastPath = `${useVision ? `vision:${visionModel}` : 'ocr'} (ocr read ${ocrText.trim().length} chars)`;
+
+    const answer = useVision
       ? await askVision(png.toString('base64'), {
           mood, model: visionModel, endpoint: endpoint(), timeoutMs: VISION_TIMEOUT_MS,
         })
-      : await ask(await recognise(png), { mood, model: settings.model, endpoint: endpoint() });
+      : await ask(ocrText, { mood, model: settings.model, endpoint: endpoint() });
     send('pet:say', { text: answer, kind: 'answer' });
   } catch (err) {
     send('pet:say', { text: err.message, kind: 'error' });
@@ -249,7 +259,7 @@ app.whenReady().then(async () => {
     const orig = send;
     send = (channel, payload) => {
       if (channel !== 'pet:say' || payload.kind === 'thinking') return orig(channel, payload);
-      console.log(`[${payload.kind}] via ${visionModel ? `vision:${visionModel}` : 'ocr'}`);
+      console.log(`[${payload.kind}] via ${lastPath}`);
       console.log(payload.text);
       app.exit(payload.kind === 'error' ? 1 : 0);
     };
