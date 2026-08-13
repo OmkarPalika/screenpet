@@ -177,6 +177,11 @@ const LINES = {
   arrived: ['oh! hello', 'there you are', 'welcome back', 'I thought I heard someone'],
   left: ['I will be here', '*settles down to wait*', 'off you go then', 'holding the desk'],
   blind: ['I cannot see anything. is the camera covered?', 'no camera for me, it seems'],
+  // Something moved, and with face detection on, Windows found no face in it: a
+  // door, a curtain, the cat. Said as a question rather than a greeting, because
+  // greeting a curtain is the thing the face check exists to stop. It is still
+  // vague about people - a count is not a name.
+  moved: ['something moved…', 'was that you?', '*looks up* …no?', 'hm. nobody there'],
 
   // ...and nothing came back. Not an error: a room can just be quiet.
   deaf: [

@@ -32,6 +32,23 @@ const DEFAULTS = {
   // Same rule, more so. The camera only ever answers "did anything move", but
   // the permission it needs is the whole camera, so it ships off.
   camera: false,
+  // Continuous listening for one phrase. Off by default and, unlike the others,
+  // it is off by default for a reason that does not go away: this is the only
+  // setting that holds the microphone open all the time. It needs `mic` on too,
+  // because it is the same microphone.
+  wake: false,
+  // Holds the microphone open to move in time with whatever is playing. Same
+  // cost as the wake word and the same rule: needs `mic`, ships off. Without it
+  // the pet still dances when asked, opening the microphone only for the dance.
+  bop: false,
+  // The only setting that sends anything to anyone. Off means the pet gives the
+  // refusal it always gave; on means a town name leaves this machine when you
+  // ask about the weather, and nothing else does. See weather.js.
+  weather: false,
+  city: '',
+  // Face detection on the camera stream. Off by default, needs `camera` on, and
+  // it answers "is there a face" - never whose. See faces.js.
+  faces: false,
   autostart: false,
   ollama: 'http://127.0.0.1:11434',
 };
@@ -61,6 +78,11 @@ function validEndpoint(v) {
 
 const str = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
+// The town name that leaves the machine when the weather setting is on. Anything
+// that is not part of a place name is stripped before it is ever put in a URL:
+// this is the only user-typed string in the app that reaches a server.
+const { cleanCity } = require('./weather');
+
 /** Anything unrecognised falls back to the default rather than being trusted. */
 function load(raw) {
   const s = raw && typeof raw === 'object' ? raw : {};
@@ -76,6 +98,16 @@ function load(raw) {
     // opens a microphone or a camera.
     mic: s.mic === true,
     camera: s.camera === true,
+    // Same rule again, and for the same reason: these three each open something
+    // that stays shut unless a literal true says otherwise. `wake` and `faces`
+    // additionally require the device they use, checked here rather than in
+    // three call sites - a wake word without a microphone is a setting that
+    // silently does nothing, and a face check without a camera is the same.
+    wake: s.wake === true && s.mic === true,
+    bop: s.bop === true && s.mic === true,
+    weather: s.weather === true,
+    city: cleanCity(s.city) || DEFAULTS.city,
+    faces: s.faces === true && s.camera === true,
     autostart: typeof s.autostart === 'boolean' ? s.autostart : DEFAULTS.autostart,
     ollama: validEndpoint(s.ollama) ? s.ollama : DEFAULTS.ollama,
   };
@@ -102,13 +134,21 @@ function load(raw) {
  *   shape silently denies half the calls.
  */
 function allowPermission(current, permission, details) {
-  if (permission !== 'media') return false;
-  if (!current || current.camera !== true) return false;
-  if (!details) return false;
+  if (permission !== 'media' || !current || !details) return false;
+
+  // One device, one setting, and the setting has to be a literal true to have
+  // survived load(). Audio became reachable when the pet learned to move to a
+  // beat; it is still gated on the same "Let me talk to it" consent as dictation
+  // and the wake word, and there is still no third thing this can return true
+  // for. A request naming any other media type fails `every` and is refused.
+  const allowed = (type) =>
+    (type === 'video' && current.camera === true)
+    || (type === 'audio' && current.mic === true);
+
   if (Array.isArray(details.mediaTypes)) {
-    return details.mediaTypes.length === 1 && details.mediaTypes[0] === 'video';
+    return details.mediaTypes.length > 0 && details.mediaTypes.every(allowed);
   }
-  return details.mediaType === 'video';
+  return typeof details.mediaType === 'string' && allowed(details.mediaType);
 }
 
 /** Merge a partial update from the settings window, validating as we go. */

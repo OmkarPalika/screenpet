@@ -26,7 +26,9 @@
       "ocr.ps1",
       "listen.ps1",
       "media.ps1",
-      "dnd.ps1"
+      "dnd.ps1",
+      "wake.ps1",
+      "faces.ps1"
     ],
     "files": [
       "main.js",
@@ -41,7 +43,12 @@
       "media.ps1",
       "dnd.js",
       "dnd.ps1",
+      "wake.js",
+      "wake.ps1",
+      "faces.js",
+      "faces.ps1",
       "reminders.js",
+      "weather.js",
       "pet-state.js",
       "settings.js",
       "icon.png",

@@ -1,7 +1,8 @@
 # screenpet
 
 A desktop pet that reads your screen and answers the question on it. Nothing
-leaves your machine.
+leaves your machine — with one exception, off by default, that sends a town name
+you typed and nothing else. See "The one thing that leaves".
 
 ![screenpet reading a quiz question and answering it](demo/screenpet-demo.gif)
 
@@ -272,7 +273,9 @@ exact, and identical every time:
 | `dance`, `spin`, `jump`, `fall over`, `look around` | See "A body" below. |
 | `next track`, `pause the music`, `turn it up`, `mute the sound` | The keyboard's media keys. Whatever is already playing obeys. |
 | `take a photo`, `say cheese` | One frame from the camera, into your Pictures folder. Needs the camera switched on. |
-| `what is the weather` | A refusal, with the reason. |
+| `wake me every weekday at 7`, `remind me to stand up every 30 minutes` | A recurring alarm. Daily, weekdays, one weekday, or an interval. |
+| `dance` | A dance, to whatever is actually playing if the microphone is on. |
+| `what is the weather` | A refusal — unless you switched the weather on, in which case a forecast. |
 
 **A reminder is the one thing here that writes down your words.** "Remind me to
 call the bank in an hour" has to survive a restart to be worth setting, and
@@ -286,10 +289,19 @@ hear about them. Every bit of that validation is in
 [reminders.js](reminders.js), on the assumption that the file may have been
 hand-edited or corrupted.
 
-**Weather is matched deliberately in order to turn it down.** Every weather
-source is somebody else's server and it wants your location to be useful. Left
-unmatched, the model cheerfully invents a forecast — which is worse than saying
-no, so the pet says no.
+**Recurring alarms are four shapes and no more**: every day, every weekday, every
+named weekday, or every N minutes. Anything expressible there is also expressible
+in one sentence out loud, which is the test for whether it belongs in a pet — cron
+syntax has no business here. The pet reads the rule back as `every weekday at
+07:00`, because a bare "at 7" is read on a 24-hour clock rather than guessed at,
+and the readback is how you catch a wrong guess when you set it rather than at
+seven in the evening.
+
+**Weather is matched deliberately in order to turn it down** — which is still
+what happens with the setting off, and off is how it ships. Every weather source
+is somebody else's server. Left unmatched entirely the model cheerfully invents a
+forecast, which is worse than saying no. See "The one thing that leaves" for
+exactly what switching it on sends.
 
 **Music is one keypress, not an integration.** [media.ps1](media.ps1) taps a
 single Windows media key — the same one on your keyboard — and whatever holds the
@@ -371,9 +383,12 @@ does, and all it *can* do:
 - that number becomes one of three words — `arrived`, `left`, `blind` — and the
   frame is discarded
 
-Nothing is stored, encoded, recognised or sent — with exactly one exception, and
-it is the one you asked for out loud: `take a photo` keeps that single frame, in
-your Pictures folder, and nowhere else. **It cannot tell who you are**,
+Nothing is stored, encoded, recognised or sent — with exactly two exceptions,
+both of which need a setting switched on. `take a photo` keeps that single frame,
+in your Pictures folder and nowhere else. And with "tell a face from a curtain"
+on, one frame at the moment somebody arrives goes to Windows' own detector, which
+answers with a count and never writes it down — see "Faces". **Neither of them
+can tell who you are**,
 and no amount of prompting will make it say, because the information is gone
 before anything else in the app can see it. The pet greets you vaguely for the
 same reason: greeting you *by name* off a motion threshold would be claiming
@@ -502,8 +517,19 @@ and quit it — the pet has no taskbar button by design.
 | Skin | Butter, mint, blossom or slate. Applies to whichever pet you picked. |
 | Speak replies out loud | On by default. Mute from the tray without opening this window. |
 | Let me talk to it | Off by default. Adds `Listen…` to the pet's menu. |
+| Answer to “hey pet” | Off by default, needs the above. **Holds the microphone open.** See "The wake word". |
+| Bop along to music | Off by default, needs the microphone. **Holds it open.** See "Dancing". |
 | Notice when I am at the desk | Off by default. Motion only — see "Noticing you". |
+| Tell a face from a curtain | Off by default, needs the camera. A count, never a name — see "Faces". |
+| Let it ask about the weather | Off by default. **The only setting that sends anything.** See "The one thing that leaves". |
+| Town | Where to ask about. The only user-typed string here that reaches a server. |
 | Start with Windows | Packaged builds only — in development this would register `electron.exe`. |
+
+**Four settings open something, and each needs its own literal `true` plus the
+device it uses.** A wake word with the microphone off, or a face check with the
+camera off, is a setting that silently does nothing — so `load()` turns both off
+rather than pretending. Switching the microphone off takes the wake word and the
+bopping with it, in the same pass. There are tests for every one of those.
 
 Settings live in `settings.json` next to `pet.json` in Electron's `userData`.
 Both are validated on load, so a corrupt or hand-edited file degrades to
@@ -675,6 +701,8 @@ see above. The remaining env vars are development knobs only:
 | `SCREENPET_NUM_CTX` | `4096` | Context window. See "Why it is not slow any more". |
 | `SCREENPET_KEEP_ALIVE` | `30m` | How long Ollama holds the model in VRAM. `5m` is Ollama's own default, `0` unloads after every answer. |
 | `SCREENPET_SMOKE` | unset | Answer once, print, exit. |
+| `SCREENPET_WAKE_CONFIDENCE` | `0.6` | How sure the wake word has to be. Lower if it is deaf, raise if the fridge wakes it. |
+| `SCREENPET_QUNS` | unset | Force the Windows notification state (see "Getting out of the way"). `7` is talkative, `5` is Do Not Disturb. For testing the half your machine is not currently in. |
 | `SCREENPET_MODEL` / `SCREENPET_OLLAMA` | — | Defaults for direct `brain.js` calls in tests. The app reads `settings.json`. |
 
 ## Demo
@@ -747,11 +775,117 @@ Steam is the one storefront in this category with any precedent for paid desktop
 companions, at roughly $5 with skins as the only upsell that has historically
 worked. That was the reasoning behind building the demo before the app.
 
+## The one thing that leaves
+
+Everything else here runs on your machine. The weather cannot: every weather
+source is somebody else's server, and there is no offline version of tomorrow.
+
+So it is a setting, it ships **off**, and with it off the pet gives the refusal
+it always gave. With it on, asking about the weather sends:
+
+- the **town you typed into Settings** — not a location lookup, not an IP
+  geolocation, not anything Windows knows about where you are. You can put the
+  next town over and the forecast is still useful.
+- the **coordinates that came back for that town**, rounded to two decimal
+  places — about a kilometre, which is as precise as the request has any need to
+  be.
+
+That is the entire payload. No account, no API key, no cookie, no device
+identifier, nothing from your screen, camera or microphone. [Open-Meteo]
+specifically because it needs no registration — a keyed service would tie every
+forecast you ask for to an identity, which is worse than the forecast is useful.
+
+The hosts are hardcoded in [weather.js](weather.js) and are not configurable by
+settings, by a skill, or by the model. A setting that could point this at an
+arbitrary host would be an exfiltration path wearing a weather feature as a hat.
+The tests assert both hosts, assert the town is one encoded parameter, assert the
+coordinates are rounded, and assert no identifier appears in either URL.
+
+[Open-Meteo]: https://open-meteo.com
+
+## The wake word
+
+Off by default, and it needs "Let me talk to it" on as well, because it is the
+same microphone.
+
+**It holds that microphone open for as long as it is on.** That is what a wake
+word costs and there is no version of it that does not. The honest mitigation is
+not a promise, it is the shape of the thing doing the listening:
+
+[wake.ps1](wake.ps1) loads a SAPI recogniser with a `Choices` grammar containing
+exactly the wake phrases. This is not a transcriber that happens to be looking
+for a word — it is **structurally incapable of recognising anything else**. Say
+your card number in front of it and there is no code path that produces those
+digits, because the only symbols in its grammar are "hey pet", "hello pet",
+"okay pet" and "wake up pet".
+
+The only line the process can print is `WAKE`. [wake.js](wake.js) drops anything
+else rather than passing it on, so the single fact that crosses into the app is
+*that you said it* — not what you said, not how confident it was.
+
+It is the same local Windows engine dictation uses. No audio is recorded, buffered
+or sent, and the process has no network access of any kind.
+
+## Faces
+
+Off by default, needs the camera, and answers exactly one question: **how many
+faces are in this frame.**
+
+It exists because motion cannot tell a person from a door. With it off the pet
+greets a curtain; with it on it says "hm, nobody there" instead.
+
+- It uses **Windows' own face detector** (`Windows.Media.FaceAnalysis`), which
+  ships with Windows 10 and later — no model file, no download, no dependency.
+- That API **has no identify, no compare and no embedding**. There is no call
+  here that could tell one person from another even if this app wanted to.
+- **Nothing is enrolled and no template is stored.** The pet cannot greet you by
+  name because it does not know your name, and there is nothing on disk that
+  could learn it.
+- The frame goes to the detector **down a pipe**, is converted to `Gray8` — which
+  throws the colour away before the detector ever sees it — and is gone when the
+  process exits a second later. It is never written to disk.
+
+Verified in both directions with drawn images, so that no real person was
+photographed to prove a face detector detects faces:
+
+```
+flat grey field   -> 0 faces   (935ms)
+crude flat doodle -> 0 faces
+drawn face, 3 sizes -> 1, 1, 1 faces
+```
+
+...and through the real `main.js`, camera and all:
+
+```
+a face    -> "welcome back"
+a curtain -> "hm. nobody there"
+```
+
+## Dancing
+
+Asking the pet to `dance` opens the microphone **for the length of the dance**
+— twenty seconds — and closes it. It listens for a beat and moves on it. The
+"bop along to music" setting holds the microphone open instead, so it bops at
+whatever is playing without being asked.
+
+Both need "Let me talk to it", which is the same consent dictation and the wake
+word run on, and which is what the permission gate actually checks.
+
+What the beat detector gets is a spectrum forty times a second. What it keeps is
+one number — how much energy is in the bottom eighth of it, which is where a
+drum lives and where speech mostly does not. Nothing is buffered, recognised or
+stored, and **the beat never crosses into the main process**: the pet moves in
+the renderer, because nothing on the other side needs to know.
+
+Without a microphone the pet still dances when asked. It just dances to nothing,
+which is what it always did.
+
 ## Verify the privacy claim
 
 Do not take the above on trust. Block the app's outbound network access in
-Windows Defender Firewall and use it. It should work exactly the same, because
-the only socket it opens is to loopback.
+Windows Defender Firewall and use it. Everything still works except the weather,
+because with that setting off the only socket it opens is to loopback — and with
+it on, the firewall is the thing that proves what the second socket was for.
 
 Screen text is scanned for secrets before it reaches the model — API keys,
 tokens, JWTs, card-shaped digit runs, and `password:`-style assignments are
@@ -822,6 +956,19 @@ exits. The one path the other two cannot reach.
 - **Quiet is Windows' opinion, not a heuristic.** If you leave Focus Assist on
   permanently, the pet stays quiet permanently, and that is the correct
   behaviour rather than a bug. Show it from the tray to override.
+- **The wake word's recognition rate is unverified.** The grammar loads, the
+  recogniser starts and the process reports ready — that is measured. Whether it
+  actually fires when a person says "hey pet" across a room has not been tested,
+  because testing it means somebody saying it into a real microphone.
+  `SCREENPET_WAKE_CONFIDENCE` is the knob if it is deaf or twitchy.
+- **Face detection is a count, and only a count.** It cannot tell you who, it
+  cannot be made to, and there is nothing stored that could learn. It also costs
+  about a second of PowerShell, so it runs when somebody arrives rather than on
+  the motion tick.
+- **The beat detector is energy against its own rolling average**, not a tempo
+  tracker. It will bob on a door slam and miss a quiet track. Beat detection
+  proper is a research project and this has to answer every 25ms on a machine
+  already running a language model.
 - **The pet is on one display at a time.** It does not follow the cursor, and
   there is no second pet for the second monitor. Reading the screen does follow
   the cursor; the pet itself moves when you tell it to.

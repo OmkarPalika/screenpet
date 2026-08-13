@@ -361,7 +361,7 @@ chatInput.addEventListener('keydown', (e) => {
 // How the pet looks and sounds. Species and palette hang off the root element:
 // the shape rules in pets.css are plain descendant selectors, so they work
 // anywhere they are set.
-window.pet.onLook(({ pet, skin, voice: on, mic, camera }) => {
+window.pet.onLook(({ pet, skin, voice: on, mic, camera, faces, bop }) => {
   document.documentElement.dataset.pet = pet;
   document.documentElement.dataset.skin = skin;
   voiceOn = !!on;
@@ -369,7 +369,9 @@ window.pet.onLook(({ pet, skin, voice: on, mic, camera }) => {
   // No microphone, no button. An entry that only tells you the feature is off
   // is a worse answer than the entry not being there.
   menu.querySelector('[data-listen]').hidden = !mic;
+  facesOn = !!faces;
   watchRoom(!!camera);
+  listenForBeat(!!bop);
 });
 
 // ---- the room ------------------------------------------------------------
@@ -382,14 +384,20 @@ window.pet.onLook(({ pet, skin, voice: on, mic, camera }) => {
 // prompting will make it say, because the information is gone before anything
 // else in this file can see it.
 //
-// One exception, below: asking for a photo out loud gets you a photo, saved to
-// your Pictures folder by main. That is the only path by which a frame leaves
-// this section, it runs once per request, and it still goes nowhere near a
-// network.
+// Two exceptions, below, both of which need a setting switched on:
 //
-// ponytail: motion, not faces. Real presence detection wants a face model and a
-// model file to ship with it; this is 30 lines and answers the only question
-// the pet actually asks - is anyone there?
+//   - asking for a photo out loud gets you a photo, saved to your Pictures
+//     folder by main;
+//   - with "tell a face from a curtain" on, one frame at the moment somebody
+//     arrives goes to Windows' own face detector, which answers with a count.
+//
+// Those are the only paths by which a frame leaves this section, each runs once
+// per event rather than on the tick, and neither goes anywhere near a network.
+//
+// ponytail: motion first, faces only to settle the question motion cannot -
+// whether the thing that moved was a person. Motion is 30 lines and runs every
+// 800ms; the face check is a second of PowerShell and runs when somebody
+// arrives.
 
 const camEl = document.getElementById('cam');
 const camVideo = document.getElementById('cam-video');
@@ -407,6 +415,7 @@ let camTimer = null;
 let camPrev = null;
 let present = false;
 let lastMotionAt = 0;
+let facesOn = false;
 
 function stopRoom() {
   clearInterval(camTimer);
@@ -438,7 +447,14 @@ function sampleRoom() {
     const now = Date.now();
     if (diff > MOTION) {
       lastMotionAt = now;
-      if (!present) { present = true; window.pet.presence('arrived'); }
+      if (!present) {
+        present = true;
+        // The face check answers a question motion cannot: whether the thing
+        // that moved was a person or a door. Main gets the frame only with the
+        // setting on, and gets a count back and nothing else.
+        if (facesOn) window.pet.face(grabFrame(320, 240, 0.7));
+        else window.pet.presence('arrived');
+      }
     } else if (present && now - lastMotionAt > GONE_MS) {
       present = false;
       window.pet.presence('left');
@@ -471,17 +487,112 @@ async function watchRoom(on) {
   camTimer = setInterval(sampleRoom, CAM_TICK_MS);
 }
 
-// One frame, on request, into a canvas made and dropped here. Not the 32x24 one:
-// that canvas is the motion path and reusing it would mean either a useless
-// photo or a presence check reading a full-size frame.
-window.pet.onPhoto(() => {
-  if (!camStream || !camVideo.videoWidth) return window.pet.photo(null);
+/**
+ * One frame, into a canvas made and dropped here. Not the 32x24 one: that canvas
+ * is the motion path, and reusing it would mean either a useless photo or a
+ * presence check reading a full-size frame.
+ *
+ * @param {number} w  0 for the stream's own size
+ */
+function grabFrame(w = 0, h = 0, quality = 0.9) {
+  if (!camStream || !camVideo.videoWidth) return null;
   const shot = document.createElement('canvas');
-  shot.width = camVideo.videoWidth;
-  shot.height = camVideo.videoHeight;
-  shot.getContext('2d').drawImage(camVideo, 0, 0);
-  window.pet.photo(shot.toDataURL('image/jpeg', 0.9));
-});
+  shot.width = w || camVideo.videoWidth;
+  shot.height = h || camVideo.videoHeight;
+  shot.getContext('2d').drawImage(camVideo, 0, 0, shot.width, shot.height);
+  return shot.toDataURL('image/jpeg', quality);
+}
+
+window.pet.onPhoto(() => window.pet.photo(grabFrame()));
+
+// ---- the beat --------------------------------------------------------------
+//
+// What reaches this code is a spectrum, forty times a second, and what leaves it
+// is the word "beat". Nothing in between is kept: no buffer, no recording, no
+// recognition. The microphone is not a second way of hearing you - a
+// FFT bin count is incapable of being speech.
+//
+// Two ways in. "Dance" opens the microphone for the length of the dance and
+// closes it; the "bop along" setting holds it open. Both need the microphone
+// setting, which is the same consent dictation and the wake word run on.
+//
+// ponytail: energy against its own rolling average, not a tempo tracker. This
+// has to answer "was that a drum" every 25ms on a machine already running a
+// language model, and beat detection proper is a research project.
+
+const FFT = 512;
+const BEAT_GAP_MS = 300;      // two beats closer than this are one beat
+const BEAT_RATIO = 1.35;      // this much above the running average is a hit
+const QUIET = 0.02;           // below this the room is silent, not on the beat
+
+let audioStream = null;
+let audioCtx = null;
+let beatRaf = 0;
+let beatAvg = 0;
+let lastBeatAt = 0;
+let beatUntil = 0; // 0 means "for as long as the setting is on"
+
+function stopBeat() {
+  cancelAnimationFrame(beatRaf);
+  beatRaf = 0;
+  if (audioStream) audioStream.getTracks().forEach((t) => t.stop());
+  audioStream = null;
+  if (audioCtx) audioCtx.close();
+  audioCtx = null;
+  beatAvg = 0;
+  if (!camStream) camEl.hidden = true; // the dot is shared with the camera
+}
+
+async function listenForBeat(on, forMs = 0) {
+  if (!on) return stopBeat();
+  beatUntil = forMs ? Date.now() + forMs : 0;
+  if (audioStream) return;
+
+  try {
+    audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    audioStream = null;
+    return; // no microphone, or refused. The pet dances on its own instead.
+  }
+
+  audioCtx = new AudioContext();
+  const analyser = audioCtx.createAnalyser();
+  analyser.fftSize = FFT;
+  audioCtx.createMediaStreamSource(audioStream).connect(analyser);
+  const bins = new Uint8Array(analyser.frequencyBinCount);
+  camEl.hidden = false; // same green dot: something is listening
+
+  const sample = () => {
+    if (beatUntil && Date.now() > beatUntil) return stopBeat();
+    analyser.getByteFrequencyData(bins);
+
+    // Low end only. A drum lives below ~250Hz and a voice mostly does not, so
+    // this is both the better beat signal and the half of the spectrum that
+    // carries the least about what was said.
+    let energy = 0;
+    const low = Math.floor(bins.length / 8);
+    for (let i = 0; i < low; i++) energy += bins[i];
+    energy /= low * 255;
+
+    const now = Date.now();
+    if (energy > QUIET && energy > beatAvg * BEAT_RATIO && now - lastBeatAt > BEAT_GAP_MS) {
+      lastBeatAt = now;
+      // Moved here rather than reported to main: main has no use for it, and a
+      // beat that never crosses the bridge is a beat nothing else can see.
+      // Beats arriving mid-move are skipped rather than restarting it.
+      if (!petEl.dataset.move) move('jump');
+    }
+    // Rolling average, weighted towards the past so one loud moment does not
+    // become the new normal.
+    beatAvg = beatAvg ? beatAvg * 0.9 + energy * 0.1 : energy;
+    beatRaf = requestAnimationFrame(sample);
+  };
+  sample();
+}
+
+// A dance you asked for: the microphone opens for the length of it and shuts
+// again. With "bop along" on it is already open, and this changes nothing.
+window.pet.onDance((ms) => listenForBeat(true, ms));
 
 // ---- wandering -----------------------------------------------------------
 // The window never moves. Moving a transparent always-on-top window at 60fps is

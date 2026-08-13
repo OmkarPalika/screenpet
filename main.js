@@ -11,6 +11,9 @@ const { listen } = require('./speech');
 const media = require('./media');
 const dnd = require('./dnd');
 const reminders = require('./reminders');
+const weather = require('./weather');
+const wake = require('./wake');
+const faces = require('./faces');
 const { ask, askVision, chat, detectVisionModel, listModels, hasEnoughText } = require('./brain');
 const pets = require('./pet-state');
 const skills = require('./skills');
@@ -28,6 +31,9 @@ const MAX_PHOTO_CHARS = 12 * 1024 * 1024;
 // How long anything the pet says keeps it on screen during quiet hours. Long
 // enough to read an answer, short enough that it goes away again on its own.
 const QUIET_SHOW_MS = 30000;
+// How long the microphone stays open for a dance you asked for. Long enough for
+// a chorus, short enough that forgetting about it costs nothing.
+const DANCE_MS = 20000;
 // setTimeout wraps past this and fires immediately, which for a reminder means
 // shouting the moment you set it. Long timers are re-armed instead.
 const MAX_DELAY_MS = 2147483647;
@@ -420,24 +426,34 @@ function ring(say, late = false) {
   });
 }
 
-function startTimer({ ms, say }, at = Date.now() + ms) {
+function startTimer({ ms, say, repeat = null }, at = null) {
+  // A repeat rule knows its own next occurrence; a duration is measured from now.
+  const when = at !== null ? at
+    : repeat ? reminders.nextAt(repeat, Date.now())
+    : Date.now() + ms;
+  if (!Number.isFinite(when)) return false;
+
   const id = setTimeout(() => {
     timers.delete(id);
     // Anything past 24 days had to be clamped to get here; re-arm rather than
     // shout early.
-    if (Date.now() < at) return startTimer({ ms: at - Date.now(), say }, at);
+    if (Date.now() < when) return startTimer({ say, repeat }, when);
     saveTimers();
     ring(say);
-  }, Math.min(Math.max(ms, 0), MAX_DELAY_MS));
+    // The next one is scheduled after this one fires rather than in a batch, so
+    // a daily alarm is exactly one live timeout at any moment.
+    if (repeat) startTimer({ say, repeat });
+  }, Math.min(Math.max(when - Date.now(), 0), MAX_DELAY_MS));
 
-  timers.set(id, { at, say });
+  timers.set(id, repeat ? { at: when, say, repeat } : { at: when, say });
   saveTimers();
+  return true;
 }
 
 /** Reminders from a previous run: the ones still to come, and the ones missed. */
 function restoreTimers(now) {
   const { late, pending } = reminders.load(readJson('timers.json'), now);
-  for (const item of pending) startTimer({ ms: item.at - now, say: item.say }, item.at);
+  for (const item of pending) startTimer(item, item.at);
   saveTimers(); // whatever was dropped as malformed or stale goes now
 
   // Staggered, because one bubble replaces the last: five at once would show you
@@ -466,9 +482,27 @@ function runSkill(text) {
     return true;
   }
 
+  // The refusal in skills.js is the default answer. Switching the setting on is
+  // what replaces it - and the request that goes out carries the town you typed
+  // and nothing else. See weather.js.
+  if (skill.weather && settings.weather && settings.city) {
+    send('pet:say', { text: 'thinking', kind: 'thinking' });
+    weather.forecast(settings.city)
+      .then((line) => send('pet:say', { text: line, kind: 'answer', expr: 'happy' }))
+      .catch((err) => send('pet:say', {
+        text: err.message, kind: 'error', expr: pets.expressionFor('error'),
+      }));
+    return true;
+  }
+
   // Not through talk(): these are answers to something you asked for, and the
   // wording comes from skills.js rather than the line bank.
   send('pet:say', { text: skill.say, kind: 'chat', expr: skill.expr, move: skill.move });
+  // Dancing to whatever is actually playing needs the microphone, so it opens
+  // for the length of the dance and shuts again - unless "bop along" already
+  // holds it, in which case this changes nothing. Without the microphone the
+  // pet dances on its own, which is what it always did.
+  if (skill.move === 'dance' && settings.mic) send('pet:dance', DANCE_MS);
   if (skill.timer) startTimer(skill.timer);
   if (skill.media) {
     media.press(skill.media).catch((err) => {
@@ -550,6 +584,27 @@ function applyHotkey() {
   globalShortcut.register('CommandOrControl+Shift+Q', () => { quitting = true; app.quit(); });
 }
 
+// The microphone is held open for as long as this is on, which is why it is the
+// one setting that also lights the same green dot the camera does. Restarted
+// rather than left running when settings change, so switching the microphone off
+// takes the wake word down with it.
+function applyWake() {
+  wake.stop();
+  if (!settings.wake) return;
+
+  wake.start((event) => {
+    if (event === 'woke') listenAndReply();
+    else if (event.startsWith('error:')) {
+      console.error(event);
+      send('pet:say', {
+        text: `my ears gave out - ${event.slice(7)}`,
+        kind: 'error',
+        expr: pets.expressionFor('error'),
+      });
+    }
+  });
+}
+
 function applyAutostart() {
   // Skipped in dev: this would register electron.exe, not the packaged app.
   if (!app.isPackaged) return;
@@ -565,12 +620,15 @@ function sendLook() {
     voice: settings.voice,
     mic: settings.mic,
     camera: settings.camera,
+    faces: settings.faces,
+    bop: settings.bop,
   });
 }
 
 async function applySettings() {
   applyHotkey();
   applyAutostart();
+  applyWake();
   sendLook();
   refreshTray(); // the mute state is shown there
   visionModel = await resolveVision();
@@ -735,6 +793,24 @@ ipcMain.on('pet:photo-taken', (_e, dataUrl) => {
   }
 });
 
+// One frame, at the moment somebody arrived, with the setting on. It goes down a
+// pipe to Windows' own face detector and is never written anywhere; what comes
+// back is a count. Windows.Media.FaceAnalysis has no identify and no compare, so
+// there is no version of this that knows who it is looking at - which is why the
+// pet says "there you are" and not your name.
+ipcMain.on('pet:face-check', (_e, dataUrl) => {
+  if (!settings.faces) return; // the renderer should not have asked; refuse anyway
+  faces.count(dataUrl).then(
+    (n) => talk(n > 0 ? 'arrived' : 'moved', {
+      event: n > 0 ? 'arrived' : 'curious',
+      move: n > 0 ? 'jump' : null,
+    }),
+    // A failed check is still someone arriving. Falling back to the motion line
+    // is better than a red bubble about PowerShell.
+    () => talk('arrived', { event: 'arrived', move: 'jump' })
+  );
+});
+
 ipcMain.on('pet:battery', (_e, level) => {
   const ok = level && Number.isFinite(level.percent)
     && level.percent >= 0 && level.percent <= 100;
@@ -770,6 +846,7 @@ ipcMain.on('config:close', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  wake.stop(); // the microphone closes before anything else happens
   // The timeouts go; the file stays. That is the whole point of the file.
   for (const id of timers.keys()) clearTimeout(id);
   clearTimeout(saveTimer);
