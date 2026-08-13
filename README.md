@@ -536,8 +536,10 @@ exits. The one path the other two cannot reach.
 - **Species differ in voice and idle movement, not in rules.** They all eat, play
   and decay identically — the cat is not fussier about food than the pup. Per
   species stats would be the obvious next thing, and are not there.
-- **The demo GIF records the cat**, whichever pet you have chosen. It is one
-  species in the clip and one skin, not a showcase of the picker.
+- **The demo GIF records the cat**, whichever pet you have chosen. One species,
+  one skin, and two feelings out of fifteen — it is the hero image for reading
+  the screen, not a tour of the picker or the expression range. `pet-faces.png`
+  and `pet-species.png` from `npm run verify:ui` are where those live.
 - **Autostart is wired but not exercised end to end.** It is gated on
   `app.isPackaged` and only reachable from the settings window of a built app.
 - **No auto-update.** Every new version is a manual download.

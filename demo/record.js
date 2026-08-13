@@ -96,7 +96,14 @@ app.whenReady().then(async () => {
   frames.push({ ...frames.at(-1), delay: 1600 }); // hold so it can be read
 
   await js(`demo.headpat(); demo.expr('love')`);
-  await beat(14);                               // headpat, heart eyes, hearts float up
+  await beat(16);                               // heart eyes, and hearts raining down
+  frames.push({ ...frames.at(-1), delay: 700 });
+
+  // Then it gets shy about it, which is where the bow turns up. Two feelings is
+  // enough for a hero image: the clip is about reading the screen, and the rest
+  // of the range lives in pet-faces.png rather than padding this out.
+  await js(`demo.expr('shy'); demo.rain(['🌸', '💗'])`);
+  await beat(16);
   frames.push({ ...frames.at(-1), delay: 1500 });
 
   fs.writeFileSync(STILL, (await shot()).toPNG());
