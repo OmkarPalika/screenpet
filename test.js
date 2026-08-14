@@ -2466,6 +2466,46 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     );
   }
 
+  // --- the paperwork actually ships, and the installer shows the real terms ---
+  {
+    const fs = require('fs');
+    const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+
+    // Docs the app's own text points people at. If one is renamed and this list
+    // is not, it silently stops being installed and the pointers go nowhere -
+    // including the Wikipedia CC BY-SA and Open-Meteo attributions, which are
+    // recorded nowhere else.
+    for (const f of ['LICENSE', 'TERMS.md', 'PRIVACY.md', 'THIRD-PARTY-NOTICES.md']) {
+      assert.ok(pkg.build.extraFiles.includes(f), `${f} is not installed alongside the app`);
+      assert.ok(fs.existsSync(`./${f}`), `${f} is listed in the build but is not in the repository`);
+    }
+
+    // The licence page is generated from TERMS.md at package time. If the
+    // generator stops running, the installer keeps showing whatever terms
+    // happened to be on disk the last time somebody ran it by hand.
+    assert.strictEqual(pkg.build.nsis.license, 'build/license.txt', 'the installer shows no terms at all');
+    for (const s of ['dist', 'pack']) {
+      assert.ok(
+        pkg.scripts[s].includes('npm run license'),
+        `npm run ${s} packages the app without regenerating the licence page`
+      );
+    }
+
+    require('child_process').execFileSync(process.execPath, ['build/license.js']);
+    const lic = fs.readFileSync('./build/license.txt');
+    assert.deepStrictEqual([...lic.slice(0, 3)], [0xEF, 0xBB, 0xBF], 'no byte order mark: NSIS will mangle the em dashes');
+
+    const body = lic.toString('utf8').slice(1);
+    assert.ok(!/[^\r]\n/.test(body), 'a bare newline survived: NSIS runs the whole document together');
+    assert.ok(!/^#+ |\*\*|\]\(/m.test(body), 'markdown syntax survived into the licence page');
+    assert.ok(body.includes('Privacy Policy (PRIVACY.md)'), 'links lost their target instead of being flattened');
+    // Proof it is the whole document rather than a truncated one: the last
+    // section and the two clauses that carry the most weight.
+    assert.ok(body.includes('governed by the laws of India'), 'the governing law clause is missing');
+    assert.ok(body.includes('TOTAL AGGREGATE LIABILITY'), 'the liability cap is missing');
+    assert.ok(body.trimEnd().endsWith('palikaomkar@gmail.com'), 'the licence page is cut short');
+  }
+
   // The rejections parked by the synchronous sections above. Awaited before the
   // success line, so a failure cannot arrive after it.
   await Promise.all(globalThis.pendingRejections || []);

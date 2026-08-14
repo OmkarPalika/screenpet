@@ -4,3 +4,6 @@ pet-*.png
 dist/
 out/
 *.log
+
+# generated from TERMS.md by build/license.js at package time
+build/license.txt

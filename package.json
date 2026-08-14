@@ -11,8 +11,9 @@
     "verify:ui": "electron verify-ui.js",
     "smoke": "set SCREENPET_SMOKE=1&& electron .",
     "demo": "electron demo/record.js",
-    "dist": "electron-builder",
-    "pack": "electron-builder --dir"
+    "license": "node build/license.js",
+    "dist": "npm run license && electron-builder",
+    "pack": "npm run license && electron-builder --dir"
   },
   "devDependencies": {
     "electron": "^43.4.0",
@@ -61,6 +62,12 @@
       "icon.png",
       "renderer/**"
     ],
+    "extraFiles": [
+      "LICENSE",
+      "TERMS.md",
+      "PRIVACY.md",
+      "THIRD-PARTY-NOTICES.md"
+    ],
     "win": {
       "target": [
         "nsis",
@@ -69,6 +76,7 @@
       "icon": "build/icon.png"
     },
     "nsis": {
+      "license": "build/license.txt",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
