@@ -133,10 +133,10 @@ survive termination.
 
 ## 11. Governing law
 
-These terms are governed by the laws of `[JURISDICTION]`, and the courts of
-`[JURISDICTION]` have exclusive jurisdiction over any dispute — except that if
-you are a consumer, you may bring proceedings in the courts of the country where
-you live, and the mandatory consumer law of that country still applies to you.
+These terms are governed by the laws of India, and the competent courts in India
+have exclusive jurisdiction over any dispute — except that if you are a consumer,
+you may bring proceedings in the courts of the country where you live, and the
+mandatory consumer law of that country still applies to you.
 
 ## 12. Changes to these terms
 
@@ -151,4 +151,4 @@ If any provision of these terms is held unenforceable, the rest stays in force.
 Failing to enforce a provision is not a waiver of it. These terms, together with
 the Privacy Policy, are the entire agreement between us about the app.
 
-Contact: `[CONTACT EMAIL]`
+Contact: palikaomkar@gmail.com

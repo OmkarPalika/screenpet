@@ -4,7 +4,7 @@
 
 ## Reporting a vulnerability
 
-Email `[CONTACT EMAIL]` with the words "screenpet security" in the subject.
+Email palikaomkar@gmail.com with the words "screenpet security" in the subject.
 Please include what you found, how to reproduce it, and what an attacker gets
 out of it.
 
