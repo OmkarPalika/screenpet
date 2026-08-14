@@ -435,6 +435,40 @@ answers "you". The gate is therefore in two places — the recorder does not sen
 audio it measured as silence, and a short list of known hallucinations is dropped
 in [whisper.js](whisper.js). Both are measured, not guessed.
 
+### Parakeet was measured too, and it is a tie
+
+NVIDIA's Parakeet TDT overtook Whisper on the open ASR leaderboards in 2026, and
+`parakeet-cli.exe` ships inside the same whisper.cpp release this app already
+asks you to download. So it was run against the same fourteen recordings:
+
+| | whisper base.en | +prompt | parakeet q4_k |
+| --- | --- | --- | --- |
+| commands | 33% | 23% | **10%** |
+| technical | 87% | **29%** | 35% |
+| chat | 0% | 0% | 0% |
+| **all** | 49% | 21% | **19%** |
+| median latency | 1564ms | 1564ms | **1110ms** |
+| model on disk | 142MB | 142MB | 397MB |
+
+**Two points apart on fourteen phrases is a tie**, so the decision is made on the
+things that are structural rather than statistical:
+
+- **Parakeet is better at commands and worse at technical words.** It heard
+  `forget everything` correctly where whisper heard "Forward everything" — which
+  in this app is a wrong word that fires a real skill. But it has no equivalent
+  of the vocabulary prompt, so `git rebase onto main` came back as "Get rebassed
+  on to main" where prompted whisper was exact.
+- **Parakeet returns nothing on silence.** Whisper answers "you". A transducer
+  emitting nothing is a better shape than a list of known hallucinations.
+- **It is 2.8x the disk of base.en and 5x tiny.en**, for a tray pet.
+- The widely quoted "27x faster than whisper.cpp" **did not reproduce here**: it
+  was 1.4x, against base.en on this CPU. Those comparisons are generally against
+  a larger whisper model than this app would ever load.
+
+whisper with the prompt stays the default on size alone. Parakeet is the one to
+move to if the 397MB stops mattering, and the code would get simpler doing it -
+it needs neither the `-of` workaround nor the hallucination list.
+
 **Known limits.** One speaker, one room, fourteen phrases: this sizes an effect,
 it does not measure a population. 21% is better, not solved — one word in five is
 still wrong. `small.en` would likely close more of that at 465MB. Latency is the
