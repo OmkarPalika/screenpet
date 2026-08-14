@@ -182,14 +182,28 @@ html, body {
 /* The gaze follows the cursor and the blink squashes the eyes. Both want the
    transform property, and an animation wins it outright, so they live on
    separate elements rather than fighting. */
-.gaze { transform: translate(var(--eye-x, 0px), var(--eye-y, 0px)); transition: transform 90ms linear; }
+/* Slightly past the target and back. An eye that arrives at exactly the right
+   place and stops dead is a servo; the overshoot is what reads as a glance. */
+.gaze {
+  transform: translate(var(--eye-x, 0px), var(--eye-y, 0px));
+  transition: transform 170ms cubic-bezier(0.2, 1.5, 0.35, 1);
+}
 
-.eyes { animation: blink 5.4s infinite; transform-origin: center 54px; }
+.eyes { transform-origin: center 54px; }
+
+/* Driven from the renderer rather than looped here: a blink every 5.4 seconds
+   forever is the tell that gives the whole thing away. See blink() there. */
+.eyes.is-blink { animation: blink 190ms ease-in-out; }
 
 @keyframes blink {
-  0%, 92%, 100% { transform: scaleY(1); }
-  95%           { transform: scaleY(0.08); }
+  0%, 100% { transform: scaleY(1); }
+  50%      { transform: scaleY(0.08); }
 }
+
+/* Pupils open when something surprises it - the widening itself lives with the
+   expressions below, because an expression rule that sits above the mood rules
+   loses the cascade to them. */
+.eye { transition: rx 160ms ease-out, ry 160ms ease-out; }
 
 @keyframes bob {
   0%, 100% { transform: translateY(0); }
@@ -486,6 +500,12 @@ html, body {
 /* 😱 Everything at once, and the colour drains out. */
 .pet[data-expr="shock"] .eye   { rx: 8.5; ry: 10; }
 .pet[data-expr="shock"] .glint { r: 1.2; }
+
+/* Wide open. Half of what makes a face read as startled is the pupil, not the
+   brow, and it is the half a still frame does not show you. */
+.pet[data-expr="shock"] .eye,
+.pet[data-expr="mindblown"] .eye,
+.pet[data-expr="oh"] .eye { rx: 7.4; ry: 8.8; }
 .pet[data-expr="shock"] .brows { display: block; }
 .pet[data-expr="shock"] .brow  { transform: translateY(-7px); }
 .pet[data-expr="shock"] .mouth { d: path("M52 68a8 11 0 1 0 16 0a8 11 0 1 0 -16 0"); fill: #8a4340; }
@@ -799,6 +819,23 @@ html, body {
 .pet.is-playing  { animation: hop 0.42s ease-in-out 4; }
 .pet.is-tickled  { animation: wiggle 0.16s ease-in-out 8; }
 .pet.is-held     { animation: none; transform: rotate(-4deg) scale(1.04); cursor: grabbing; }
+
+/* Thrown. The bob is off for the same reason it is off while held - the arc is
+   driven a frame at a time from the renderer, and an animation owning transform
+   would win over every one of those frames. */
+.pet.is-flying { animation: none; }
+
+/* Hitting something. Its own class rather than one of the data-move animations,
+   so a pet thrown mid-dance goes on dancing when it lands - and it must sit
+   after those rules to beat them for the quarter second it runs. */
+.pet.is-thumped svg { animation: thump 260ms cubic-bezier(0.3, 0, 0.2, 1); }
+
+@keyframes thump {
+  0%   { transform: scale(1, 1); }
+  25%  { transform: scale(1.22, 0.74) translateY(6px); }
+  60%  { transform: scale(0.94, 1.08) translateY(-3px); }
+  100% { transform: scale(1, 1); }
+}
 
 @keyframes wiggle {
   0%, 100% { transform: translateX(0) rotate(0deg); }

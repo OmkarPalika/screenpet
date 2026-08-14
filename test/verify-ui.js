@@ -528,6 +528,46 @@ app.whenReady().then(async () => {
   const back = await petBox();
   check(back.flip === 'up', `the stage stayed flipped once back on the floor: ${JSON.stringify(back)}`);
 
+  // Thrown, it keeps going after you let go. Dispatched with real gaps between
+  // the moves: the release speed is measured off the last few positions, and
+  // events fired in one tick have no speed in them at all - which is also the
+  // guard that stops a stationary click from firing the pet across the screen.
+  await dragTo(120, 120);
+  await settle();
+  const from = await petBox();
+  await js(`(async () => {
+    const p = document.getElementById('pet'), r = p.getBoundingClientRect();
+    const wait = (ms) => new Promise((done) => setTimeout(done, ms));
+    p.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0,
+      clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
+    let x = r.left + r.width / 2;
+    for (let i = 0; i < 5; i++) {
+      x += 34;
+      document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: x, clientY: 130 }));
+      await wait(24);
+    }
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: x, clientY: 130 }));
+  })()`);
+  const released = await js(`stageX`);
+  check((await js(`flight !== null`)) === true, 'a throw did not become a flight');
+  await new Promise((r) => setTimeout(r, 2500));
+  const landed = await petBox();
+  check((await js(`flight === null`)) === true, 'the pet is still flying seconds later');
+  check(landed.left > released, `the pet stopped dead where it was let go: ${landed.left} vs ${released}`);
+  check(landed.bottom <= landed.h + 1, 'a thrown pet went through the floor');
+  check(landed.bottom > landed.h - 40, `a thrown pet did not fall to the floor: ${landed.bottom} of ${landed.h}`);
+  check(
+    (await js(`document.getElementById('pet').style.transform`)) === '',
+    'the pet is left rotated where it landed'
+  );
+
+  // A drag that ends without moving must never be read as a throw. Dividing a
+  // distance by nearly no time is how a stationary pet ends up across the room.
+  const still = await petBox();
+  await dragTo(still.left + 200, still.top);
+  await settle();
+  check((await js(`flight === null`)) === true, 'a same-tick drag was measured as a throw');
+
   // Placed by hand is remembered by the main process, and the pet stops
   // wandering off on its own from that point.
   check(!!ipc.place.length, 'placing the pet told main nothing, so it is forgotten on restart');
@@ -543,6 +583,9 @@ app.whenReady().then(async () => {
   // Back on a short window the pet must still be on it - the clamp runs on
   // resize, or a pet parked low on a tall display ends up under a short one.
   const shrunk = await petBox();
+  // Instantly, not over the 2.6 second walk: mid-glide the pet is outside the
+  // window it was just clamped into, which is exactly the moment a resolution
+  // change happens.
   check(
     shrunk.bottom <= shrunk.h + 1 && shrunk.top >= -1,
     `resizing the window left the pet outside it: ${JSON.stringify(shrunk)}`
