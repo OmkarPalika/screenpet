@@ -10,8 +10,9 @@ screenpet analytics. **We collect nothing, because there is nowhere for it to
 go.**
 
 On default settings the only network socket the app opens is to `127.0.0.1` —
-your own machine. You can prove that without reading any code: block the app in
-Windows Defender Firewall and use it. Everything still works.
+your own machine. You can prove that without reading any code: block the app in your
+firewall - Windows Defender, or Little Snitch and its like on macOS - and use
+it. Everything still works.
 
 Three settings can change that, and each one is off until you turn it on. They
 are listed in [What can leave this computer](#what-can-leave-this-computer).
@@ -40,20 +41,21 @@ anything to us, and there is no server to send it to.
 
 | Source | When | Where it goes |
 | --- | --- | --- |
-| Your screen | Only when you press the hotkey or ask the pet to look | Windows OCR on this machine, then the local model |
+| Your screen | Only when you press the hotkey or ask the pet to look | The text recogniser built into this machine - Windows OCR, or Vision on macOS - and then the local model |
 | A screenshot image | Only on the vision tier, when OCR finds too little text to work with | The local model only. **Never sent to a hosted provider** — an image cannot be redacted the way text can |
 | Microphone | Only with `Let me talk to it` on, and only while a phrase is being spoken | A recogniser on this machine: Windows' own, or whisper.cpp / Parakeet if you installed one. None of them reach the network, and with a local engine the audio is piped to it and never written to disk |
-| Camera | Only with the camera setting on | Answers "did anything move" and "is there a face" — never *whose* face. The Windows API used has no identify, no compare and no face embedding |
+| Camera | Only with the camera setting on | Answers "did anything move" and "is there a face" — never *whose* face. The detector used on each system — Windows.Media.FaceAnalysis, or Vision on macOS — is asked only to count. Neither is asked for landmarks or a face print, and no identify or compare call is made |
 
 Screen captures and camera frames are held in memory for the length of one
 request and are never written to disk — with one exception you trigger by hand:
-asking the pet to take a photo saves a JPEG to `Pictures\screenpet\`, and tells
-you the filename it used.
+asking the pet to take a photo saves a JPEG to your Pictures folder, in a
+`screenpet` directory, and tells you the filename it used.
 
 ## What is stored on your computer
 
-All of it under `%APPDATA%\screenpet\`, readable and deletable by you at any
-time:
+All of it in one folder, readable and deletable by you at any time:
+`%APPDATA%\screenpet\` on Windows, `~/Library/Application Support/screenpet/`
+on macOS.
 
 | File | What is in it |
 | --- | --- |
@@ -61,7 +63,7 @@ time:
 | `pet.json` | The pet's own state — mood, hunger, how long you have known each other |
 | `memory.json` | Only what you explicitly said "remember ..." about, plus counters. See below |
 | `timers.json` | Timers and reminders you set |
-| `keys.json` | API keys for a hosted provider, if you chose one — wrapped with Windows DPAPI under your user account |
+| `keys.json` | API keys for a hosted provider, if you chose one — wrapped with Windows DPAPI on Windows, or a Keychain-held key on macOS, either way under your user account |
 
 **Nothing typed at the pet, read off your screen, heard through the microphone
 or seen through the camera is ever written to `memory.json`.** Conversation
@@ -72,8 +74,8 @@ way in by the same patterns that guard the model prompt, capped at 40 notes,
 emptied by "forget everything", and deleted outright if you switch the memory
 setting off.
 
-To remove everything screenpet has ever stored: uninstall it and delete
-`%APPDATA%\screenpet\`.
+To remove everything screenpet has ever stored: uninstall it and delete that
+folder.
 
 ## What can leave this computer
 
@@ -92,7 +94,7 @@ turns all three off in the same pass.
 
 Notes that matter:
 
-- The app never asks Windows, or anyone else, where you are. The weather is
+- The app never asks the operating system, or anyone else, where you are. The weather is
   based on a town name you typed and can lie about.
 - The weather and lookup services need no account and no key, so nothing ties
   either request to you. No cookies, no device identifier, no login. One thing
@@ -124,8 +126,9 @@ is the reason the default is a model that runs on your own machine.
 
 ## Your API keys
 
-If you choose a hosted provider, its key is wrapped with Windows DPAPI under
-your user account and written to `keys.json` — never to `settings.json`, which
+If you choose a hosted provider, its key is wrapped before it is written to
+`keys.json` — with Windows DPAPI under your user account, or on macOS with a
+random key held in your login Keychain and never synced off the machine — never to `settings.json`, which
 the settings window round-trips through the renderer process. The key is never
 shown back to you, never written to a log, never put on a command line, never
 placed in a URL, and never included in an error message. The settings window can
@@ -140,7 +143,7 @@ of any age.
 
 Because we hold no data about you, there is nothing for us to disclose, correct,
 export or erase. Everything the app stores is a file on your own disk: you can
-read it in Notepad, and deleting `%APPDATA%\screenpet\` erases all of it.
+read it in any text editor, and deleting that folder erases all of it.
 
 If you have selected a hosted model provider, requests about data that company
 received go to that company under their policy.

@@ -9,6 +9,7 @@ const fs = require('fs');
 const { recognise } = require('./system/ocr');
 const { listen } = require('./system/speech');
 const dictate = require('./system/dictate');
+const host = require('./system/host');
 const media = require('./system/media');
 const dnd = require('./system/dnd');
 const reminders = require('./core/reminders');
@@ -812,10 +813,14 @@ async function replyTo(message) {
  *   falling back to the recogniser they chose to move away from.
  */
 function recogniser() {
-  if (settings.dictation === 'sapi') return 'sapi';
   const have = dictate.installed(app.getPath('userData'));
+  // Windows' own recogniser is a Windows capability. Asking for it on a host
+  // that has none has to answer 'missing' rather than fall through to it, or
+  // the pet spends its life saying it did not catch that.
+  const sapi = host.supports('listen');
+  if (settings.dictation === 'sapi') return sapi ? 'sapi' : 'missing';
   if (settings.dictation === 'local') return have ? 'local' : 'missing';
-  return have ? 'local' : 'sapi';
+  return have ? 'local' : (sapi ? 'sapi' : 'missing');
 }
 
 // Only the renderer can open a microphone, so main asks it for one phrase and
@@ -1195,6 +1200,10 @@ ipcMain.handle('config:get', async () => ({
   models: await listModels({ endpoint: endpoint() }),
   visionModel,
   packaged: app.isPackaged,
+  // What this machine can actually do. A switch for a capability the host does
+  // not have is worse than no switch: it reads as a promise and then does
+  // nothing. The settings window disables those and says why.
+  capabilities: host.report(),
   providers: Object.entries(providers.PROVIDERS).map(([name, spec]) => ({
     name, label: spec.label, local: spec.local === true, model: spec.model || '', keys: spec.keys || '',
   })),

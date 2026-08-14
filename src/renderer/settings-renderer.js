@@ -290,6 +290,32 @@ saveBtn.addEventListener('click', async () => {
   status.textContent = 'Saved.';
 });
 
+// Which checkbox depends on something the operating system has to provide. A
+// tick box for a capability this machine does not have is a promise the app
+// then breaks, so those are switched off, disabled, and say why on hover.
+//
+// Only these two. Bopping and noticing you are Web Audio and a canvas diff in
+// the renderer - they need a microphone and a camera, not an OS feature, and
+// they work anywhere Electron does.
+const NEEDS = { wake: 'wake', faces: 'faces' };
+
+function showCapabilities(caps) {
+  if (!Array.isArray(caps)) return;
+  const by = Object.fromEntries(caps.map((c) => [c.name, c]));
+  for (const [id, capability] of Object.entries(NEEDS)) {
+    const box = el(id);
+    const cap = by[capability];
+    if (!box || !cap || cap.ready) continue;
+    box.checked = false;
+    box.disabled = true;
+    const label = box.closest('label') || box.parentElement;
+    if (label) {
+      label.classList.add('unavailable');
+      label.title = cap.why;
+    }
+  }
+}
+
 el('close').addEventListener('click', () => window.config.close());
 
 (async () => {
@@ -307,6 +333,7 @@ el('close').addEventListener('click', () => window.config.close());
   fillWear(data.wear || ['none'], current.wear);
   paintPreviews();
   showVision(data.visionModel);
+  showCapabilities(data.capabilities);
 
   // 'auto' and 'off' are the two built-in options; an explicit model name that
   // is not one of them needs an option of its own or the select shows nothing.

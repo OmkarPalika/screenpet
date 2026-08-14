@@ -2479,6 +2479,75 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     );
   }
 
+  // --- what each host can do, and what it says when it cannot ---
+  {
+    const fs = require('fs');
+    const hostjs = require('../src/system/host');
+    const { KEYS } = require('../src/system/media');
+
+    // Windows is the platform this ships on; every capability must exist there.
+    for (const name of Object.keys(hostjs.CAPABILITIES)) {
+      assert.ok(hostjs.supports(name, 'win32'), `${name} is missing on Windows`);
+    }
+
+    // macOS has all of it except the two that need a recogniser holding the
+    // microphone. Pinned in both directions: quietly gaining `wake` on macOS
+    // would mean a switch that does nothing, and quietly losing `ocr` would
+    // mean the whole app does nothing.
+    const mac = Object.keys(hostjs.CAPABILITIES).filter((n) => hostjs.supports(n, 'darwin'));
+    assert.deepStrictEqual(
+      mac.sort(), ['dnd', 'faces', 'keys', 'media', 'ocr'],
+      'the macOS capability list changed'
+    );
+
+    // Nothing is offered on a platform with no implementation at all.
+    for (const name of Object.keys(hostjs.CAPABILITIES)) {
+      assert.ok(!hostjs.supports(name, 'linux'), `${name} claims to work on Linux, where nothing was written`);
+    }
+
+    // These sentences are read out by the pet, so they have to be sentences.
+    for (const cap of hostjs.report('linux')) {
+      assert.ok(!cap.ready, `${cap.name} reports ready on a platform it does not support`);
+      assert.match(cap.why, /^I .*!$/, `${cap.name}'s refusal does not sound like the pet: ${cap.why}`);
+      assert.ok(!/[A-Z][a-z]+\.[A-Z]/.test(cap.why), `${cap.name}'s refusal names an API: ${cap.why}`);
+    }
+
+    // The macOS helper is one binary answering three different callers. If
+    // host.js names a subcommand the Swift does not implement, nothing on
+    // Windows fails and the Mac fails at the worst possible moment.
+    const swift = fs.readFileSync('./src/system/mac/screenpet-helper.swift', 'utf8');
+    for (const name of ['ocr', 'faces', 'keys']) {
+      const [exe, args] = hostjs.CAPABILITIES[name].on.darwin();
+      if (exe !== hostjs.HELPER) continue;
+      assert.ok(
+        new RegExp(`case "${args[0]}"`).test(swift),
+        `host.js asks the macOS helper for "${args[0]}" and the helper has no such case`
+      );
+    }
+    // keys.js sends these two words and nothing else sends anything.
+    for (const mode of ['protect', 'unprotect']) {
+      assert.ok(swift.includes(`case "${mode}"`), `the macOS helper cannot ${mode} a key`);
+    }
+
+    // Same drift, other file: a media key added to KEYS but not to the
+    // AppleScript would work on Windows and quietly do nothing on a Mac.
+    const applescript = fs.readFileSync('./src/system/mac/media.applescript', 'utf8');
+    for (const key of Object.keys(KEYS)) {
+      assert.ok(
+        applescript.includes(`"${key}"`),
+        `media.js knows the key "${key}" and media.applescript does not`
+      );
+    }
+
+    // Dictation is the one capability whose absence has a fallback rather than
+    // a refusal, and main.js is where that decision lives.
+    const mjs = fs.readFileSync('./src/main.js', 'utf8');
+    assert.ok(
+      mjs.includes("const sapi = host.supports('listen')"),
+      'main.js still assumes Windows dictation exists'
+    );
+  }
+
   // --- the layout the build config assumes ---
   {
     const fs = require('fs');

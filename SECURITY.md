@@ -34,8 +34,8 @@ The design rules that follow from that are the things worth testing:
 - **The local endpoint is loopback-only**, validated in `src/core/settings.js`. A
   hand-edited settings file must not be able to send screen text to a remote
   "Ollama".
-- **API keys are one-way.** A key is wrapped with Windows DPAPI, stored in
-  `keys.json`, and never returned to the renderer, a log line, an error message,
+- **API keys are one-way.** A key is wrapped - DPAPI on Windows, AES-GCM under a
+  Keychain-held key on macOS - stored in `keys.json`, and never returned to the renderer, a log line, an error message,
   a command line or a URL. Any path that reads one back out is a vulnerability.
 - **Screenshots never reach a hosted provider.** An image cannot be redacted, so
   the vision tier is local-only, locked in two places.
@@ -67,8 +67,8 @@ vulnerabilities — but a way to *widen* one is:
   SmartScreen will warn. Verify what you downloaded against the hash published
   with the release.
 - **Local dictation runs a binary you supplied.** If a known engine binary and
-  its matching model are present in `%APPDATA%\screenpet\whisper\`, the app
-  executes that binary. Only the filenames in `src/system/dictate.js`'s `ENGINES` table are
+  its matching model are present in the `whisper` folder inside the app data
+  directory, the app executes that binary. Only the filenames in `src/system/dictate.js`'s `ENGINES` table are
   ever run, the folder is fixed, and there is no setting that can point it
   elsewhere — deliberately, because a path to an executable in `settings.json`
   would be arbitrary code execution with a nice label on it. Anyone who can write
@@ -77,11 +77,29 @@ vulnerabilities — but a way to *widen* one is:
   the same. A way to make the app run a binary from anywhere *else* is a
   vulnerability.
 
+## The macOS helper
+
+macOS needs a compiled helper for Vision and the Keychain, built from
+`src/system/mac/screenpet-helper.swift` by `npm run build:helper`. It is worth
+attacking on its own terms:
+
+- It is **not committed as a binary**, deliberately. A prebuilt artefact in a
+  repository is unreviewable, and this one holds the key that unwraps
+  `keys.json`.
+- It takes base64 on stdin and nothing on argv, for the same reason keys.ps1
+  does: arguments are visible to anything that can list processes.
+- The Keychain item is `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` - not
+  synced to iCloud, not in a backup that leaves the machine. A change that
+  widens that is a vulnerability.
+- The AppleScript for media control takes its key as an argument to a fixed
+  script file. Anything that turns it into an interpolated `-e` string is an
+  AppleScript injection and should be reported as one.
+
 ## Out of scope
 
 - Vulnerabilities in Ollama, in a model you pulled, or in a hosted provider's
   API — report those to them.
 - Anything that requires an attacker to already have code execution or file
-  write access under your Windows account. At that point they can read
+  write access under your own user account. At that point they can read
   `%APPDATA%` directly and the app is not the weak link.
 - Missing hardening that changes nothing an attacker could reach.

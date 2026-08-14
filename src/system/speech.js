@@ -1,20 +1,11 @@
 'use strict';
 
-const { spawn } = require('child_process');
-const path = require('path');
+const host = require('./host');
 
-// Same arrangement as ocr.js, and for the same reasons: PowerShell cannot read a
-// script from inside an asar archive, and the .NET Framework assembly this needs
-// is only projected by Windows PowerShell 5.1.
-const SCRIPT = path.join(__dirname, 'listen.ps1').replace('app.asar', 'app.asar.unpacked');
+// Windows dictation only. macOS has no on-device recogniser this app is willing
+// to use, so host.js does not offer `listen` there and main.js routes dictation
+// to whisper.cpp or Parakeet instead.
 
-const PWSH = path.join(
-  process.env.SystemRoot || 'C:\\Windows',
-  'System32',
-  'WindowsPowerShell',
-  'v1.0',
-  'powershell.exe'
-);
 
 // The chat box caps typing at 500 characters; dictation gets the same ceiling
 // rather than a second, larger one nobody remembers to keep in step.
@@ -35,14 +26,7 @@ const MIN_CONFIDENCE = Number(process.env.SCREENPET_MIC_CONFIDENCE || 0.3);
  */
 function listen({ seconds = 8 } = {}) {
   return new Promise((resolve, reject) => {
-    const ps = spawn(
-      PWSH,
-      [
-        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT,
-        String(seconds), String(MIN_CONFIDENCE),
-      ],
-      { windowsHide: true }
-    );
+    const ps = host.spawn('listen', [String(seconds), String(MIN_CONFIDENCE)]);
 
     let out = '';
     let err = '';

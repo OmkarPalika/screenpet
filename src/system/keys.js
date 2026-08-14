@@ -13,20 +13,11 @@
 // line. The settings window can set a key and clear a key; it is never told one,
 // and there is no IPC channel that returns one. See main.js.
 
-const { spawn } = require('child_process');
-const path = require('path');
+const host = require('./host');
 
-// Same arrangement as every other PowerShell bridge here: a script cannot be
-// read from inside an asar archive.
-const SCRIPT = path.join(__dirname, 'keys.ps1').replace('app.asar', 'app.asar.unpacked');
+// DPAPI on Windows, the Keychain on macOS. Both are reached by a child process
+// that takes the key on stdin, never on a command line.
 
-const PWSH = path.join(
-  process.env.SystemRoot || 'C:\\Windows',
-  'System32',
-  'WindowsPowerShell',
-  'v1.0',
-  'powershell.exe'
-);
 
 const TIMEOUT_MS = 15000;
 
@@ -39,11 +30,9 @@ const cache = new Map();
 
 function run(mode, payload) {
   return new Promise((resolve, reject) => {
-    const ps = spawn(
-      PWSH,
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, '-Mode', mode],
-      { windowsHide: true }
-    );
+    // The mode is one of three literals chosen inside this file, never by a
+    // caller, so neither spelling is a place user input can reach.
+    const ps = host.spawn('keys', host.PLATFORM === 'darwin' ? [mode] : ['-Mode', mode]);
 
     let out = '';
     let err = '';

@@ -1,19 +1,10 @@
 'use strict';
 
-const { spawn } = require('child_process');
-const path = require('path');
+const host = require('./host');
 
-// Same arrangement as ocr.js and speech.js: PowerShell cannot read a script from
-// inside an asar archive.
-const SCRIPT = path.join(__dirname, 'media.ps1').replace('app.asar', 'app.asar.unpacked');
+// Windows presses a virtual key; macOS tells System Events to press the physical
+// media key. Same broadcast either way - see KEYS below.
 
-const PWSH = path.join(
-  process.env.SystemRoot || 'C:\\Windows',
-  'System32',
-  'WindowsPowerShell',
-  'v1.0',
-  'powershell.exe'
-);
 
 // Windows virtual key codes. This is the entire vocabulary: there is no way to
 // press anything else through here, because the name is looked up in this object
@@ -45,11 +36,10 @@ function press(name) {
   if (!code) return Promise.reject(new Error(`I do not know the key "${name}"`));
 
   return new Promise((resolve, reject) => {
-    const ps = spawn(
-      PWSH,
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT, String(code)],
-      { windowsHide: true }
-    );
+    // Windows takes the virtual key code; macOS takes the name, because what it
+    // does with it differs per key rather than being one broadcast. Either way
+    // the value came out of KEYS above and cannot be anything else.
+    const ps = host.spawn('media', [host.PLATFORM === 'darwin' ? name : String(code)]);
 
     let err = '';
     ps.stderr.on('data', (d) => (err += d));
