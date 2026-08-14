@@ -148,6 +148,14 @@
 @keyframes peck   { 0%, 100% { transform: translateY(0) rotate(0deg); } 45% { transform: translateY(6px) rotate(9deg); } }
 @keyframes rumble { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
 @keyframes twitch { 0%, 100% { transform: rotate(0deg); } 30% { transform: rotate(-7deg); } 55% { transform: rotate(4deg); } }
+/* The crouch is what makes the pounce read as one: straight up is a hop, which
+   two other species already do. */
+@keyframes pounce { 0%, 100% { transform: none; } 30% { transform: translateY(5px) scale(1.07, 0.9); } 58% { transform: translateY(-13px) rotate(-6deg) scale(0.96, 1.06); } }
+@keyframes paddle { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-5px) rotate(2deg); } }
+@keyframes haunt  { 0%, 100% { transform: translateY(0); opacity: 1; } 50% { transform: translateY(-8px); opacity: 0.75; } }
+/* Stepped rather than eased: everything else here moves like a creature, and
+   the one that is not should not. */
+@keyframes glitch { 0%, 100% { transform: none; } 25% { transform: translateX(-3px) skewX(5deg); } 50% { transform: translateX(3px) skewX(-4deg); } 75% { transform: translateY(-2px); } }
 
 /* cat: tall pointed ears, whiskers, and a tail curled up behind it */
 [data-pet="cat"] .ear-l    { d: path("M26 34l6-27 19 19z"); }
@@ -187,6 +195,47 @@
 [data-pet="dragon"] .tail  { display: block; d: path("M88 94c16 0 22-8 22-18l6 4-2-11-9 7c1 8-5 14-17 14z"); }
 [data-pet="dragon"] .pet.is-idling       { animation: rumble 260ms ease-in-out 6; }
 [data-pet="dragon"] .pet.is-idling .tail { animation: sway 1.3s ease-in-out 2; }
+
+/* fox: wide low ears and a tail bigger than it is. No whiskers, deliberately -
+   the first pass had them and read as a cat with a good tail. The cat is
+   whiskers and a curl; the fox is ears out sideways and far too much tail. */
+[data-pet="fox"] .ear-l    { d: path("M14 44l5-32 34 21z"); }
+[data-pet="fox"] .ear-r    { d: path("M106 44l-5-32-34 21z"); }
+[data-pet="fox"] .tail     { display: block; d: path("M84 94c27 4 35-13 30-29-3-12-17-14-20-4 7 1 12 6 11 14-2 12-12 19-23 17z"); }
+[data-pet="fox"] .pet.is-idling       { animation: pounce 900ms ease-in-out; }
+[data-pet="fox"] .pet.is-idling .tail { animation: sway 700ms ease-in-out 3; }
+
+/* axolotl: the gills are the whole pet. Three lobes a side, as one path each -
+   a subpath per lobe, which is why they can be circles and still be an "ear". */
+[data-pet="axolotl"] .ear-l {
+  d: path("M17 34a7 7 0 1 0 14 0a7 7 0 1 0-14 0M9 46a6 6 0 1 0 12 0a6 6 0 1 0-12 0M17 57a6 6 0 1 0 12 0a6 6 0 1 0-12 0");
+}
+[data-pet="axolotl"] .ear-r {
+  d: path("M89 34a7 7 0 1 0 14 0a7 7 0 1 0-14 0M99 46a6 6 0 1 0 12 0a6 6 0 1 0-12 0M91 57a6 6 0 1 0 12 0a6 6 0 1 0-12 0");
+}
+[data-pet="axolotl"] .tail { display: block; d: path("M86 88q22-8 28 4t-28 12z"); }
+[data-pet="axolotl"] .pet.is-idling       { animation: paddle 1.5s ease-in-out 2; }
+[data-pet="axolotl"] .pet.is-idling .tail { animation: sway 750ms ease-in-out 3; }
+
+/* ghost: the only species that swaps the body outline rather than hanging
+   things off it, and the only one that floats - so its shadow all but goes. */
+[data-pet="ghost"] .ear    { display: none; }
+[data-pet="ghost"] .body {
+  d: path("M60 12c22 0 40 18 40 42v40l-8-7-8 7-8-7-8 7-8-7-8 7-8-7-8 7-8-7V54c0-24 18-42 40-42z");
+  opacity: 0.88;
+}
+[data-pet="ghost"] .shadow          { opacity: 0.07; }
+[data-pet="ghost"] .pet.is-idling   { animation: haunt 2.2s ease-in-out; }
+[data-pet="ghost"] .pet.is-idling .gaze { animation: glance 2.4s ease-in-out; }
+
+/* robot: a box with side panels and an aerial. No whiskers, no tail - a robot
+   with a wagging tail is a dog in a costume. */
+[data-pet="robot"] .body  { d: path("M30 18h60a13 13 0 0 1 13 13v50a13 13 0 0 1-13 13H30a13 13 0 0 1-13-13V31a13 13 0 0 1 13-13z"); }
+[data-pet="robot"] .ear-l { d: path("M17 44h-9v24h9z"); }
+[data-pet="robot"] .ear-r { d: path("M103 44h9v24h-9z"); }
+[data-pet="robot"] .crest { display: block; d: path("M58 20h4v-11h-4zM60 3a5 5 0 1 0 0.1 0"); }
+[data-pet="robot"] .pet.is-idling        { animation: glitch 420ms steps(4, end) 3; }
+[data-pet="robot"] .pet.is-idling .crest { animation: twitch 500ms ease-in-out 3; }
 
 /* blob has no shape rules of its own, but it does get an idle of its own so the
    default squish is a fallback rather than "the pet nobody wrote a quirk for". */
