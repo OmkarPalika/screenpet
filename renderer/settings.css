@@ -85,9 +85,13 @@ code { font-family: Consolas, ui-monospace, monospace; font-size: 11px; }
 
 /* ---- skins ---- */
 
-.skins { display: flex; gap: 9px; margin-bottom: 14px; }
+.skins { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 14px; }
 
 .swatch {
+  /* The colour comes from pets.css, off the swatch's own data-skin, so a new
+     palette is one rule in one file rather than one here that is easy to forget
+     and shows up as a colourless circle. */
+  background: var(--body);
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -99,11 +103,6 @@ code { font-family: Consolas, ui-monospace, monospace; font-size: 11px; }
 
 .swatch[aria-pressed="true"] { border-color: var(--accent); outline-color: var(--accent); }
 .swatch:focus-visible { outline: 2px solid var(--accent); }
-
-.swatch[data-skin="butter"]  { background: #f2b45c; }
-.swatch[data-skin="mint"]    { background: #7fd1b0; }
-.swatch[data-skin="blossom"] { background: #f3a3bd; }
-.swatch[data-skin="slate"]   { background: #9aa8bd; }
 
 /* ---- checkbox ---- */
 

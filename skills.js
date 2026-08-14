@@ -595,9 +595,17 @@ const MOVE_WORDS = [
   ['dance', /\b(dance|boogie|bust a move)\b/i],
   ['spin', /\b(spin(?!\s+up)|twirl)\b/i],
   ['jump', /\b(jump(?!\s+(?:to|into|in)\b)|hop|bounce)\b/i],
-  ['topple', /\b(fall over|topple|play dead|roll over)\b/i],
+  // Before topple, which used to answer for "roll over" - a dog rolling over is
+  // a roll, and playing dead is the other one.
+  ['roll', /\b(roll(?!\s+back)(?:\s+over)?|barrel roll)\b/i],
+  ['topple', /\b(fall over|topple|play dead)\b/i],
   ['peek', /\b(look around|look about|have a look)\b/i],
   ['walk', /\b(walk(?!\s+(?:through|me\b))|move over|shoo)\b/i],
+  // "sit tight" and "sit on it" are things you say about a task, not to a pet.
+  ['sit', /\b(sit(?!\s+(?:tight|on|with))\s*(?:down)?|good (?:boy|girl))\b/i],
+  ['stretch', /\b(stretch(?!\s+goal)|limber up)\b/i],
+  ['shiver', /\b(shiver|brr+|are you cold)\b/i],
+  ['sneeze', /\b(sneeze|achoo|bless you)\b/i],
 ];
 
 const MOVE_LINES = {
@@ -607,11 +615,18 @@ const MOVE_LINES = {
   topple: ['*flops over*', 'I am unwell', 'this is my final form'],
   peek: ['*looks around*', 'all clear', 'checking the corners'],
   walk: ['off I go', '*wanders*', 'I like it over here'],
+  roll: ['*rolls*', 'weeee', 'again, but faster'],
+  sit: ['*sits*', 'sitting. very good at sitting.', 'like this?'],
+  stretch: ['*stretches*', 'that is better', 'nnnghh'],
+  shiver: ['brrr', '*shivers*', 'is it cold in here, or is it me'],
+  sneeze: ['*achoo*', 'excuse me', 'dust, I think'],
 };
 
 const MOVE_EXPR = {
   dance: 'joy', spin: 'giggle', jump: 'grin',
   topple: 'dizzy', peek: 'curious', walk: 'smile',
+  roll: 'giggle', sit: 'smile', stretch: 'proud',
+  shiver: 'grimace', sneeze: 'oops',
 };
 
 /**

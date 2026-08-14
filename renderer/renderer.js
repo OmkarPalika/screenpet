@@ -196,7 +196,10 @@ function bark(expr) {
 
 // How long each one runs, so the attribute comes off when the animation ends
 // rather than at some guessed constant.
-const MOVE_MS = { walk: 2600, dance: 2600, spin: 1240, jump: 1040, topple: 2400, peek: 2200 };
+const MOVE_MS = {
+  walk: 2600, dance: 2600, spin: 1240, jump: 1040, topple: 2400, peek: 2200,
+  roll: 900, sit: 2000, stretch: 1400, shiver: 1260, sneeze: 900,
+};
 const MOVES = Object.keys(MOVE_MS);
 
 let moveTimer = null;
@@ -674,7 +677,7 @@ const QUIRK_MS = 2600;
 // Which of the whole-body movements the pet does unprompted. Dancing is not on
 // the list: a pet that breaks into a dance at nobody is unsettling rather than
 // charming, so that one stays something you ask for.
-const IDLE_MOVES = ['peek', 'jump', 'spin'];
+const IDLE_MOVES = ['peek', 'jump', 'spin', 'sit', 'stretch'];
 
 function quirk() {
   if (idle()) {

@@ -619,6 +619,21 @@ html, body {
 .pet[data-move="topple"] svg { animation: topple 2.4s cubic-bezier(0.4, 0, 0.3, 1); }
 .pet[data-move="peek"]   svg { animation: peek 2.2s ease-in-out; }
 
+.pet[data-move="sit"]     svg { animation: sit 2s cubic-bezier(0.3, 0, 0.3, 1); }
+.pet[data-move="stretch"] svg { animation: reach 1.4s ease-in-out; }
+.pet[data-move="shiver"]  svg { animation: shiver 90ms ease-in-out 14; }
+.pet[data-move="sneeze"]  svg { animation: sneeze 900ms ease-in-out; }
+/* The only movement that turns about its own middle rather than its feet - a
+   roll pivoting on the floor is a pratfall, which topple already is. */
+.pet[data-move="roll"]    svg { animation: roll 900ms ease-in-out; transform-origin: 60px 60px; }
+/* Counter-rotated, same as the topple: the shadow is inside the svg, so without
+   this it goes over the pet's head halfway through and the pet appears to be
+   rolling in mid-air. */
+.pet[data-move="roll"] .shadow {
+  transform-origin: 60px 60px;
+  animation: roll-shadow 900ms ease-in-out;
+}
+
 /* A step cycle: rock onto one side, lift, rock onto the other. The squash on
    the down beats is what stops it reading as a slide with a wobble on top. */
 @keyframes walk {
@@ -689,6 +704,52 @@ html, body {
   45%      { transform: rotate(-12deg) translateX(-5px); }
   60%      { transform: rotate(12deg) translateX(5px); }
   85%      { transform: rotate(12deg) translateX(5px); }
+}
+
+/* Down, hold, up. The hold is the whole movement - a sit that springs straight
+   back up is a squat, and the pet is meant to look pleased with itself. */
+@keyframes sit {
+  0%        { transform: none; }
+  18%, 82%  { transform: translateY(7px) scale(1.09, 0.86); }
+  100%      { transform: none; }
+}
+
+/* Up on tiptoe and long, then the settle. Not called `stretch`: pets.css
+   already has a keyframe by that name for the cat's idle, and the later
+   definition would quietly replace it everywhere. */
+@keyframes reach {
+  0%, 100% { transform: none; }
+  40%      { transform: translateY(-7px) scale(0.93, 1.12); }
+  72%      { transform: translateY(2px) scale(1.06, 0.95); }
+}
+
+@keyframes shiver {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-2.5px) scaleY(0.99); }
+  75%      { transform: translateX(2.5px); }
+}
+
+/* The wind-up is the joke: back, hold, then the whole body snaps forward. */
+@keyframes sneeze {
+  0%       { transform: none; }
+  35%, 48% { transform: translateY(-4px) rotate(-11deg) scale(1.05); }
+  62%      { transform: translateY(3px) rotate(13deg) scale(0.93); }
+  80%      { transform: translateY(0) rotate(-4deg); }
+  100%     { transform: none; }
+}
+
+/* Away and over, then back to where it started - it has to land where it was
+   standing, or the pet drifts across the taskbar every time you ask. */
+@keyframes roll {
+  0%   { transform: translateX(0) rotate(0deg); }
+  50%  { transform: translateX(-28px) rotate(-180deg); }
+  100% { transform: translateX(0) rotate(-360deg); }
+}
+
+@keyframes roll-shadow {
+  0%   { transform: rotate(0deg); }
+  50%  { transform: rotate(180deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* Speaking out loud. A class rather than an expression on purpose: the pet has

@@ -86,8 +86,15 @@ nothing to complain about. A pet that talks more than that gets uninstalled.
 ## Pets
 
 Six of them: **blob**, **cat**, **pup**, **bun**, **bird**, **dragon**. Pick one
-in Settings, next to the four skins. They are orthogonal — every pet works in
-every palette, so it is 24 combinations, not six.
+in Settings, next to the ten skins — butter, mint, blossom, slate, coal, cream,
+moss, plum, sky, coral. They are orthogonal: every pet works in every palette,
+and every outfit works over both, so it is 6 × 10 × 9 rather than six.
+
+A palette is **three CSS variables** — `--body`, `--ear`, `--cheek` — defined in
+one place. The settings swatch paints itself from the same three off its own
+`data-skin`, so a new skin is one rule in one file; a test asserts `settings.css`
+never names a skin, because the version of this that hardcoded four swatch
+colours is exactly how a skin ships as a colourless circle.
 
 Every species keeps the **same face rig**: same classes, same coordinates. Only
 ears, body outline and extras (tail, crest, whiskers) change. That is the whole
@@ -132,7 +139,7 @@ happened, laid over the top and cleared after a couple of seconds.
 
 They are CSS, not sprites — the mouth is a `d: path(...)` swap and the extras
 (brows, tongue, tears, sweat, sparkle, anger mark, `z`s) are `display` toggles.
-So they cost no images, and they compose with all four skins for free.
+So they cost no images, and they compose with all ten skins for free.
 
 `rage` is deliberately the `annoyed` face turned up — steeper brows, angrier
 mouth, a shake and a hue shift — rather than a face of its own. That is what
@@ -327,6 +334,7 @@ exact, and identical every time:
 | `flip a coin`, `roll a d20` | A result, and a spin while you get it. |
 | `rock` / `paper` / `scissors` | An actual game. It dances if it wins and falls over if it does not. |
 | `dance`, `spin`, `jump`, `fall over`, `look around` | See "A body" below. |
+| `sit`, `good boy`, `roll over`, `stretch`, `achoo`, `brrr` | The other five. `roll over` is the trick, `play dead` is the collapse. |
 | `next track`, `pause the music`, `turn it up`, `mute the sound` | The keyboard's media keys. Whatever is already playing obeys. |
 | `take a photo`, `say cheese` | One frame from the camera, into your Pictures folder. Needs the camera switched on. |
 | `wake me every weekday at 7`, `remind me to stand up every 30 minutes` | A recurring alarm. Daily, weekdays, one weekday, or an interval. |
@@ -543,9 +551,18 @@ disk with your notes in it, and this app does not keep one.
 
 ## A body
 
-Six whole-body movements, separate from the thirty-nine faces:
+Eleven whole-body movements, separate from the thirty-nine faces:
 
 `walk` `dance` `spin` `jump` `topple` `peek`
+`sit` `stretch` `roll` `sneeze` `shiver`
+
+Each is one `@keyframes` block and one row in the renderer's `MOVE_MS`, and a
+test asserts every movement a command can ask for has both, plus a rule in the
+stylesheet and something to say. `roll` is the only one that turns about its own
+middle rather than its feet — a roll pivoting on the floor is a pratfall, which
+`topple` already is — and its shadow counter-rotates, or the pet appears to roll
+in mid-air. `roll over` used to answer with `topple`: the trick and the collapse
+were the same movement, and now they are not.
 
 **The face and the body are different axes on purpose.** An expression is
 `data-expr` on `.pet`; a movement is `data-move` on the `svg` inside it. Two
@@ -783,7 +800,7 @@ and quit it — the pet has no taskbar button by design.
 | Diagrams and images | `Auto` uses a vision model if one exists, `Off` forces text-only. |
 | Hotkey | Validated before saving; a malformed accelerator would crash the app on launch. |
 | Pet | Blob, cat, pup, bun, bird or dragon. Previews are the real thing. |
-| Skin | Butter, mint, blossom or slate. Applies to whichever pet you picked. |
+| Skin | Ten palettes — butter, mint, blossom, slate, coal, cream, moss, plum, sky, coral. Applies to whichever pet you picked. |
 | Wearing | Nothing, bow, shades, halo, masked hero, party hat, wizard hat, crown or headphones. See "The wardrobe". |
 | Speak replies out loud | On by default. Mute from the tray without opening this window. |
 | Little noises | On by default. A woof, a meow, a chirp — synthesised, not played from a file. Muted separately from the voice. |
@@ -1290,9 +1307,10 @@ npm run verify:ui
 ```
 
 Drives both real windows over real IPC — speech, all five moods, every
-expression, cursor tracking, all six species, all four skins, stat bars, hover
-hit-testing, headpat, tickle, drag, the chat box, every menu item, and the whole
-settings form — and fails on any console error. Writes PNGs to look at.
+expression, cursor tracking, all six species, all ten skins, every outfit, stat
+bars, hover hit-testing, headpat, tickle, drag, the chat box, every menu item,
+and the whole settings form — and fails on any console error. Writes PNGs to
+look at.
 
 The expression and species checks are not just "an attribute was set". They
 assert the mouth and ear geometry actually changed, because both systems rest on

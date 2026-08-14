@@ -724,8 +724,13 @@ app.whenReady().then(async () => {
   const movesAt = [
     ['walk', '-0.30s'], ['dance', '-0.26s'], ['spin', '-0.20s'],
     ['jump', '-0.23s'], ['topple', '-0.95s'], ['peek', '-0.55s'],
+    // The moment that has to look right for each of the new ones: the hold at
+    // the bottom of the sit, the top of the stretch, halfway through the roll -
+    // which is the frame where it is upside down - and the snap of the sneeze.
+    ['sit', '-1.00s'], ['stretch', '-0.55s'], ['roll', '-0.45s'],
+    ['sneeze', '-0.55s'], ['shiver', '-0.045s'],
   ];
-  await sheet('pet-moves.png', [920, 260], `(source, box, clone) => {
+  await sheet('pet-moves.png', [920, 380], `(source, box, clone) => {
     box.style.display = 'flex';
     box.style.flexWrap = 'wrap';
     for (const [name, at] of ${JSON.stringify(movesAt)}) {
@@ -772,10 +777,10 @@ app.whenReady().then(async () => {
   }`);
 
   const allSpecies = ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon'];
-  await sheet('pet-species.png', [760, 500], `(source, box, clone) => {
+  await sheet('pet-species.png', [760, 1190], `(source, box, clone) => {
     box.style.display = 'grid';
     box.style.gridTemplateColumns = 'repeat(6, 124px)';
-    for (const skin of ['butter', 'mint', 'blossom', 'slate']) {
+    for (const skin of ${JSON.stringify(require('./settings').SKINS)}) {
       for (const s of ${JSON.stringify(allSpecies)}) {
         const cell = document.createElement('div');
         cell.dataset.pet = s;
@@ -792,13 +797,17 @@ app.whenReady().then(async () => {
   ipcMain.handle('config:get', async () => ({
     settings: {
       model: 'llama3.1:8b', vision: 'auto', hotkey: 'CommandOrControl+Shift+Space',
-      pet: 'cat', skin: 'butter', autostart: false, ollama: 'http://127.0.0.1:11434',
+      pet: 'cat', skin: 'butter', wear: 'none',
+      autostart: false, ollama: 'http://127.0.0.1:11434',
       memory: true, cheek: true,
       network: false, web: false, weather: false, city: '',
       provider: 'ollama', providerModel: '',
     },
-    skins: ['butter', 'mint', 'blossom', 'slate'],
-    pets: ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon'],
+    // The real lists, not a copy of them: a settings window offering four skins
+    // while the app has ten is a bug this file exists to catch.
+    skins: require('./settings').SKINS,
+    pets: require('./settings').PETS,
+    wear: require('./settings').WEAR,
     models: ['llama3.1:8b', 'mistral:7b'],
     visionModel: null,
     packaged: false,
@@ -832,7 +841,8 @@ app.whenReady().then(async () => {
     'settings did not list the installed models'
   );
   check(
-    (await sjs(`document.querySelectorAll('#skins .swatch').length`)) === 4,
+    (await sjs(`document.querySelectorAll('#skins .swatch').length`))
+      === require('./settings').SKINS.length,
     'settings did not render the skin swatches'
   );
   check(
@@ -858,6 +868,28 @@ app.whenReady().then(async () => {
     (await sjs(`getComputedStyle(document.querySelector('#pets .body')).fill`)) === 'rgb(127, 209, 176)',
     'skin choice did not repaint the pet previews'
   );
+  // Every skin gets a swatch, and every swatch gets its colour from the pet's
+  // own variables. A palette added to settings.js and nowhere else shows up here
+  // as a circle the same colour as the window.
+  const swatches = await sjs(`(() => [...document.querySelectorAll('.swatch')]
+    .map((s) => getComputedStyle(s).backgroundColor))()`);
+  check(
+    swatches.length === require('./settings').SKINS.length,
+    `${swatches.length} swatches for ${require('./settings').SKINS.length} skins`
+  );
+  check(new Set(swatches).size === swatches.length, `two skins share a swatch colour: ${swatches}`);
+  for (const c of swatches) {
+    check(/^rgba?\(/.test(c) && !c.startsWith('rgba(0, 0, 0, 0'), `a swatch has no colour (${c})`);
+  }
+  // And the wardrobe is offered in full, with something readable in each row.
+  const wear = await sjs(`(() => [...document.getElementById('wear').options]
+    .map((o) => [o.value, o.textContent]))()`);
+  check(
+    wear.length === require('./settings').WEAR.length,
+    `${wear.length} outfits offered, ${require('./settings').WEAR.length} exist`
+  );
+  check(wear.every(([, label]) => label && label.trim()), 'an outfit has no label');
+
   check(
     (await sjs(`document.getElementById('vision-hint').classList.contains('warn')`)),
     'settings did not warn that no vision model is installed'
@@ -947,6 +979,7 @@ app.whenReady().then(async () => {
        h.value = 'Alt+Shift+P'; h.dispatchEvent(new Event('input'));
        document.querySelector('[data-skin="blossom"]').click();
        document.querySelector('#pets [data-pet="dragon"]').click();
+       document.getElementById('wear').value = 'hero';
        document.getElementById('save').click(); })()`
   );
   await settle();
@@ -954,6 +987,7 @@ app.whenReady().then(async () => {
   check(saved && saved.hotkey === 'Alt+Shift+P', `hotkey not saved: ${saved && saved.hotkey}`);
   check(saved && saved.skin === 'blossom', `skin not saved: ${saved && saved.skin}`);
   check(saved && saved.pet === 'dragon', `pet not saved: ${saved && saved.pet}`);
+  check(saved && saved.wear === 'hero', `outfit not saved: ${saved && saved.wear}`);
 
   // --- report -------------------------------------------------------------
   const all = [...errors, ...problems];
