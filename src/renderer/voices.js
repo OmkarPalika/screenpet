@@ -320,6 +320,43 @@ const CALLS = {
 /** The purpose-written call for this species and feeling, if there is one. */
 const callFor = (species, feeling) => (CALLS[species] || {})[feeling] || null;
 
+// ---- the room ---------------------------------------------------------------
+// Not the pet's voice: the noises its body makes against the world. A footfall
+// and a landing are the two it actually has, because they are the two things it
+// does that would make a sound.
+
+/** One footfall. Barely there - eight of these in a walk, and a walk is common. */
+function step(ctx, when = ctx.currentTime) {
+  const out = ctx.createGain();
+  out.gain.value = MASTER;
+  out.connect(ctx.destination);
+  const a = parts(ctx, out, when, FEELINGS.neutral);
+  // Noise rather than a tone: a footfall has no pitch, and giving it one turns
+  // the pet into a xylophone by the fourth step.
+  a.noise({ dur: 0.035, peak: 0.13, low: 900, high: 160 });
+  return a.end;
+}
+
+/**
+ * Landing after a fall. Loud in proportion to the drop, because a pet dropped
+ * two pixels and a pet thrown across the screen making the same noise is the
+ * thing that gives away that neither is real.
+ *
+ * @param {number} force 0..1
+ */
+function thud(ctx, force = 1, when = ctx.currentTime) {
+  const f = Math.max(0.15, Math.min(1, force));
+  const out = ctx.createGain();
+  out.gain.value = MASTER;
+  out.connect(ctx.destination);
+  const a = parts(ctx, out, when, FEELINGS.neutral);
+  // Body: low, and it drops as it lands. Skin: a short slap of noise on top,
+  // which is the half that says it hit something solid.
+  a.tone({ type: 'sine', from: 110 * (0.8 + f * 0.4), to: 46, dur: 0.16, peak: 0.5 * f, low: 700 })
+    .noise({ dur: 0.05, peak: 0.22 * f, low: 1400, high: 200 });
+  return a.end;
+}
+
 // ---- chirp speech ----------------------------------------------------------
 // What the pet says in its own voice, said in its own voice: a run of little
 // square blips rather than an English sentence read by a Windows narrator. The
@@ -434,6 +471,6 @@ function sound(ctx, species, expr, when = ctx.currentTime) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     VOICES, CALLS, FEELINGS, FEELING_OF, feelingOf, callFor, sound, chatter, MASTER,
-    CHIRP_MAX, CHIRP_EVERY,
+    CHIRP_MAX, CHIRP_EVERY, step, thud,
   };
 }

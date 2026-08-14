@@ -385,6 +385,13 @@ lasts between 40 and 700ms. The bun and the bird both failed that last check on
 the first pass — a squeak at the top of the range is most of the way to a sound
 you cannot hear — and were lengthened until they passed.
 
+**And two noises that are not its voice at all.** A footfall while it walks -
+eight of them in a walk, timed off the step cycle in the stylesheet rather than
+guessed, because steps that drift out of time with the legs are worse than no
+steps - and a thud when it lands from a throw, loud in proportion to how hard it
+hit. A pet dropped two pixels and a pet thrown across the screen making the same
+noise is the thing that gives away that neither is real.
+
 `Little noises` in settings, and `Mute noises` in the tray, separate from the
 voice: muting a pet that reads your screen aloud and muting a pet that goes
 "woof" are two different wants, and the second outstays its welcome first.
@@ -963,6 +970,20 @@ short replies sound like a form letter.
 > **you:** I've been staring at this bug for three hours
 > **pet:** Three hours? It should have given up and quit gracefully by now.
 
+**Follow-up questions about the screen work.** Read the screen, then open Talk…
+and ask "what about the second one?" — what it read is put in front of the model
+along with the conversation. It is the redacted copy, capped at 700 characters,
+held in this process only, replaced by the next screen read, and dropped after
+five minutes: answering a follow-up about a screen you left ten minutes ago is
+worse than admitting it does not know. `forget everything`, and switching memory
+off, drop it immediately — a pet that says it forgot and then quotes your screen
+back has not.
+
+The prompt says one of two things and never both: it has just read your screen
+and here is the text, or it cannot see your screen. A pet that says it cannot
+see your screen one line after answering a question about it is worse than one
+that never could.
+
 The last three exchanges are kept for context **in memory only, never written to
 disk**. A desktop pet that keeps a transcript of your evening in `userData` is a
 liability, not a feature. It does remember things across sessions, but only the
@@ -1061,6 +1082,7 @@ and quit it — the pet has no taskbar button by design.
 | Pet | Blob, cat, pup, bun, bird, dragon, fox, axolotl, ghost or robot. Previews are the real thing. |
 | Skin | Ten palettes — butter, mint, blossom, slate, coal, cream, moss, plum, sky, coral. Applies to whichever pet you picked. |
 | Wearing | Nothing, bow, shades, halo, masked hero, party hat, wizard hat, crown or headphones. See "The wardrobe". |
+| Read the window I am in | On by default. Crops the screenshot to the window you are working in, and falls back to the whole screen by itself where that would not help. |
 | Speak replies out loud | On by default. Mute from the tray without opening this window. |
 | Little noises | On by default. A woof, a meow, a chirp — synthesised, not played from a file. Muted separately from the voice. |
 | Let me talk to it | Off by default. Adds `Listen…` to the pet's menu. |
@@ -1149,10 +1171,59 @@ rather not.
 ## How answering works
 
 1. You press `Ctrl+Shift+Space`.
-2. The pet hides itself and grabs one frame of the primary screen.
-3. Windows' built-in OCR (`Windows.Media.Ocr`) reads the text off it.
-4. The text goes to a local model on `127.0.0.1:11434` via Ollama.
-5. The pet says the answer in a speech bubble.
+2. The pet asks Windows where the window you are working in is, hides itself, and
+   grabs one frame of the display the cursor is on.
+3. The frame is cropped to that window — see below.
+4. Windows' built-in OCR (`Windows.Media.Ocr`) reads the text off it.
+5. The text goes to a local model on `127.0.0.1:11434` via Ollama.
+6. **The bubble fills in as the answer is written**, rather than after it.
+
+### The window, not the wall
+
+A 1536 pixel screen is your editor, a browser, a chat window and the taskbar,
+and OCR hands the model all of it shredded into one column of text. So the
+screenshot is cropped to the window you are actually in first.
+
+What comes back from Windows is **a rectangle and nothing else** — not the
+title, not the process, not the class. The pet crops a screenshot with it and
+has no idea what it cropped. Same reasoning as the do-not-disturb check, which
+asks for one integer rather than for a window list.
+
+Cropping is refused, and the whole screen read instead, whenever it would not
+help: a maximised window (nothing to gain, and a rounding error could cost an
+edge), a window mostly on the other monitor, or one too small to hold a
+question. Those judgements are in [window.js](src/system/window.js), separate
+from the part that talks to Windows, so all of them are testable anywhere. Turn
+it off in Settings and it reads the whole screen, which is what it always did.
+
+macOS reads the whole screen: the API exists there, but it needs the Screen
+Recording permission to say anything useful about another app's window, and
+that is a second permission to explain in exchange for a crop.
+
+### Filling in as it is written
+
+The answer used to appear all at once after six to twelve seconds of a thinking
+face. Ollama is asked to stream now, and the bubble fills as the words arrive.
+It is not faster; it is completely different to wait for.
+
+**The monologue never reaches the screen.** The default model is a reasoner: it
+narrates its whole approach inside `<think>` before it answers. `stripThinking`
+drops an unterminated block outright, so the bubble stays on the thinking face
+through the reasoning and then fills with the answer. Measured on this machine,
+`deepseek-r1:8b` asked what 17 × 23 is: first visible character at 5.3s, whole
+answer by 5.5s. With a model that does not think first, text appears almost
+immediately.
+
+Two things are deliberately not applied to the pieces as they arrive: the quote
+stripper and the echo stripper. Both are decisions about a whole answer, and a
+line that vanishes halfway through being typed out reads as a bug. They run once
+at the end.
+
+The stream is throttled to about fifteen updates a second — the window cannot
+draw faster than that, and the last piece is always sent, because a stream that
+stops mid-word because the final token landed inside the throttle window is
+exactly the bug this is meant to prevent. Hosted providers are not streamed;
+they answer in one piece.
 
 The screenshot is never written to disk. It is passed to OCR as bytes on stdin
 and decoded from an in-memory stream. Nothing is stored — no history, no cache.

@@ -106,6 +106,16 @@ const CAPABILITIES = {
     },
     why: 'I have nowhere safe to keep a key on this system!',
   },
+  // macOS can answer this - CGWindowListCopyWindowInfo - but it needs the
+  // Screen Recording permission to return anything useful about other apps, and
+  // that is a second thing to explain for a crop. Whole screen there, which is
+  // what every version of this app did until now.
+  window: {
+    on: {
+      win32: () => [PWSH, psArgs('window.ps1')],
+    },
+    why: 'I can only read the whole screen on this system!',
+  },
 };
 
 /** Whether the host can do this at all. Says nothing about permissions. */

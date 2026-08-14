@@ -9,6 +9,7 @@ const wearSel = el('wear');
 const autostart = el('autostart');
 const voice = el('voice');
 const sounds = el('sounds');
+const focus = el('focus');
 const mic = el('mic');
 const dictationSel = el('dictation');
 const camera = el('camera');
@@ -248,6 +249,7 @@ saveBtn.addEventListener('click', async () => {
     wear: wearSel.value,
     voice: voice.checked,
     sounds: sounds.checked,
+    focus: focus.checked,
     mic: mic.checked,
     dictation: dictationSel.value,
     camera: camera.checked,
@@ -271,6 +273,7 @@ saveBtn.addEventListener('click', async () => {
   hotkeyInput.value = current.hotkey;
   voice.checked = current.voice;
   sounds.checked = current.sounds;
+  focus.checked = current.focus;
   wearSel.value = current.wear;
   camera.checked = current.camera;
   mic.checked = current.mic;
@@ -348,6 +351,7 @@ el('close').addEventListener('click', () => window.config.close());
   hotkeyInput.value = current.hotkey;
   voice.checked = current.voice;
   sounds.checked = current.sounds;
+  focus.checked = current.focus;
   wearSel.value = current.wear;
   camera.checked = current.camera;
   mic.checked = current.mic;

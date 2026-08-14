@@ -15,6 +15,7 @@ const dnd = require('./system/dnd');
 const reminders = require('./core/reminders');
 const weather = require('./core/weather');
 const wake = require('./system/wake');
+const windows = require('./system/window');
 const faces = require('./system/faces');
 const memory = require('./core/memory');
 const net = require('./core/net');
@@ -83,6 +84,7 @@ let visionModel = null; // resolved model name, or null for the OCR path
 let busy = false;
 let listening = false; // the microphone is open - separate from busy, and rarer
 let lastPath = 'ocr'; // which tier actually answered, for the smoke check
+let lastCrop = 'screen'; // and how much of the screen it was given
 let lineIndex = 0;
 let chats = 0;
 let saveTimer = null;
@@ -94,6 +96,16 @@ let wasAsleep = false;
 // pet that keeps a transcript of your evening on disk is a liability.
 const HISTORY_TURNS = 3;
 const history = [];
+
+// The last thing it read off the screen, so "what about the second one?" works
+// after a screen answer. Redacted on the way in, held in memory only, replaced
+// by the next read, and stale after this long - answering a follow-up from a
+// screen you left ten minutes ago is worse than admitting it does not know.
+const SCREEN_MEMORY_MS = 5 * 60 * 1000;
+let lastScreen = null;
+
+const screenContext = () =>
+  lastScreen && Date.now() - lastScreen.at < SCREEN_MEMORY_MS ? lastScreen : null;
 
 const filePath = (name) => path.join(app.getPath('userData'), name);
 
@@ -507,6 +519,12 @@ async function grabScreen() {
   const { width, height } = display.size;
   const scale = display.scaleFactor || 1;
 
+  // Asked before the pet gets out of the way, not after: hiding a window takes
+  // a moment, and this is a PowerShell spawn on the path of a key you just
+  // pressed. The pet's own window is never the foreground one - it is
+  // focusable:false, which is what makes this safe to ask at any point.
+  const where = settings.focus ? await windows.rect() : null;
+
   const wasVisible = win && win.isVisible();
   if (wasVisible) win.hide();
   try {
@@ -516,10 +534,43 @@ async function grabScreen() {
     });
     const source = sources.find((s) => String(s.display_id) === String(display.id)) || sources[0];
     if (!source) throw new Error('No screen source available.');
-    return source.thumbnail.toPNG();
+    // Cropped to the window you are in, when that is a sensible thing to do.
+    // window.js decides; null means the whole screen, which is what this always
+    // did and what every system that cannot answer the question still gets.
+    const crop = windows.cropFor(where, display, source.thumbnail.getSize());
+    lastCrop = crop ? 'window' : 'screen';
+    return (crop ? source.thumbnail.crop(crop) : source.thumbnail).toPNG();
   } finally {
     if (wasVisible) win.showInactive();
   }
+}
+
+/**
+ * A listener that puts the answer in the bubble as it is written.
+ *
+ * Throttled: Ollama hands over a token every few milliseconds and the window
+ * cannot draw faster than the screen refreshes, so an unthrottled stream is
+ * hundreds of messages a second nobody can see. The last piece is always sent -
+ * a stream that stops mid-word because the final token landed inside the
+ * throttle window is exactly the bug this is meant to prevent.
+ */
+function streamer() {
+  let at = 0;
+  let queued = null;
+  let timer = null;
+  const push = (text) => {
+    at = Date.now();
+    queued = null;
+    send('pet:say', { text, kind: 'answer', partial: true });
+  };
+  const onToken = (text) => {
+    const wait = 70 - (Date.now() - at);
+    if (wait <= 0) return push(text);
+    queued = text;
+    if (!timer) timer = setTimeout(() => { timer = null; if (queued !== null) push(queued); }, wait);
+  };
+  onToken.stop = () => { clearTimeout(timer); timer = null; queued = null; };
+  return onToken;
 }
 
 async function answerScreen() {
@@ -540,14 +591,28 @@ async function answerScreen() {
     const alwaysVision = settings.vision !== 'auto' && settings.vision !== 'off';
     const ocrText = alwaysVision ? '' : await recognise(png);
     const useVision = visionModel && (alwaysVision || !hasEnoughText(ocrText));
-    lastPath = `${useVision ? `vision:${visionModel}` : 'ocr'} (ocr read ${ocrText.trim().length} chars)`;
+    lastPath = `${useVision ? `vision:${visionModel}` : 'ocr'} of the ${lastCrop} (ocr read ${ocrText.trim().length} chars)`;
 
     const where = await llm();
+    // Streamed on the local path only. A hosted provider answers through
+    // providers.js, which asks for the whole thing at once - and the smoke
+    // check exits on the first answer it sees, so a half-written one would cut
+    // it short.
+    const onToken = providers.isLocal(settings.provider) && !process.env.SCREENPET_SMOKE
+      ? streamer() : undefined;
     const answer = useVision
       ? await askVision(png.toString('base64'), {
-          ...where, mood, model: visionModel, timeoutMs: VISION_TIMEOUT_MS,
+          ...where, mood, model: visionModel, timeoutMs: VISION_TIMEOUT_MS, onToken,
         })
-      : await ask(ocrText, { ...where, mood });
+      : await ask(ocrText, { ...where, mood, onToken });
+    if (onToken) onToken.stop();
+
+    // Kept for a follow-up question, redacted the same way the model's copy was.
+    // Vision answers keep no text: there was none to read, and the screenshot
+    // itself is never held anywhere.
+    lastScreen = answer && !useVision
+      ? { text: redact(ocrText), answer, at: Date.now() }
+      : null;
 
     // Nothing to answer is not a failure. Said through the line bank rather than
     // reported as one, and not through talk(), which the smoke check silences.
@@ -708,6 +773,10 @@ function runSkill(text) {
       const { mem: next, gone } = memory.forget(mem, skill.memory.forget);
       mem = next;
       saveMem();
+      // "forget everything" has to mean everything, including the screen it
+      // still has in hand for follow-up questions. A pet that says it forgot
+      // and then quotes your screen back has not.
+      if (!skill.memory.forget) lastScreen = null;
       send('pet:say', {
         // Said honestly: "Forgotten" when nothing matched is the pet agreeing to
         // something it did not do, and you would never find out.
@@ -816,15 +885,20 @@ async function replyTo(message) {
   busy = true;
   send('pet:say', { text: 'thinking', kind: 'thinking' });
   try {
+    const onToken = providers.isLocal(settings.provider) && !process.env.SCREENPET_SMOKE
+      ? streamer() : undefined;
     const reply = await chat(text, {
       ...(await llm()),
       mood: pets.mood(state, { asleep: asleep() }),
+      onToken,
       history,
+      screen: screenContext(),
       // Only the facts you asked it to remember, and only the ones sharing a
       // word with what you just said. On the default settings that goes to
       // Ollama on loopback; with a hosted provider chosen, it goes there.
       memory: settings.memory ? memory.brief(mem, text, Date.now()) : [],
     });
+    if (onToken) onToken.stop();
     history.push({ you: text, pet: reply });
     if (history.length > HISTORY_TURNS) history.shift();
     talk(null, { text: reply, event: replies++ % 2 ? 'wink' : 'chat' });
@@ -1009,6 +1083,9 @@ async function saveSettings(patch) {
     clearTimeout(memTimer);
     mem = memory.fresh(Date.now());
     dropJson('memory.json');
+    // Same rule as forgetting everything: switching memory off must not leave
+    // the last screen sitting in this process ready to be quoted back.
+    lastScreen = null;
   }
   writeJson('settings.json', settings);
   await applySettings();

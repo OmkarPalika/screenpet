@@ -41,7 +41,7 @@ anything to us, and there is no server to send it to.
 
 | Source | When | Where it goes |
 | --- | --- | --- |
-| Your screen | Only when you press the hotkey or ask the pet to look | The text recogniser built into this machine - Windows OCR, or Vision on macOS - and then the local model |
+| Your screen | Only when you press the hotkey or ask the pet to look | The text recogniser built into this machine - Windows OCR, or Vision on macOS - and then the local model. On Windows the frame is cropped to the window you are working in first, using a rectangle and nothing else - never its title or the name of the application |
 | A screenshot image | Only on the vision tier, when OCR finds too little text to work with | The local model only. **Never sent to a hosted provider** — an image cannot be redacted the way text can |
 | Microphone | Only with `Let me talk to it` on, and only while a phrase is being spoken | A recogniser on this machine: Windows' own, or whisper.cpp / Parakeet if you installed one. None of them reach the network, and with a local engine the audio is piped to it and never written to disk |
 | Camera | Only with the camera setting on | Answers "did anything move" and "is there a face" — never *whose* face. The detector used on each system — Windows.Media.FaceAnalysis, or Vision on macOS — is asked only to count. Neither is asked for landmarks or a face print, and no identify or compare call is made |
@@ -64,6 +64,12 @@ on macOS.
 | `memory.json` | Only what you explicitly said "remember ..." about, plus counters. See below |
 | `timers.json` | Timers and reminders you set |
 | `keys.json` | API keys for a hosted provider, if you chose one — wrapped with Windows DPAPI on Windows, or a Keychain-held key on macOS, either way under your user account |
+
+The text of the **last** screen read is kept in the app's memory so that a
+follow-up question about it can be answered. It is the redacted copy, capped,
+replaced by the next read, dropped after five minutes, and removed the moment
+you say `forget everything` or switch memory off. It is never written to disk,
+and it goes when the app closes.
 
 **Nothing typed at the pet, read off your screen, heard through the microphone
 or seen through the camera is ever written to `memory.json`.** Conversation
