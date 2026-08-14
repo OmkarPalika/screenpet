@@ -25,7 +25,7 @@ anything you do in it — the files it writes are yours, on your disk, under you
 account. This policy exists to describe what the software does with your data,
 not to describe data we hold about you, because we hold none.
 
-Questions: `[CONTACT EMAIL]`
+Questions: palikaomkar@gmail.com
 
 ## What we collect
 
