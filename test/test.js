@@ -2243,6 +2243,19 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.ok(urls[0].startsWith(net.DDG_HOST), 'the lookup went somewhere unexpected');
     assert.ok(!/[<>"']/.test(urls[0]), 'the query was not encoded into the URL');
 
+    // Everything the request carries, named. `t` is DuckDuckGo's convention for
+    // an application identifying itself, and the Privacy Policy says so - it has
+    // to stay a fixed string, because a per-user or per-install value in here
+    // would turn an anonymous lookup into a traceable one without changing a
+    // single line that looks like it is about privacy.
+    const params = new URL(urls[0]).searchParams;
+    assert.deepStrictEqual(
+      [...params.keys()].sort(), ['format', 'no_html', 'q', 'skip_disambig', 't'],
+      'the lookup carries a parameter the Privacy Policy does not mention'
+    );
+    assert.strictEqual(params.get('t'), 'screenpet', 'the app tag is no longer a fixed string');
+    assert.strictEqual(params.get('q'), 'speed of light', 'the query is not what was typed');
+
     // Nothing from an instant answer falls through to the encyclopedia, and only
     // ever to these two hosts.
     urls.length = 0;
