@@ -144,6 +144,26 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   }
 }
 
+// --- one voice, two paths ---
+//
+// The screen prompt and the chat prompt are written separately and drift apart
+// the moment one of them is tuned, which is how you end up with a pet that talks
+// like a person until you type at it. These are the rules that produced the
+// current measured output; if one path loses one of them, it is drifting.
+{
+  const { buildChatPrompt } = require('./brain');
+  for (const [name, p] of [['screen', buildPrompt('q?')], ['chat', buildChatPrompt('hi')]]) {
+    assert.ok(/two short sentences/i.test(p), `${name} prompt lost its length cap`);
+    assert.ok(/contractions/i.test(p), `${name} prompt no longer asks for spoken English`);
+    assert.ok(/no emoji, no asterisks/i.test(p), `${name} prompt allows emoji and roleplay again`);
+    // The way out of a strained joke. Without it a small model reaches for one on
+    // questions that do not have a joke in them.
+    assert.ok(/one dry aside/i.test(p) && /(leave it out|skip it)/i.test(p),
+      `${name} prompt caps the wit without allowing none`);
+    assert.ok(!/flourish|affectionate/i.test(p), `${name} prompt is back to cooing`);
+  }
+}
+
 // ===== pet state ===========================================================
 
 // --- load: never trust the file on disk ---
@@ -1619,9 +1639,13 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(await chat('   ', { fetch: cspy }), '');
   assert.strictEqual(chatCalled, false);
 
-  // A pasted wall of text is a prompt blowout, not a conversation.
+  // A pasted wall of text is a prompt blowout, not a conversation. Measured on
+  // the message rather than the whole prompt: a fixed total is really an assertion
+  // about how long the style instructions are allowed to be, and it fires on the
+  // day someone adds a line to them.
   await chat('x'.repeat(9000), { fetch: cgrab, model: 'm' });
-  assert.ok(cbody.prompt.length < 1200, `chat prompt not capped: ${cbody.prompt.length} chars`);
+  assert.ok(!cbody.prompt.includes('x'.repeat(501)), 'chat did not cap the message');
+  assert.ok(cbody.prompt.length < 2000, `chat prompt not capped: ${cbody.prompt.length} chars`);
 
   // ===== memory ==============================================================
 
