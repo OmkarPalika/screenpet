@@ -15,7 +15,12 @@ const weather = require('./weather');
 const wake = require('./wake');
 const faces = require('./faces');
 const memory = require('./memory');
-const { ask, askVision, chat, detectVisionModel, listModels, hasEnoughText } = require('./brain');
+const net = require('./net');
+const providers = require('./providers');
+const keys = require('./keys');
+const {
+  ask, askVision, chat, detectVisionModel, listModels, hasEnoughText, redact,
+} = require('./brain');
 const pets = require('./pet-state');
 const skills = require('./skills');
 const config = require('./settings');
@@ -110,6 +115,30 @@ function noteEvent(event) {
 const asleep = () => powerMonitor.getSystemIdleTime() >= IDLE_SLEEP_S;
 const endpoint = () => settings.ollama;
 
+// ---- which model answers ----------------------------------------------------
+
+// DPAPI blobs, one per provider. Kept out of settings.json on purpose: that file
+// is round-tripped through the settings window, and a key has no business
+// crossing into a renderer. Nothing here is read while the provider is 'ollama'.
+let keyStore = {};
+
+/**
+ * Everything ask/chat need to know about where the answer comes from.
+ *
+ * Awaited because unwrapping a key is a PowerShell spawn - once per provider per
+ * session, cached in keys.js after that.
+ */
+async function llm() {
+  const local = providers.isLocal(settings.provider);
+  return {
+    model: settings.model,
+    endpoint: endpoint(),
+    provider: settings.provider,
+    providerModel: settings.providerModel,
+    key: local ? null : await keys.get(settings.provider, keyStore),
+  };
+}
+
 // ---- permissions ------------------------------------------------------------
 
 // Deny by default; config.allowPermission owns the one exception and is tested
@@ -182,7 +211,7 @@ function openSettings() {
   if (settingsWin && !settingsWin.isDestroyed()) return settingsWin.focus();
   settingsWin = new BrowserWindow({
     width: 460,
-    height: 900,
+    height: 940,
     resizable: false,
     title: 'screenpet',
     icon: path.join(__dirname, 'icon.png'),
@@ -375,6 +404,10 @@ function tick() {
 // ---- answering --------------------------------------------------------------
 
 async function resolveVision() {
+  // A screenshot cannot be redacted, so the vision tier is local-only. Choosing
+  // a hosted provider gives up reading diagrams rather than uploading the screen
+  // to get them - brain.js refuses the same request a second time.
+  if (!providers.isLocal(settings.provider)) return null;
   if (settings.vision === 'off') return null;
   if (settings.vision !== 'auto') return settings.vision;
   return detectVisionModel({ endpoint: endpoint() });
@@ -422,11 +455,12 @@ async function answerScreen() {
     const useVision = visionModel && (alwaysVision || !hasEnoughText(ocrText));
     lastPath = `${useVision ? `vision:${visionModel}` : 'ocr'} (ocr read ${ocrText.trim().length} chars)`;
 
+    const where = await llm();
     const answer = useVision
       ? await askVision(png.toString('base64'), {
-          mood, model: visionModel, endpoint: endpoint(), timeoutMs: VISION_TIMEOUT_MS,
+          ...where, mood, model: visionModel, timeoutMs: VISION_TIMEOUT_MS,
         })
-      : await ask(ocrText, { mood, model: settings.model, endpoint: endpoint() });
+      : await ask(ocrText, { ...where, mood });
 
     // Nothing to answer is not a failure. Said through the line bank rather than
     // reported as one, and not through talk(), which the smoke check silences.
@@ -526,6 +560,20 @@ function runSkill(text) {
     return true;
   }
 
+  // Same shape as the weather below it: skills.js gives the honest refusal, and
+  // switching the setting on is what replaces it. What goes out is the words you
+  // typed after "look up", redacted first - a query is your own text, but a
+  // pasted key is text too. See net.js.
+  if (skill.lookup && settings.network && settings.web) {
+    send('pet:say', { text: 'thinking', kind: 'thinking' });
+    net.lookup(redact(skill.lookup))
+      .then((line) => send('pet:say', { text: line, kind: 'answer', expr: 'proud' }))
+      .catch((err) => send('pet:say', {
+        text: err.message, kind: 'error', expr: pets.expressionFor('error'),
+      }));
+    return true;
+  }
+
   // The refusal in skills.js is the default answer. Switching the setting on is
   // what replaces it - and the request that goes out carries the town you typed
   // and nothing else. See weather.js.
@@ -587,6 +635,26 @@ function runSkill(text) {
     return true;
   }
 
+  // The banter skills point at a bank instead of carrying their own words, so
+  // the pet's voice - and its per species variations - stay in one file.
+  if (skill.bank) {
+    send('pet:say', {
+      text: pets.line(skill.bank, lineIndex++, settings.pet),
+      kind: 'chat',
+      expr: pets.expressionFor(skill.event),
+      move: skill.move,
+    });
+    // Same beat as praise: say the thing, then be visibly embarrassed about it.
+    if (skill.follow) {
+      setTimeout(() => send('pet:say', {
+        text: pets.line(skill.follow.bank, lineIndex++, settings.pet),
+        kind: 'chat',
+        expr: pets.expressionFor(skill.follow.event),
+      }), 3200);
+    }
+    return true;
+  }
+
   // Not through talk(): these are answers to something you asked for, and the
   // wording comes from skills.js rather than the line bank.
   send('pet:say', { text: skill.say, kind: 'chat', expr: skill.expr, move: skill.move });
@@ -619,13 +687,13 @@ async function replyTo(message) {
   send('pet:say', { text: 'thinking', kind: 'thinking' });
   try {
     const reply = await chat(text, {
+      ...(await llm()),
       mood: pets.mood(state, { asleep: asleep() }),
       history,
-      // Only the facts you asked it to remember, only the ones sharing a word
-      // with what you just said, and only as far as Ollama on loopback.
+      // Only the facts you asked it to remember, and only the ones sharing a
+      // word with what you just said. On the default settings that goes to
+      // Ollama on loopback; with a hosted provider chosen, it goes there.
       memory: settings.memory ? memory.brief(mem, text, Date.now()) : [],
-      model: settings.model,
-      endpoint: endpoint(),
     });
     history.push({ you: text, pet: reply });
     if (history.length > HISTORY_TURNS) history.shift();
@@ -757,6 +825,9 @@ app.whenReady().then(async () => {
   // Loaded before seen() runs, so the gap since the last run is still visible -
   // that is what "you were gone three days" is measured from.
   mem = memory.load(settings.memory ? readJson('memory.json') : null, Date.now());
+  // Wrapped blobs only. Nothing is unwrapped until something actually needs a
+  // key, and never at all on the default local-only settings.
+  keyStore = readJson('keys.json') || {};
 
   // Before any window exists, so nothing can ask for anything in the gap.
   lockPermissions();
@@ -954,7 +1025,38 @@ ipcMain.handle('config:get', async () => ({
   models: await listModels({ endpoint: endpoint() }),
   visionModel,
   packaged: app.isPackaged,
+  providers: Object.entries(providers.PROVIDERS).map(([name, spec]) => ({
+    name, label: spec.label, local: spec.local === true, model: spec.model || '', keys: spec.keys || '',
+  })),
+  // Booleans. There is no channel that returns a key, and this is the only thing
+  // the settings window is ever told about them.
+  keys: keys.present(keyStore),
 }));
+
+/**
+ * Store an API key. One way: it goes in, it is wrapped, and nothing hands it
+ * back - not to this window, not to any other.
+ */
+ipcMain.handle('keys:set', async (_e, provider, key) => {
+  if (!providers.needsKey(provider)) return { ok: false, why: 'that provider takes no key' };
+  try {
+    keyStore = { ...keyStore, [provider]: await keys.protect(key) };
+    writeJson('keys.json', keyStore);
+    keys.drop(provider); // the cached one is now the old one
+    return { ok: true, keys: keys.present(keyStore) };
+  } catch (err) {
+    return { ok: false, why: err.message };
+  }
+});
+
+ipcMain.handle('keys:clear', async (_e, provider) => {
+  const next = { ...keyStore };
+  delete next[provider];
+  keyStore = next;
+  writeJson('keys.json', keyStore);
+  keys.drop(provider);
+  return { ok: true, keys: keys.present(keyStore) };
+});
 
 ipcMain.handle('config:save', async (_e, patch) => ({
   settings: await saveSettings(patch),

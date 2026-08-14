@@ -125,19 +125,65 @@
     </p>
 
     <label class="check">
+      <input id="network" type="checkbox" />
+      <span>Let it out on the internet</span>
+    </label>
+    <p class="hint" id="network-hint">
+      <strong>Off by default, and off is the point of this app.</strong> While it is off
+      the pet is sealed in: a model on this machine, and anything that would need the
+      network says so instead of doing it. Turning it on sends nothing by itself — it
+      unlocks the three settings below, each of which is its own decision. Turning it
+      back off switches all three off with it.
+    </p>
+
+    <label class="check">
       <input id="weather" type="checkbox" />
       <span>Let it ask about the weather</span>
     </label>
     <p class="hint" id="weather-hint">
-      <strong>The only setting that sends anything off this machine.</strong> With it on,
-      asking about the weather sends the town below to open-meteo.com — no account, no
-      key, nothing from your screen, camera or microphone, and no location lookup. Off,
-      the pet says it cannot see outside, which is the truth.
+      Needs the setting above. Asking about the weather sends the town below to
+      open-meteo.com — no account, no key, nothing from your screen, camera or
+      microphone, and no location lookup. Off, the pet says it cannot see outside,
+      which is the truth.
     </p>
 
     <label for="city">Town</label>
     <input id="city" type="text" spellcheck="false" placeholder="Abu Dhabi" />
-    <p class="hint">The only thing that ever leaves. You can put the next town over.</p>
+    <p class="hint">You can put the next town over.</p>
+
+    <label class="check">
+      <input id="web" type="checkbox" />
+      <span>Let it look things up</span>
+    </label>
+    <p class="hint" id="web-hint">
+      Needs the internet setting. <code>look up the speed of light</code> sends those
+      words to DuckDuckGo and Wikipedia — no key, no account, so nothing ties the
+      lookup to you. Only what you typed after the command goes; nothing from your
+      screen, memory, camera or microphone.
+    </p>
+
+    <label for="provider">Which model answers</label>
+    <select id="provider"></select>
+    <p class="hint" id="provider-hint"></p>
+
+    <label for="provider-model">Model name</label>
+    <input id="provider-model" type="text" spellcheck="false" />
+    <p class="hint">Leave blank for the provider's default. Model names go stale.</p>
+
+    <label for="api-key">API key</label>
+    <input id="api-key" type="password" spellcheck="false" autocomplete="off"
+           placeholder="paste here to store it" />
+    <div class="row">
+      <span class="status" id="key-status"></span>
+      <button id="key-clear" class="ghost">Forget key</button>
+      <button id="key-save" class="ghost">Store key</button>
+    </div>
+    <p class="hint">
+      Stored in <code>keys.json</code>, wrapped with Windows DPAPI under your account —
+      not in the settings file, and never shown again once stored. Copying that file to
+      another machine or another user gets an unreadable lump. It is not a vault:
+      anything running as you can unwrap it, exactly as the pet does.
+    </p>
 
     <label class="check">
       <input id="memory" type="checkbox" />

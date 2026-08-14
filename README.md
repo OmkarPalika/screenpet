@@ -1,8 +1,13 @@
 # screenpet
 
-A desktop pet that reads your screen and answers the question on it. Nothing
-leaves your machine — with one exception, off by default, that sends a town name
-you typed and nothing else. See "The one thing that leaves".
+A desktop pet that reads your screen and answers the question on it. **On the
+default settings nothing leaves your machine at all** — the model runs here, the
+OCR runs here, the speech runs here.
+
+There is one switch that changes that, off out of the box, and everything it
+unlocks is itself off until you say so: weather, web lookups, and the option of
+answering with a hosted model instead of a local one. See "Going outside" for
+exactly what each of those sends and to whom.
 
 ![screenpet reading a quiz question and answering it](demo/screenpet-demo.gif)
 
@@ -276,6 +281,9 @@ exact, and identical every time:
 | `wake me every weekday at 7`, `remind me to stand up every 30 minutes` | A recurring alarm. Daily, weekdays, one weekday, or an interval. |
 | `dance` | A dance, to whatever is actually playing if the microphone is on. |
 | `what is the weather` | A refusal — unless you switched the weather on, in which case a forecast. |
+| `look up the speed of light`, `who is ada lovelace` | A refusal — unless you switched web lookups on. See "Going outside". |
+| `remember my standup is at 9:30`, `forget everything` | See "What it remembers". |
+| `flirt with me`, `tease me`, `roast me` | See "Banter" below. |
 
 **A reminder is the one thing here that writes down your words.** "Remind me to
 call the bank in an hour" has to survive a restart to be worth setting, and
@@ -300,8 +308,39 @@ seven in the evening.
 **Weather is matched deliberately in order to turn it down** — which is still
 what happens with the setting off, and off is how it ships. Every weather source
 is somebody else's server. Left unmatched entirely the model cheerfully invents a
-forecast, which is worse than saying no. See "The one thing that leaves" for
-exactly what switching it on sends.
+forecast, which is worse than saying no. Web lookups work the same way and for
+the same reason. See "Going outside" for exactly what switching either on sends.
+
+## Banter
+
+```
+flirt with me   -> I would defragment a hard drive for you
+                   *goes pink*
+I love you      -> you cannot just SAY that
+tease me        -> the mouse pointer has been in the same place for eleven minutes
+roast me        -> no notes. well. some notes. many notes.
+you are useless -> rude, and accurate
+```
+
+Six line banks in [pet-state.js](pet-state.js), where the rest of the pet's voice
+lives, so the banter skills point at a bank rather than carrying their own words
+— which also means they pick up the per-species variations for free.
+
+**All of it is asked for. None of it fires on its own.** A pet that starts
+roasting you unprompted is a different product. The remarks that *are* unprompted
+come from [memory.js](memory.js), are built from numbers it actually recorded,
+and have their own switch.
+
+Flirting is cheesy and wholesome, and there is a test asserting it stays that
+way — this bank ships to strangers on a cartoon blob, and "keep it PG" is exactly
+the kind of intention that survives right up until somebody adds one more line.
+The same test checks every line fits a speech bubble, and that `I love this bug`,
+`roast the coffee beans` and `how do I tease apart these two functions` all reach
+the model instead of the banter.
+
+Teasing is never about your work. The pet cannot see it well enough to have an
+opinion worth having, and one that mocks code it half-read is just wrong with a
+face on.
 
 **Music is one keypress, not an integration.** [media.ps1](media.ps1) taps a
 single Windows media key — the same one on your keyboard — and whatever holds the
@@ -589,21 +628,28 @@ and quit it — the pet has no taskbar button by design.
 | Bop along to music | Off by default, needs the microphone. **Holds it open.** See "Dancing". |
 | Notice when I am at the desk | Off by default. Motion only — see "Noticing you". |
 | Tell a face from a curtain | Off by default, needs the camera. A count, never a name — see "Faces". |
-| Let it ask about the weather | Off by default. **The only setting that sends anything.** See "The one thing that leaves". |
-| Town | Where to ask about. The only user-typed string here that reaches a server. |
+| Let it out on the internet | **Off** by default. The master switch — see "Going outside". Unlocks the next four; switching it off switches them all off. |
+| Let it ask about the weather | Off by default, needs the above. A town name and nothing else. |
+| Town | Where to ask about. You can put the next town over. |
+| Let it look things up | Off by default, needs the internet switch. The words after `look up`, to DuckDuckGo and Wikipedia. |
+| Which model answers | Ollama on this machine by default. Anything else sends the text read off your screen to that company. |
+| Model name / API key | For a hosted provider. The key is wrapped with DPAPI and never shown again. |
 | Remember things between sessions | **On** by default. Writes only what you asked it to remember. Off deletes the file. See "What it remembers". |
 | Let it be cheeky about it | On by default, needs the above. The pet needling you with what it has. |
 | Start with Windows | Packaged builds only — in development this would register `electron.exe`. |
 
-**Four settings open something, and each needs its own literal `true` plus the
-device it uses.** A wake word with the microphone off, or a face check with the
-camera off, is a setting that silently does nothing — so `load()` turns both off
-rather than pretending. Switching the microphone off takes the wake word and the
-bopping with it, in the same pass. There are tests for every one of those.
+**Every setting that opens something needs its own literal `true` plus whatever
+it depends on.** A wake word with the microphone off, a face check with the
+camera off, or a weather lookup with the internet switch off is a setting that
+silently does nothing — so `load()` turns it off rather than pretending.
+Switching off a dependency takes its dependants with it in the same pass, in one
+place, rather than at each call site that would otherwise have to remember.
+There are tests for every one of those.
 
 Settings live in `settings.json` next to `pet.json` in Electron's `userData`.
 Both are validated on load, so a corrupt or hand-edited file degrades to
-defaults rather than crashing.
+defaults rather than crashing. **API keys are not in there** — see "Where a key
+lives".
 
 **The endpoint is locked to loopback.** `127.0.0.1`, `localhost` and `[::1]` are
 the only accepted hosts, and that is enforced in code rather than by convention.
@@ -845,13 +891,105 @@ Steam is the one storefront in this category with any precedent for paid desktop
 companions, at roughly $5 with skins as the only upsell that has historically
 worked. That was the reasoning behind building the demo before the app.
 
-## The one thing that leaves
+## Going outside
 
-Everything else here runs on your machine. The weather cannot: every weather
-source is somebody else's server, and there is no offline version of tomorrow.
+**`Let it out on the internet` is off, and off is the point of this app.** While
+it is off the pet is sealed in: a local model, local OCR, local speech, and every
+skill that would need the network says so instead of doing it.
 
-So it is a setting, it ships **off**, and with it off the pet gives the refusal
-it always gave. With it on, asking about the weather sends:
+Turning it on **sends nothing by itself**. It unlocks three settings, each its
+own decision with its own switch, and turning the master switch back off turns
+all three off in the same pass — in [settings.js](settings.js), once, rather than
+at each of the call sites that would otherwise have to remember.
+
+| Unlocked | What leaves | Where to |
+| --- | --- | --- |
+| Weather | A town you typed, and coordinates rounded to ~1km | open-meteo.com |
+| Look things up | The words you typed after `look up`, redacted | DuckDuckGo, Wikipedia |
+| A hosted model | **The text read off your screen**, redacted | whichever company you picked |
+
+The first two need no account and no key, so nothing ties either request to you.
+The third is a different order of thing and has its own section below.
+
+### Looking things up
+
+```
+look up the speed of light
+search for tardigrades
+who is ada lovelace
+```
+
+Instant answers first, the encyclopedia when there is no instant answer. Both
+hosts are hardcoded in [net.js](net.js), the query is capped at 120 characters
+and redacted before it goes, and the reply is cut to two lines at a sentence
+boundary. Nothing from your screen, memory, camera or microphone is ever part of
+a lookup.
+
+The trigger words are deliberately narrow — `search`, `look up`, `google`,
+`who is`. `what is a closure` is **not** one of them: that is the model's job,
+and a skill that grabbed every "what is" would answer it out of an encyclopedia
+with total confidence and no idea what you were actually working on. There is a
+test for that.
+
+### Somebody else's model
+
+Anthropic, OpenAI, Google Gemini, NVIDIA NIM and Mistral, chosen in Settings.
+Three deliberate acts before any of it happens: the network switch on, a provider
+picked, a key stored.
+
+**Be clear about what this trades away.** With a hosted provider selected, the
+text this app reads off your screen is sent to that company. It goes through the
+same redaction that guards the local prompt first — keys, tokens, JWTs, card
+numbers — but redaction is a filter for the secrets it knows the shape of. It is
+not a promise about the rest of what is on your screen. The settings window says
+so in as many words, in red, before you save.
+
+Two things stay local whatever you pick:
+
+- **Screenshots are never uploaded.** An image cannot be redacted the way text
+  can, so the vision tier is switched off entirely when a hosted provider is
+  chosen — you lose diagram reading rather than uploading your screen to keep it.
+  Refused in `resolveVision()` and again in `askVision()`, because one lock on
+  that door was not enough.
+- **Typed chat is redacted too** when it is going to a company, and left alone
+  when it is not. Pasting a key into the chat box should not be how it reaches
+  OpenAI.
+
+Five providers, three request shapes — NVIDIA and Mistral both speak OpenAI's
+`chat/completions` verbatim, so there is no adapter layer, just the two that
+genuinely differ. Every URL is hardcoded in [providers.js](providers.js) and the
+key travels in a header, never in a query string: a URL is the part of a request
+that ends up in logs, history and referrers. There is a test asserting that for
+every provider, and another asserting a failure message never carries the key —
+some providers echo the request back in their error bodies, and that message goes
+in a speech bubble.
+
+Model names are an editable text field with the current default as a placeholder,
+because model names go stale faster than this file will.
+
+### Where a key lives
+
+`keys.json`, wrapped with Windows DPAPI under your user account —
+[keys.ps1](keys.ps1). Not in `settings.json`, which is round-tripped through the
+settings window; a key has no business crossing into a renderer.
+
+The settings window can **store** a key and **forget** a key. It is never told
+one. There is no `getKey` on the bridge, no IPC channel that returns one, and a
+test asserting both. The secret reaches PowerShell on stdin rather than as an
+argument, because arguments are visible to anything that can list processes.
+
+**This is not a vault.** Anything running as you can ask DPAPI to unwrap it,
+exactly as the pet does. What it buys is that the file is useless on its own —
+copied to another machine, or read by another user on this one, it is an
+unreadable lump. That is the threat that actually applies to a config file in a
+user profile.
+
+### The weather
+
+The oldest of the three, and still the smallest. Every weather source is somebody
+else's server and there is no offline version of tomorrow, so it is a setting, it
+ships **off**, and with it off the pet gives the refusal it always gave. With it
+on, asking about the weather sends:
 
 - the **town you typed into Settings** — not a location lookup, not an IP
   geolocation, not anything Windows knows about where you are. You can put the
@@ -953,14 +1091,26 @@ which is what it always did.
 ## Verify the privacy claim
 
 Do not take the above on trust. Block the app's outbound network access in
-Windows Defender Firewall and use it. Everything still works except the weather,
-because with that setting off the only socket it opens is to loopback — and with
-it on, the firewall is the thing that proves what the second socket was for.
+Windows Defender Firewall and use it. On the default settings **everything still
+works**, because the only socket it opens is to loopback: reading the screen,
+answering, speaking, listening, the camera, reminders, memory, banter. Nothing in
+that list needs the network and nothing in it degrades.
+
+Turn the internet switch on and the firewall becomes the thing that shows you
+what each unlocked setting was for — the weather stops, lookups stop, and a
+hosted provider stops. That is the whole difference, visible from outside the
+app, without reading any of this code.
 
 Screen text is scanned for secrets before it reaches the model — API keys,
 tokens, JWTs, card-shaped digit runs, and `password:`-style assignments are
 replaced with `[REDACTED]`. That is a coarse net, not a guarantee; see
 `SECRET_PATTERNS` in [brain.js](brain.js).
+
+That net matters much more once a hosted provider is selected, because then the
+screen text leaves the machine rather than crossing to loopback. It is applied on
+that path, and to typed chat on that path, and there are tests asserting both —
+but a coarse net is still a coarse net, and it is the reason the default is a
+model that runs here.
 
 ## Test
 
@@ -1130,6 +1280,22 @@ exits. The one path the other two cannot reach.
   one skin, and two feelings out of fifteen — it is the hero image for reading
   the screen, not a tour of the picker or the expression range. `pet-faces.png`
   and `pet-species.png` from `npm run verify:ui` are where those live.
+- **Web lookups are keyless, and it shows.** DuckDuckGo's instant answers are
+  inconsistent for the same query, and Wikipedia's search matches titles
+  literally — `look up the speed of light` can come back with a novel of that
+  name rather than 299,792,458 m/s. A real search API would fix it and would
+  need an account, which is the trade this deliberately does not take.
+- **Hosted providers are not benchmarked.** Local models were measured against
+  the quiz and mix screens; these were not. The request shapes are tested against
+  a stub, and the wiring was exercised end to end, but no answer quality claim is
+  made about any of the five.
+- **Default model names for hosted providers will go stale.** They are
+  placeholders in an editable field, not a maintained list.
+- **DPAPI is not a vault.** Anything running as your user can unwrap `keys.json`.
+  It stops the file being useful elsewhere; it does not stop a process that is
+  already you.
+- **No streaming and no token accounting** on hosted providers. One request, one
+  answer, capped at 400 tokens — you find out what it cost from their dashboard.
 - **Memory recall is word overlap.** `remember the cat is called biscuit` is
   found by "biscuit" and not by "my pet". Paraphrases are missed, and the fix
   would be a vector index inside a desktop pet.

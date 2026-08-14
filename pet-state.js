@@ -204,6 +204,51 @@ const LINES = {
   // Said straight after a compliment, because giving one is embarrassing.
   bashful: ['...anyway', 'do not make it weird', 'forget I said anything', '*looks away*'],
 
+  // Flirting. Cheesy on purpose and wholesome on purpose: this is a cartoon
+  // blob on a taskbar, and the joke is entirely in how bad the lines are. There
+  // is a test asserting this bank stays that way - it ships to strangers, and a
+  // desktop pet is not the place to find out where somebody's line is.
+  flirty: [
+    'are you a semicolon? because you complete me',
+    'I would defragment a hard drive for you',
+    'of every window open right now, you are my favourite',
+    'you make my pixels warm',
+    'I have 16 million colours and you are all of them',
+    'I would give you my last byte',
+    'I would let you read my source code',
+    'is it warm in here or is that just my CPU',
+  ],
+  // ...and then instantly mortified, same joke as praise.
+  smitten: ['*goes pink*', 'I said that out loud, did I', 'anyway. weather nice.', '*hides behind the taskbar*'],
+  // Being flirted with, which it handles with no composure whatsoever.
+  charmed: ['oh. OH.', '*melts slightly*', 'you cannot just SAY that', 'I am a small blob. this is a lot.'],
+
+  // Teasing you. Never about your work - it cannot see it well enough to have
+  // an opinion worth having, and a pet that mocks code it half-read is just
+  // wrong with a face on.
+  teasing: [
+    'you have had that tab open since Tuesday. I have said nothing until now',
+    'bold of you to open a fourth window',
+    'that is a lot of confidence for someone who just typed "how do i"',
+    'not judging. observing. loudly.',
+    'you and I both know what you are avoiding',
+    'the mouse pointer has been in the same place for eleven minutes',
+    'I have watched you rename that variable three times',
+  ],
+  // Winding you up on purpose, because you asked it to. Ends in a wink: this is
+  // a pet doing a bit, and the bit only works if the pet is visibly in on it.
+  ragebait: [
+    'tabs are better than spaces and I will not be discussing it',
+    'you are objectively a light mode person in denial',
+    'your commit messages are fine. FINE. that is what I said',
+    'I have looked at your desktop. that is all I am going to say',
+    'the semicolons were right all along',
+    'no notes. well. some notes. many notes.',
+    'I could do your job. slowly. but I could',
+  ],
+  // You teased it back. It is fine. It is completely fine.
+  needled: ['I am unbothered', 'that one did land, actually', 'rude, and accurate', '*pretends that did not land*'],
+
   // Nothing to answer. The pet used to report this as a failure - "I could not
   // read any text on screen" - which is technically true and reads like a broken
   // tool. It looked, there was no question, and that is fine.
@@ -306,6 +351,14 @@ const EXPRESSIONS = {
   wake: 'oh',
   praise: 'proud',
   bashful: 'shy',
+  // The banter set. All four reuse faces the stylesheet already draws - a new
+  // feeling is not worth a new face until the words stop carrying it.
+  flirt: 'love',
+  smitten: 'shy',
+  charmed: 'love',
+  tease: 'wink',
+  bait: 'grin',
+  needled: 'sulk',
   nothing: 'giggle',
   milestone: 'joy',
   doze: 'doze',
