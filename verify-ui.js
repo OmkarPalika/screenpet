@@ -487,6 +487,59 @@ app.whenReady().then(async () => {
   win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', voice: false, mic: false });
   await settle();
 
+  // --- little noises --------------------------------------------------------
+  // The unit tests can check that every species has a recipe. Only an audio
+  // context can answer whether the recipe makes a sound, so each one is rendered
+  // offline here and measured: a silent bark and a clipping one both pass every
+  // check that does not listen.
+  const barks = await js(`(async () => {
+    const out = {};
+    for (const species of Object.keys(VOICES)) {
+      const off = new OfflineAudioContext(1, 44100, 44100); // one second, mono
+      const end = sound(off, species, 'smile');
+      const d = (await off.startRendering()).getChannelData(0);
+      let peak = 0;
+      let voiced = 0;
+      for (let i = 0; i < d.length; i++) {
+        const v = Math.abs(d[i]);
+        if (v > peak) peak = v;
+        if (v > 0.002) voiced++;
+      }
+      out[species] = { peak, ms: Math.round((voiced / 44100) * 1000), end };
+    }
+    return out;
+  })()`);
+
+  for (const [species, b] of Object.entries(barks)) {
+    check(b.peak > 0.01, `the ${species} makes no sound: peak ${b.peak.toFixed(4)}`);
+    check(b.peak < 1, `the ${species} clips: peak ${b.peak.toFixed(3)}`);
+    // Long enough to hear, short enough to be a noise rather than a ringtone.
+    check(b.ms >= 40 && b.ms <= 700, `the ${species} lasts ${b.ms}ms`);
+    check(b.end < 1, `the ${species} was scheduled past the end of the render`);
+  }
+
+  // The feeling has to reach the sound and not only the face. Sleepy is slower
+  // than happy, so the same recipe has to run longer.
+  const bent = await js(`(() => {
+    const at = (expr) => sound(new OfflineAudioContext(1, 44100, 44100), 'cat', expr);
+    return { happy: at('love'), sleepy: at('doze') };
+  })()`);
+  check(bent.sleepy > bent.happy * 1.3, 'a sleepy pet sounds exactly like a happy one');
+
+  // Muted is muted here too, and no audio context is opened at all: the setting
+  // is checked before anything is created, not after.
+  win.webContents.send('pet:look', { pet: 'pup', skin: 'butter', sounds: false });
+  win.webContents.send('pet:say', { text: 'quiet please', kind: 'chat', expr: 'smile' });
+  await settle();
+  check((await js(`sfx === null`)) === true, 'the pet opened an audio context while muted');
+
+  win.webContents.send('pet:look', { pet: 'pup', skin: 'butter', sounds: true });
+  win.webContents.send('pet:say', { text: 'woof', kind: 'chat', expr: 'smile' });
+  await settle();
+  check((await js(`sfx !== null`)) === true, 'the pet never made a sound with noises on');
+  win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', sounds: false });
+  await settle();
+
   // --- body movements -------------------------------------------------------
   // The face and the body are separate axes, and the point of separating them is
   // that both can run at once. If a movement ever lands on .pet instead of the
@@ -857,8 +910,8 @@ app.whenReady().then(async () => {
     return app.exit(1);
   }
   console.log(
-    'ok - speech, moods, expressions, gaze, species, skins, bars, hover, headpat,\n'
-    + '     tickle, drag, chat, menu, settings and IPC all good.'
+    'ok - speech, noises, moods, expressions, gaze, species, skins, bars, hover,\n'
+    + '     headpat, tickle, drag, chat, menu, settings and IPC all good.'
   );
   console.log(
     'wrote pet-preview.png, pet-hungry.png, pet-menu.png, pet-love.png, pet-chat.png,\n'

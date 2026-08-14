@@ -254,6 +254,15 @@ function refreshTray() {
       checked: !settings.voice,
       click: () => saveSettings({ voice: !settings.voice }),
     },
+    // Its own entry rather than part of the one above: muting a pet that reads
+    // your screen aloud and muting a pet that goes "woof" are two different
+    // wants, and the second is the one that outstays its welcome first.
+    {
+      label: 'Mute noises',
+      type: 'checkbox',
+      checked: !settings.sounds,
+      click: () => saveSettings({ sounds: !settings.sounds }),
+    },
     { type: 'separator' },
     { label: 'Settings…', click: openSettings },
     { type: 'separator' },
@@ -865,6 +874,7 @@ function sendLook() {
     pet: settings.pet,
     skin: settings.skin,
     voice: settings.voice,
+    sounds: settings.sounds,
     mic: settings.mic,
     camera: settings.camera,
     faces: settings.faces,

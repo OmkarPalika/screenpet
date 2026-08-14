@@ -167,6 +167,27 @@ function speak(text, kind) {
   speechSynthesis.speak(u);
 }
 
+// ---- little noises -------------------------------------------------------
+// A woof, a meow, a chirp. Synthesised in voices.js from the species and the
+// face, so there is no audio to ship and nothing to load before the pet can
+// make a sound.
+//
+// Its own AudioContext rather than the beat listener's: that one is opened and
+// closed with the microphone, and whether the pet can bark should not depend on
+// whether anything is listening.
+
+let soundsOn = false;
+let sfx = null;
+
+function bark(expr) {
+  if (!soundsOn) return;
+  if (!sfx) sfx = new AudioContext();
+  // Chromium can hand back a suspended context. Without this the first noises
+  // are scheduled against a clock that is not running, and never arrive.
+  if (sfx.state === 'suspended') sfx.resume();
+  sound(sfx, document.documentElement.dataset.pet || 'blob', expr);
+}
+
 // ---- body movements ------------------------------------------------------
 // The face is an expression on .pet; this is the body, on the svg inside it.
 // Separate elements on purpose - see the note in style.css. A movement plays
@@ -199,6 +220,11 @@ window.pet.onSay(({ text, kind, expr, move: movement }) => {
   else express(expr || null, Math.min(20000, Math.max(2600, text.length * 55)));
   if (movement) move(movement);
   say(text, { kind, sticky: busy });
+  // The noise first, then the words: a pet that woofs halfway through its own
+  // sentence is two things talking over each other. Nothing while thinking -
+  // that face is held until the answer lands, and a bark every few seconds of it
+  // would be a progress bar with teeth.
+  if (!busy) bark(expr);
   speak(text, kind);
 });
 
@@ -380,10 +406,11 @@ chatInput.addEventListener('keydown', (e) => {
 // How the pet looks and sounds. Species and palette hang off the root element:
 // the shape rules in pets.css are plain descendant selectors, so they work
 // anywhere they are set.
-window.pet.onLook(({ pet, skin, voice: on, mic, camera, faces, bop }) => {
+window.pet.onLook(({ pet, skin, voice: on, sounds, mic, camera, faces, bop }) => {
   document.documentElement.dataset.pet = pet;
   document.documentElement.dataset.skin = skin;
   voiceOn = !!on;
+  soundsOn = !!sounds;
   if (!voiceOn) speechSynthesis.cancel();
   // No microphone, no button. An entry that only tells you the feature is off
   // is a worse answer than the entry not being there.
