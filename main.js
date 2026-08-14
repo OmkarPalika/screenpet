@@ -873,6 +873,7 @@ function sendLook() {
   send('pet:look', {
     pet: settings.pet,
     skin: settings.skin,
+    wear: settings.wear,
     voice: settings.voice,
     sounds: settings.sounds,
     mic: settings.mic,
@@ -1121,6 +1122,7 @@ ipcMain.handle('config:get', async () => ({
   settings,
   skins: config.SKINS,
   pets: config.PETS,
+  wear: config.WEAR,
   models: await listModels({ endpoint: endpoint() }),
   visionModel,
   packaged: app.isPackaged,

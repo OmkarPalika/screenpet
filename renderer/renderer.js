@@ -406,9 +406,10 @@ chatInput.addEventListener('keydown', (e) => {
 // How the pet looks and sounds. Species and palette hang off the root element:
 // the shape rules in pets.css are plain descendant selectors, so they work
 // anywhere they are set.
-window.pet.onLook(({ pet, skin, voice: on, sounds, mic, camera, faces, bop }) => {
+window.pet.onLook(({ pet, skin, wear, voice: on, sounds, mic, camera, faces, bop }) => {
   document.documentElement.dataset.pet = pet;
   document.documentElement.dataset.skin = skin;
+  document.documentElement.dataset.wear = wear || 'none';
   voiceOn = !!on;
   soundsOn = !!sounds;
   if (!voiceOn) speechSynthesis.cancel();

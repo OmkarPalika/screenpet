@@ -44,6 +44,42 @@
 .bow-loop { fill: #f4849c; }
 .bow-knot { fill: #e0637f; }
 
+/* ---- the wardrobe -------------------------------------------------------
+
+   What the pet has on, as one value on the root element rather than a set. An
+   outfit is a decision, not a shopping list: "hero" is a mask and a cape and
+   nobody has to think about whether a crown goes with headphones. It also means
+   the thing a settings file can ask for is one name off a list, which is a
+   validator that already exists rather than a new one.
+
+   The bow, the shades and the halo are on that list without a shape of their
+   own - they were already drawn for the expressions, so wearing one is a rule.
+
+   Nothing here is species-aware. A hat on a bun sits between the ears rather
+   than on top of them; that reads as a hat, and six sets of nudges to make it
+   read as a slightly better hat is not a trade worth making. */
+
+.cape, .wardrobe > * { display: none; }
+
+.cape  { fill: #c8403c; }
+.mask  { fill: #c8403c; }
+.cone  { fill: #6f5bd0; }
+.brim  { fill: #5b49b4; }
+.pom   { fill: #ffd45e; }
+.crown { fill: #ffd45e; stroke: #dda92b; stroke-width: 1.4; }
+.band  { fill: none; stroke: #3a3f4b; stroke-width: 5; stroke-linecap: round; }
+.can   { fill: #3a3f4b; }
+
+[data-wear="bow"]        .bow        { display: block; }
+[data-wear="shades"]     .shades     { display: block; }
+[data-wear="halo"]       .halo       { display: block; }
+[data-wear="party"]      .hat-party  { display: block; }
+[data-wear="wizard"]     .hat-wizard { display: block; }
+[data-wear="crown"]      .crown      { display: block; }
+[data-wear="headphones"] .cans       { display: block; }
+[data-wear="hero"]       .cape,
+[data-wear="hero"]       .mask       { display: block; }
+
 /* Species parts. Empty and hidden by default; each species fills in what it
    needs. The tail and crest are drawn before the body in the markup so they sit
    behind it, which is the only reason they read as attached rather than stuck on. */
