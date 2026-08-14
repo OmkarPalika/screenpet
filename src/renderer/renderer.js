@@ -687,7 +687,7 @@ function land() {
 
 /** Where it ended up is where it lives now. */
 function keep() {
-  placed = true;
+  home = { ...where };
   window.pet.place(where);
 }
 
@@ -1143,10 +1143,11 @@ window.pet.onRecord(recordPhrase);
 // pinned to changes when it flips and the pet must not move when it does.
 let stageX = 0;
 let stageTop = 0;
-// You have put it somewhere by hand. It stops wandering off on its own from
-// then on: a pet that walks away from where you deliberately parked it is
-// worse than one that never moves.
-let placed = false;
+// Where you put it by hand, or null if you never have. Home rather than a peg:
+// it wanders around this and comes back to it, because "stays where I put it"
+// and "moves like it is alive" are both true of a real pet and only the first
+// one was true of this. See wander().
+let home = null;
 // The last position as fractions of the room available, which is what survives
 // the window changing size under it. Same shape as pet-state.js keeps on disk.
 let where = { x: 1, y: 1 };
@@ -1197,8 +1198,8 @@ function snap(x, top) {
 }
 
 function applyPlace(place) {
-  if (!place || placed) return;
-  placed = true;
+  if (!place || home) return;
+  home = { x: place.x, y: place.y };
   snap(place.x * roomX(), place.y * roomY());
 }
 
@@ -1211,10 +1212,33 @@ window.addEventListener('resize', () => snap(where.x * roomX(), where.y * roomY(
 const idle = () =>
   !hovered && !busy && !held && bubble.hidden && menu.hidden && chatForm.hidden;
 
+// How far either side of a parked pet counts as still being there, as a share
+// of the room. A pet that never moves is furniture; one that walks off the spot
+// you chose is disobedient. This is the gap between the two.
+const ROAM = 0.16;
+
+let trips = 0;
+
+/** Pick somewhere to be and go there. Separate from the schedule so it can be
+    asked for twenty times in a row without leaving twenty timers behind. */
+function wanderTo() {
+  const room = window.innerWidth - stage.offsetWidth;
+  let to = Math.random() * room;
+  if (home) {
+    // Around where you put it, and back to it every other time - so it is always
+    // visibly heading somewhere, and where it settles is still your spot.
+    // Parking it used to stop it moving at all, and one drag lasted forever: the
+    // spot was restored from disk at launch, so a pet parked once in March was
+    // still standing in exactly that place in June.
+    const at = home.x * room;
+    to = trips++ % 2 ? at : at + (Math.random() * 2 - 1) * room * ROAM;
+  }
+  setX(Math.max(0, Math.min(room, to)));
+}
+
 function wander() {
-  // Not once you have parked it somewhere by hand.
-  if (idle() && !placed) {
-    setX(Math.random() * (window.innerWidth - stage.offsetWidth));
+  if (idle()) {
+    wanderTo();
     // The stage transition is what moves it; this is what makes it look like
     // walking rather than sliding, and it runs for exactly that long.
     move('walk');
