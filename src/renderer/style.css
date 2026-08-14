@@ -15,7 +15,7 @@ html, body {
   user-select: none;
 }
 
-/* ---- stage: the pet unit that wanders along the strip ---- */
+/* ---- stage: the pet unit, anywhere on the display ---- */
 
 .stage {
   position: absolute;
@@ -31,6 +31,34 @@ html, body {
 
 /* Dragging must be 1:1 with the cursor; the wander easing makes it feel broken. */
 .stage.is-dragging { transition: none; }
+
+/* Near the top of the screen there is no room above the pet for a bubble, so
+   everything that normally sits above it goes below instead.
+
+   The anchor flips with it - bottom to top - and that is the load-bearing half:
+   the stage grows away from whichever edge it is pinned to, so without this the
+   pet itself would move every time it opened its mouth. Pinned at the top, the
+   pet is the first item in the column and stays exactly where you put it while
+   the bubble grows downward. */
+.stage[data-flip="down"] {
+  bottom: auto;
+  top: 0;
+  flex-direction: column-reverse;
+}
+
+/* The tail points at the pet, which is now above the bubble rather than below. */
+.stage[data-flip="down"] .bubble::after {
+  bottom: auto;
+  top: -7px;
+  transform: rotate(225deg);
+}
+
+/* Out of flow, so it is measured from the other edge by hand. 104px from the
+   stage's own edge either way, which puts it the same distance past the pet. */
+.stage[data-flip="down"] .menu {
+  bottom: auto;
+  top: 104px;
+}
 
 /* ---- speech bubble ---- */
 

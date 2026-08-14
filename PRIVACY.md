@@ -60,7 +60,7 @@ on macOS.
 | File | What is in it |
 | --- | --- |
 | `settings.json` | Your settings. Never a key |
-| `pet.json` | The pet's own state — mood, hunger, how long you have known each other |
+| `pet.json` | The pet's own state — mood, hunger, how long you have known each other, and where on the screen you put it |
 | `memory.json` | Only what you explicitly said "remember ..." about, plus counters. See below |
 | `timers.json` | Timers and reminders you set |
 | `keys.json` | API keys for a hosted provider, if you chose one — wrapped with Windows DPAPI on Windows, or a Keychain-held key on macOS, either way under your user account |

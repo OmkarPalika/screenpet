@@ -37,7 +37,7 @@ a need.
 | --- | --- |
 | Click the pet | Headpat. Heart eyes, a shower of 💕, happiness and bond up. |
 | Double-click | Tickle. Wiggles and giggles — and see below if you keep going. |
-| Drag it | Picks it up and moves it. Goes dizzy, complains mildly. |
+| Drag it | Picks it up and puts it anywhere on the display. Goes dizzy, complains mildly, and stays where you left it — see "Where it stands". |
 | Move the mouse | Its eyes follow the cursor. |
 | Right-click | Menu: Feed, Play, Tickle, Talk, Read screen, Settings, Quit. |
 | Hover | Perks up, and shows the three need bars. |
@@ -263,12 +263,42 @@ not the pet speaking. Quotes inside an answer survive.
 Both directions of speech are on-device, and both are the platform's own — no
 model files, no downloads, nothing new to trust.
 
-**It speaks** through Windows' installed voices, via the platform synthesiser.
-The only voices it will use are ones flagged `localService`: some platforms list
-network-rendered voices next to the installed ones and nothing else tells them
-apart. Emoji and `*stage directions*` are stripped before speaking, because
-"money with wings" read aloud is not the joke. Mute lives in the tray, one click,
-because the moment you want it quiet is the moment a call starts.
+**It speaks two different ways, and which one depends on whose words they are.**
+
+**Its own lines are chirps** — a run of little square blips, synthesised on the
+spot by the same code that makes the woofs and the meows. Everything it says off
+its own bat goes out that way: greetings, small talk, banter, the sulk, being
+tickled, "I did not catch that". The words are still in the bubble; this is how
+they sound, not what is said.
+
+The rule is mechanical rather than a judgement call: **words that came out of the
+line bank are chirped, and everything else is spoken.** An answer off your
+screen, a lookup, the time, a battery level, an error — those are information you
+asked a question to get, and an answer you cannot hear is not an answer. There is
+a test that walks every line-bank send in `main.js` and fails on one that has not
+said which it is.
+
+The blips carry as much of the sentence as blips can. Length comes from the
+vowels, so a long line chirps longer, capped so an answer never turns into a
+modem. The last two blips carry the final punctuation: up for a question, flat
+and hard for a shout, down for anything else. The pitch inside a blip never
+bends, which is the whole of what makes a thing sound built rather than born —
+the same rule the robot's own bark follows. And the same sentence chirps the
+same way every time, from a hash of the text: a line that sounds different twice
+reads as noise rather than as a voice.
+
+**The words it speaks** go through Windows' installed voices, via the platform
+synthesiser. The only voices it will use are ones flagged `localService`: some
+platforms list network-rendered voices next to the installed ones and nothing
+else tells them apart. Emoji and `*stage directions*` are stripped before
+speaking, because "money with wings" read aloud is not the joke. Mute lives in
+the tray, one click, because the moment you want it quiet is the moment a call
+starts — and it silences both, including a line already halfway out.
+
+Chromium hands out no audio for a spoken utterance, so a robot voice reading
+English words is not something this app can build. Synthesising the chirps
+separately is the version that exists rather than the version that was wanted,
+and it is why the split is where it is.
 
 The mouth moving while it talks is a **class**, not an expression, and that
 distinction is load-bearing: an expression would replace whatever face the pet
@@ -852,10 +882,31 @@ after asking  -> visible=true "Tails!"       answered, and came back to say it
 later         -> visible=false               and went away again on its own
 ```
 
+## Where it stands
+
+**Anywhere on the display, and never off it.** Pick the pet up and drop it where
+you want it: a corner, the middle, against the top edge. The window is the whole
+of one display's work area and the pet is a div inside it, clamped to that box,
+so there is no gesture that can send it somewhere you cannot reach it. The work
+area rather than the display, so it cannot go behind the taskbar either.
+
+Placing it by hand is also what **stops it wandering**. Until then it walks along
+on its own every half minute or so; a pet that strolls away from where you
+deliberately parked it is worse than one that never moves. Where you put it is
+kept in `pet.json` as two fractions of the room available rather than as pixels,
+so it comes back to the same place on a different resolution, and the same place
+on the other monitor.
+
+Near the top of the screen there is no room above the pet for a speech bubble, so
+everything that normally sits above it - the bubble and the menu - **flips to
+below it** instead. The anchor flips with it, bottom edge to top edge, and that
+half is load-bearing: the stage grows away from whichever edge it is pinned to,
+so without it the pet would jump every time it opened its mouth.
+
 ## Two monitors
 
-The pet stands on one display's bottom strip. Which one is up to you: **Move pet
-here** in the tray menu moves it to whichever display the cursor is on.
+Which display it stands on is up to you: **Move pet here** in the tray menu moves
+it to whichever display the cursor is on.
 
 Reading the screen does not wait to be told. `Ctrl+Shift+Space` captures the
 display the **cursor** is on, not the primary one, because on two monitors the
@@ -864,12 +915,11 @@ other one back is worse than useless, it is confidently wrong.
 
 Unplugging a monitor with the pet standing on it used to leave the window running
 somewhere that no longer existed. It now restages onto the nearest surviving
-display, which covers a resolution change for free:
-
-```
-shoved to      {"x":-9000,"y":-9000,"width":400,"height":300}
-restaged       {"x":0,"y":564,"width":1536,"height":300}   on a real display: true
-```
+display, which covers a resolution change for free — and the pet inside is
+re-placed by fraction rather than by pixel on the resize that follows, so a pet
+parked halfway up a tall display arrives halfway up the short one instead of
+somewhere off the bottom of it. `verify:ui` shrinks the window under a placed pet
+and checks it is still on it.
 
 ## Conversations
 
@@ -1229,8 +1279,8 @@ An earlier note here claimed reasoning models were too slow to use. That was the
 | `Ctrl+Shift+Space` | Read the screen and answer (rebindable in Settings) |
 | `Ctrl+Shift+Q` | Quit |
 
-The window spans the bottom strip of the screen but stays click-through; the
-renderer hit-tests the pet and tells the main process when clicks should land, so
+The window covers the whole display but stays click-through; the renderer
+hit-tests the pet and tells the main process when clicks should land, so
 everything outside the pet keeps working normally. It never takes focus from what
 you are doing.
 

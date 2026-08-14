@@ -2571,6 +2571,61 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.deepStrictEqual(stray, [], 'PowerShell scripts outside src/system are packed into the asar unreadable');
   }
 
+  // --- its own voice for its own words ---
+  {
+    const mjs = require('fs').readFileSync('./src/main.js', 'utf8');
+
+    // The rule is mechanical on purpose: words that came out of the line bank
+    // are the pet talking, and the pet talks in chirps. Anything else - an
+    // answer, a lookup, an error, the time - is information, and information is
+    // read out in words. A line bank send that forgets to say so is a Windows
+    // voice reading "I would defragment a hard drive for you".
+    for (const at of [...mjs.matchAll(/pets\.line\(/g)].map((m) => m.index)) {
+      const send = mjs.slice(at, mjs.indexOf('});', at) + 3);
+      assert.ok(
+        /chatter:/.test(send),
+        `a line bank send does not say whether it chirps:\n${send.slice(0, 220)}`
+      );
+    }
+
+    // And the two that must never be chirped, because you asked a question to
+    // get them: the answer off the screen, and anything a skill worked out.
+    assert.ok(/kind: 'answer',\s*\n\s*expr[^}]*chatter: !answer/.test(mjs)
+      || /chatter: !answer/.test(mjs), 'the screen answer no longer decides by whether there is one');
+    assert.ok(
+      !/kind: 'error'[^}]*chatter: true/.test(mjs),
+      'an error is chirped, so the one line that says what went wrong is unreadable out loud'
+    );
+  }
+
+  // --- put anywhere, never off the screen ---
+  {
+    const now = 1000;
+    const at = (place) => pets.load({ ...pets.fresh(now), place }, now).place;
+
+    // Nothing until you move it by hand. That is also what tells the pet to
+    // stop wandering, so a default of {x:0,y:0} would park it top left and
+    // freeze it there.
+    assert.strictEqual(pets.load({}, now).place, null, 'a fresh pet claims to have been placed');
+    for (const junk of [null, 'left', 42, {}, { x: 1 }, { x: 'a', y: 0 }, { x: NaN, y: 0 }]) {
+      assert.strictEqual(at(junk), null, `${JSON.stringify(junk)} was accepted as a position`);
+    }
+
+    // Fractions of the room available, so the same file works on a different
+    // monitor. Clamped here as well as in the renderer: a hand-edited file must
+    // not be able to put the pet on a screen that is not there.
+    assert.deepStrictEqual(at({ x: 0.25, y: 0.5 }), { x: 0.25, y: 0.5 });
+    assert.deepStrictEqual(at({ x: 9000, y: -9000 }), { x: 1, y: 0 }, 'a position off the display survived');
+
+    // It has to ride along with the rest of the state, or it is lost on the
+    // next tick rather than on a restart - which is much harder to notice.
+    const placed = pets.load({ place: { x: 0.4, y: 0.2 } }, now);
+    assert.deepStrictEqual(pets.tick(placed, now + 3600000).place, { x: 0.4, y: 0.2 },
+      'the placement is dropped by the next tick');
+    assert.deepStrictEqual(pets.act(placed, 'feed', now + 1000).state.place, { x: 0.4, y: 0.2 },
+      'feeding the pet forgets where it is standing');
+  }
+
   // --- one pet per machine ---
   {
     const mjs = require('fs').readFileSync('./src/main.js', 'utf8');

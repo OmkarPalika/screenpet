@@ -51,7 +51,6 @@ app.on('second-instance', () => {
 // in there, so unlike the PowerShell scripts an icon needs no asarUnpack.
 const ASSETS = path.join(__dirname, '..', 'assets');
 
-const STAGE_H = 300;
 const TICK_MS = 20000;
 const IDLE_SLEEP_S = 300; // system idle this long and the pet naps
 const VISION_TIMEOUT_MS = 240000; // vision on CPU is much slower than text
@@ -186,17 +185,20 @@ function lockPermissions() {
 
 // ---- windows ----------------------------------------------------------------
 
-// The strip the pet stands on: the full width of one display's work area, along
-// the bottom of it. A function rather than a constant because there is more than
-// one display and the pet does not have to stay on the first one.
+// The floor the pet stands on is the whole of one display's work area, because
+// you can put it anywhere on that display. The window itself still never moves:
+// the pet is a div inside it, and translating a div is free where dragging a
+// transparent always-on-top window at 60fps is not.
+//
+// The work area rather than the display bounds, so the pet cannot be put behind
+// the taskbar - and the renderer clamps the div inside this, which is the whole
+// of "it can never be sent off the screen".
+//
+// A function rather than a constant because there is more than one display and
+// the pet does not have to stay on the first one.
 function stageBounds(display) {
   const { workArea } = display;
-  return {
-    x: workArea.x,
-    y: workArea.y + workArea.height - STAGE_H,
-    width: workArea.width,
-    height: STAGE_H,
-  };
+  return { x: workArea.x, y: workArea.y, width: workArea.width, height: workArea.height };
 }
 
 function placeOn(display) {
@@ -386,7 +388,10 @@ function talk(kind, { event = null, text = null, tone = 'chat', move = null } = 
   if (quiet && !quietOverride) return false;
   const said = text || pets.line(kind, lineIndex++, settings.pet);
   if (!said) return false;
-  send('pet:say', { text: said, kind: tone, expr: pets.expressionFor(event), move });
+  // Everything through this door is the pet talking rather than answering, so
+  // it is chirped rather than read out by a Windows voice. The rule is exactly
+  // "the words came out of the line bank", which is what makes it checkable.
+  send('pet:say', { text: said, kind: tone, expr: pets.expressionFor(event), move, chatter: true });
   return true;
 }
 
@@ -551,6 +556,9 @@ async function answerScreen() {
       text: said,
       kind: 'answer',
       expr: pets.expressionFor(answer ? 'answer' : 'nothing'),
+      // A screen with no question on it is the pet's own line, not an answer,
+      // and there is nothing in it worth a Windows voice reading out.
+      chatter: !answer,
     });
   } catch (err) {
     send('pet:say', { text: err.message, kind: 'error', expr: pets.expressionFor('error') });
@@ -739,6 +747,7 @@ function runSkill(text) {
       text: bank ? pets.line(bank, lineIndex++, settings.pet) : skill.say,
       kind: 'chat',
       expr: bank ? pets.expressionFor(event) : skill.expr,
+      chatter: !!bank,
     });
     return true;
   }
@@ -758,6 +767,7 @@ function runSkill(text) {
       kind: 'chat',
       expr: pets.expressionFor(skill.event),
       move: skill.move,
+      chatter: true,
     });
     // Same beat as praise: say the thing, then be visibly embarrassed about it.
     if (skill.follow) {
@@ -765,6 +775,7 @@ function runSkill(text) {
         text: pets.line(skill.follow.bank, lineIndex++, settings.pet),
         kind: 'chat',
         expr: pets.expressionFor(skill.follow.event),
+        chatter: true,
       }), 3200);
     }
     return true;
@@ -894,6 +905,7 @@ async function listenAndReply() {
     text: pets.line('listening', lineIndex++, settings.pet),
     kind: 'chat',
     expr: pets.expressionFor('listen'),
+    chatter: true,
   });
   try {
     // Two engines, one contract: a string, empty if nothing was said. Whisper
@@ -910,6 +922,7 @@ async function listenAndReply() {
         text: pets.line('deaf', lineIndex++, settings.pet),
         kind: 'chat',
         expr: pets.expressionFor('curious'),
+        chatter: true,
       });
     }
     await replyTo(heard);
@@ -1124,6 +1137,16 @@ ipcMain.on('pet:act', (_e, name) => {
 
 ipcMain.on('pet:react', (_e, event) => {
   if (event === 'drag') talk('dragged', { event: 'drag' });
+});
+
+// Picked up and put down somewhere. Clamped by pets.place rather than trusted:
+// this arrives from the renderer, and a position off the display is a pet you
+// cannot get back.
+ipcMain.on('pet:place', (_e, at) => {
+  const place = pets.place(at);
+  if (!place) return;
+  state = { ...state, place };
+  savePet();
 });
 
 ipcMain.on('pet:chat-open', (_e, open) => {
