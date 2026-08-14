@@ -532,7 +532,13 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // --- every skill stays inside the vocabulary the renderer implements ---
   const rjs = require('fs').readFileSync('./renderer/renderer.js', 'utf8');
   const moves = (rjs.match(/const MOVE_MS = \{([^}]+)\}/) || [])[1] || '';
-  const faces = new Set(Object.values(pets.EXPRESSIONS));
+  // Both halves of the keyboard: the faces events reach for, and the ones you
+  // can ask for by name. A movement may wear either - they are all drawn, and
+  // the sheet-walking check further down is what proves that.
+  const faces = new Set([
+    ...Object.values(pets.EXPRESSIONS),
+    ...Object.values(pets.FACES).map((f) => f.expr),
+  ]);
   for (const [move] of skills.MOVE_WORDS) {
     assert.ok(new RegExp(`\\b${move}:`).test(moves), `move "${move}" has no animation`);
     assert.ok(skills.MOVE_LINES[move], `move "${move}" has nothing to say`);
@@ -541,6 +547,36 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   const css = require('fs').readFileSync('./renderer/style.css', 'utf8');
   for (const [move] of skills.MOVE_WORDS) {
     assert.ok(css.includes(`[data-move="${move}"]`), `move "${move}" has no rule in style.css`);
+  }
+
+  // Anything the pet does unprompted has to be a movement it actually has.
+  for (const move of (rjs.match(/const IDLE_MOVES = \[([^\]]+)\]/) || ['', ''])[1]
+    .split(',').map((s) => s.trim().replace(/'/g, '')).filter(Boolean)) {
+    assert.ok(new RegExp(`\\b${move}:`).test(moves), `the pet idles into "${move}", which it cannot do`);
+  }
+
+  // The words, in the order that matters. "roll over" used to be topple, which
+  // is the trick and the collapse confused for each other.
+  for (const [text, want] of [
+    ['roll over', 'roll'],
+    ['play dead', 'topple'],
+    ['fall over', 'topple'],
+    ['sit', 'sit'],
+    ['sit down', 'sit'],
+    ['good boy', 'sit'],
+    ['stretch', 'stretch'],
+    ['achoo', 'sneeze'],
+    ['brrr', 'shiver'],
+  ]) {
+    const got = skills.match(text, ctx);
+    assert.strictEqual(got && got.move, want, `"${text}" did not ${want}`);
+  }
+  // And the sentences that only look like commands. Each of these is something
+  // you would type at a pet that reads your screen.
+  for (const text of ['sit tight, this will take a minute', 'roll back the migration',
+    'that is a stretch goal', 'we should revisit this']) {
+    const got = skills.match(text, ctx);
+    assert.ok(!got || !got.move, `"${text}" made the pet move`);
   }
 
   // A skill's face has to be one the stylesheet draws, or the pet answers
@@ -2132,6 +2168,35 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.ok(
       require('fs').readFileSync('./main.js', 'utf8').includes('sounds: settings.sounds'),
       'main never tells the renderer whether noises are on'
+    );
+  }
+
+  // --- skins --------------------------------------------------------------
+  {
+    const fs = require('fs');
+    const config = require('./settings');
+    const pcss = fs.readFileSync('./renderer/pets.css', 'utf8');
+
+    for (const skin of config.SKINS) {
+      const rule = pcss.match(new RegExp(`\\[data-skin="${skin}"\\][^{]*\\{([^}]+)\\}`));
+      assert.ok(rule, `skin "${skin}" is offered and never defined`);
+      for (const v of ['--body', '--ear', '--cheek']) {
+        assert.ok(rule[1].includes(v), `skin "${skin}" leaves ${v} to whatever was set last`);
+      }
+    }
+    for (const [, skin] of pcss.matchAll(/\[data-skin="([a-z]+)"\]/g)) {
+      assert.ok(config.SKINS.includes(skin), `"${skin}" is drawn and cannot be picked`);
+    }
+    assert.strictEqual(config.load({ skin: 'chartreuse' }).skin, 'butter');
+
+    // The swatch takes its colour from the same three variables the pet does.
+    // A second copy of every palette in settings.css is how a new skin ends up
+    // a colourless circle nobody notices until it ships.
+    const scss = fs.readFileSync('./renderer/settings.css', 'utf8');
+    assert.ok(/\.swatch \{[^}]*background: var\(--body\)/.test(scss), 'the swatch has no colour');
+    assert.ok(
+      !/\.swatch\[data-skin/.test(scss),
+      'settings.css names a skin, so palettes now live in two files'
     );
   }
 

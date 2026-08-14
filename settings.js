@@ -2,7 +2,10 @@
 
 // Pure settings handling. No disk, no Electron - main.js owns both.
 
-const SKINS = ['butter', 'mint', 'blossom', 'slate'];
+const SKINS = [
+  'butter', 'mint', 'blossom', 'slate',
+  'coal', 'cream', 'moss', 'plum', 'sky', 'coral',
+];
 
 // Species and skin are orthogonal on purpose: every pet works in every palette,
 // because the difference is shape and the palette is three CSS variables.

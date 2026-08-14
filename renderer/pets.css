@@ -9,9 +9,19 @@
 /* ---- skins: one palette swap, so moods stay filters rather than 4x5 rules ---- */
 
 :root                    { --body: #f2b45c; --ear: #e09c3e; --cheek: #f08a7a; }
+/* Butter again, by name. The default is on :root so a pet with no skin set is
+   still drawn; this is what lets a settings swatch, which only ever carries a
+   data-skin, paint itself from the same three variables as everything else. */
+[data-skin="butter"]     { --body: #f2b45c; --ear: #e09c3e; --cheek: #f08a7a; }
 [data-skin="mint"]       { --body: #7fd1b0; --ear: #5fb896; --cheek: #ef9a8e; }
 [data-skin="blossom"]    { --body: #f3a3bd; --ear: #dd88a6; --cheek: #dd5f7f; }
 [data-skin="slate"]      { --body: #9aa8bd; --ear: #7d8b9f; --cheek: #e28a7a; }
+[data-skin="coal"]       { --body: #5f6472; --ear: #4b505c; --cheek: #d97663; }
+[data-skin="cream"]      { --body: #f3e2c2; --ear: #ddc79f; --cheek: #eb9484; }
+[data-skin="moss"]       { --body: #9ec46a; --ear: #82a854; --cheek: #e2836c; }
+[data-skin="plum"]       { --body: #b489d6; --ear: #9970bd; --cheek: #e0769c; }
+[data-skin="sky"]        { --body: #86bdf0; --ear: #6aa1d6; --cheek: #ef9a8e; }
+[data-skin="coral"]      { --body: #f59173; --ear: #db7357; --cheek: #c9515f; }
 
 /* ---- ink ---- */
 
