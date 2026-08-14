@@ -66,9 +66,10 @@ vulnerabilities — but a way to *widen* one is:
 - **Builds are unsigned** until there is a code-signing certificate, so
   SmartScreen will warn. Verify what you downloaded against the hash published
   with the release.
-- **whisper dictation runs a binary you supplied.** If `whisper-cli.exe` and
-  `model.bin` are present in `%APPDATA%\screenpet\whisper\`, the app executes
-  that binary. The location is fixed and there is no setting that can point it
+- **Local dictation runs a binary you supplied.** If a known engine binary and
+  its matching model are present in `%APPDATA%\screenpet\whisper\`, the app
+  executes that binary. Only the filenames in `dictate.js`'s `ENGINES` table are
+  ever run, the folder is fixed, and there is no setting that can point it
   elsewhere — deliberately, because a path to an executable in `settings.json`
   would be arbitrary code execution with a nice label on it. Anyone who can write
   to your `%APPDATA%` can already run code as you, so this adds no privilege they

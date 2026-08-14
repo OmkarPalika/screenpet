@@ -399,27 +399,38 @@ somebody should tidy away, which is why there is a test pinning it.
 ### Turning it on
 
 `Recognised by` in settings, three values, matching the shape `vision` already
-uses: **whisper if installed, Windows otherwise** (the default), or either engine
-by name. Both run on this machine; neither reaches the network.
+uses: **a local engine if installed, Windows otherwise** (the default), or either
+by name. Everything runs on this machine; nothing reaches the network.
 
-whisper is **not bundled** — it is a 7.9MB binary and a model file, and shipping
-someone else's build inside this installer is a licensing and signing question
-this project has not answered yet. To use it, put two files in the app's own
-folder:
+Neither engine is bundled — shipping someone else's build inside this installer
+is a licensing and signing question this project has not answered. Put a binary
+and its model in the app's own folder and the app picks up whichever is there:
 
 ```
-%APPDATA%\screenpet\whisper\whisper-cli.exe   (plus its .dll files)
-%APPDATA%\screenpet\whisper\model.bin
+%APPDATA%\screenpet\whisper\whisper-cli.exe    + model.bin       (whisper)
+%APPDATA%\screenpet\whisper\parakeet-cli.exe   + parakeet.bin    (parakeet)
 ```
 
-Binaries are on the [whisper.cpp releases page](https://github.com/ggml-org/whisper.cpp/releases)
-(`whisper-bin-x64.zip`) and models on
-[Hugging Face](https://huggingface.co/ggerganov/whisper.cpp) — `ggml-tiny.en.bin`
-is 75MB, `ggml-base.en.bin` 142MB. Rename whichever you choose to `model.bin`.
-`tiny.en` is the better default than its size suggests: with the prompt it beats
-bare `base.en` and it is *faster than the PowerShell spawn SAPI needs*.
+Both binaries are in the same [whisper.cpp release](https://github.com/ggml-org/whisper.cpp/releases)
+(`whisper-bin-x64.zip`, 7.9MB — copy the whole `Release` folder, the .dlls are
+needed). Models: whisper's are on [Hugging Face](https://huggingface.co/ggerganov/whisper.cpp)
+(`ggml-tiny.en.bin` 75MB, `ggml-base.en.bin` 142MB), parakeet's are at
+[ggml-org/parakeet-GGUF](https://huggingface.co/ggml-org/parakeet-GGUF)
+(`ggml-parakeet-tdt-0.6b-v3-q4_k.bin`, 397MB — note the **`.bin` from ggml-org**,
+not the community GGUF conversions, which this binary rejects with
+`invalid model data (bad magic)`). Rename to the name in the table above.
 
-The location is fixed and there is no setting for it. A path to an executable in
+**Each engine has its own model name, and that is what picks the engine.** The
+release ships both binaries in one folder, so "both `.exe`s present, one model"
+is the ordinary case for anyone who copied the folder as instructed. Choosing on
+the binary would hand a whisper model to parakeet and kill dictation for exactly
+the people who followed the directions.
+
+Which to install: **whisper `tiny.en` if you want this over with** — 75MB, and
+with the prompt it beats bare `base.en` while being *faster than the PowerShell
+spawn SAPI needs*. **Parakeet if accuracy on commands matters more than 397MB.**
+
+The folder is fixed and there is no setting for it. A path to an executable in
 `settings.json` is arbitrary code execution with a nice label on it, and this app
 hardcodes its OCR script, its weather host and its provider URLs for that reason.
 
@@ -429,11 +440,12 @@ input name, ends up with `-`, decides that means stdout and silently prints
 nothing. `-of` gives it a name to be quiet about. Removing that flag looks like
 tidying and turns dictation off.
 
-**Whisper has no confidence score**, so the noise problem the `0.30` floor exists
-for comes back in a different shape: handed two seconds of a quiet room, base.en
-answers "you". The gate is therefore in two places — the recorder does not send
-audio it measured as silence, and a short list of known hallucinations is dropped
-in [whisper.js](whisper.js). Both are measured, not guessed.
+**Neither engine has a confidence score**, so the noise problem the `0.30` floor
+exists for comes back in a different shape: handed two seconds of a quiet room,
+whisper base.en answers "you". The gate is therefore in two places — the recorder
+does not send audio it measured as silence, and a short list of known
+hallucinations is dropped in [dictate.js](dictate.js). Both are measured, not
+guessed. Parakeet returns nothing at all on silence and needs neither.
 
 ### Parakeet was measured too, and it is a tie
 
@@ -465,9 +477,11 @@ things that are structural rather than statistical:
   was 1.4x, against base.en on this CPU. Those comparisons are generally against
   a larger whisper model than this app would ever load.
 
-whisper with the prompt stays the default on size alone. Parakeet is the one to
-move to if the 397MB stops mattering, and the code would get simpler doing it -
-it needs neither the `-of` workaround nor the hallucination list.
+So both are supported, and the model file you install decides which runs. That
+costs about twenty lines in [dictate.js](dictate.js) — the engines differ in an
+argument list and a model name — and it beats picking a winner on a two-point
+difference across fourteen phrases. Parakeet is preferred when both are properly
+installed; whisper stays the one to reach for first, on size.
 
 **Known limits.** One speaker, one room, fourteen phrases: this sizes an effect,
 it does not measure a population. 21% is better, not solved — one word in five is

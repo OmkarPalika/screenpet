@@ -94,18 +94,21 @@
 
     <label for="dictation">Recognised by</label>
     <select id="dictation">
-      <option value="auto">Auto — whisper if installed, Windows otherwise</option>
+      <option value="auto">Auto — a local engine if installed, Windows otherwise</option>
       <option value="sapi">Windows</option>
-      <option value="whisper">whisper.cpp</option>
+      <option value="local">whisper.cpp or Parakeet</option>
     </select>
     <p class="hint" id="dictation-hint">
       Both run on this machine and neither reaches the network. Windows' own recogniser
       needs no setup and is what the pet has always used — measured on real speech it got
       <strong>88% of words wrong</strong>, and scored every result below its own confidence
-      floor, which is why it so often says it did not catch that. whisper.cpp scored
-      <strong>21%</strong> on the same recordings. It is not bundled: put
-      <code>whisper-cli.exe</code> and <code>model.bin</code> in the app's
-      <code>whisper</code> folder and this picks them up.
+      floor, which is why it so often says it did not catch that. On the same recordings
+      whisper.cpp scored <strong>21%</strong> and Parakeet <strong>19%</strong>.
+      Neither is bundled: put <code>whisper-cli.exe</code> or
+      <code>parakeet-cli.exe</code> — plus <code>model.bin</code> — in the app's
+      <code>whisper</code> folder and this picks up whichever is there. Parakeet is
+      better at commands and says nothing when you said nothing; whisper is a third
+      the size and better at code words.
     </p>
 
     <label class="check">

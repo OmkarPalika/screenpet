@@ -1228,7 +1228,13 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   }
   // It survives the microphone being switched off, because turning a device off
   // is not a reason to forget which recogniser you preferred.
-  assert.strictEqual(cfg.merge(cfg.load({ mic: true, dictation: 'whisper' }), { mic: false }).dictation, 'whisper');
+  assert.strictEqual(cfg.merge(cfg.load({ mic: true, dictation: 'local' }), { mic: false }).dictation, 'local');
+
+  // 'whisper' was this value's name while whisper was the only engine it could
+  // mean. A settings file written by that version must keep doing what it did,
+  // rather than falling back to 'auto' and quietly changing the app's behaviour.
+  assert.strictEqual(cfg.load({ dictation: 'whisper' }).dictation, 'local', 'the old value stopped working');
+  assert.ok(!cfg.DICTATION.includes('whisper'), 'the alias is being offered as a current value');
 
   // A setting the window cannot reach is a setting nobody has. The first version
   // of this control was marked up with `class="row"`, which in settings.css is
@@ -1270,19 +1276,23 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(merged.hotkey, cfg.DEFAULTS.hotkey, 'merge let a bad hotkey through');
 }
 
-// ===== whisper: the other recogniser =======================================
+// ===== dictate: the other recogniser =======================================
 //
-// Nothing here spawns the binary - it is a file the user puts there and most
-// machines running these tests will not have it. What is worth pinning is
-// everything around the spawn: the install check, the cleanup, and the prompt,
-// which is the single largest measured improvement in the swap and looks like
-// dead weight to anyone who did not measure it.
+// Nothing here spawns a binary - they are files the user puts there and most
+// machines running these tests will not have them. What is worth pinning is
+// everything around the spawn: which engine is picked, the cleanup, and the
+// prompt, which is the single largest measured improvement available to whisper
+// and looks like dead weight to anyone who did not measure it.
 
 {
-  const whisper = require('./whisper');
+  const whisper = require('./dictate');
   const os = require('os');
   const fs = require('fs');
   const path = require('path');
+
+  const W = whisper.ENGINES.find((e) => e.name === 'whisper');
+  const P = whisper.ENGINES.find((e) => e.name === 'parakeet');
+  assert.notStrictEqual(W.model, P.model, 'the two engines share a model name');
 
   // --- installed: both halves, or the feature is off ---
   const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'screenpet-whisper-'));
@@ -1291,16 +1301,51 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   const dir = path.join(empty, whisper.DIR);
   fs.mkdirSync(dir);
   assert.strictEqual(whisper.installed(empty), false, 'an empty whisper folder counted as installed');
-  fs.writeFileSync(path.join(dir, whisper.EXE), 'not really an exe');
+  fs.writeFileSync(path.join(dir, W.exe), 'not really an exe');
   assert.strictEqual(whisper.installed(empty), false, 'a binary with no model counted as installed');
-  fs.writeFileSync(path.join(dir, whisper.MODEL), 'not really a model');
+  fs.writeFileSync(path.join(dir, W.model), 'not really a model');
   assert.strictEqual(whisper.installed(empty), true, 'both files present and still not installed');
+  assert.strictEqual(whisper.installedName(empty), 'whisper');
+
+  // --- the model decides, not the binary ---
+  // The whisper.cpp release ships both binaries in one folder, and the README
+  // tells you to copy that folder for its dlls. So "both exes, one whisper
+  // model" is the normal case, not a corner: picking parakeet here would hand it
+  // a whisper model, which it refuses with "bad magic", and dictation would be
+  // dead for anyone who followed the instructions.
+  fs.writeFileSync(path.join(dir, P.exe), 'not really an exe either');
+  assert.strictEqual(whisper.installedName(empty), 'whisper',
+    'parakeet was chosen on its binary alone, and would be fed a whisper model');
+
+  // With its own model present it wins - better at commands, and silent on
+  // silence. That is a real choice by whoever put a 397MB model there.
+  fs.writeFileSync(path.join(dir, P.model), 'not really a parakeet model');
+  assert.strictEqual(whisper.installedName(empty), 'parakeet', 'whisper was preferred over parakeet');
+  // ...and each is handed its own model, never the other's.
+  assert.ok(whisper.engineFor(empty).args('x').includes('x'), 'the model is not passed to the engine');
+  fs.rmSync(path.join(dir, P.model));
+  // Only whisper takes the vocabulary prompt; passing it to parakeet would be an
+  // unknown flag and a non-zero exit.
+  const args = (name) => whisper.ENGINES.find((e) => e.name === name).args('m.bin');
+  assert.ok(args('whisper').includes('--prompt'), 'whisper lost the vocabulary prompt');
+  assert.ok(!args('parakeet').includes('--prompt'), 'parakeet was given a flag it does not have');
+  // Both read the audio from stdin. Writing it to a temp file would put the
+  // microphone on disk, which is the one thing this path must not do.
+  for (const name of ['whisper', 'parakeet']) {
+    assert.ok(args(name).includes('-f') && args(name).includes('-'), `${name} is not reading stdin`);
+  }
+  // Whisper prints nothing at all from stdin without an output name to be quiet
+  // about. Removing this looks like tidying and turns dictation off.
+  assert.ok(args('whisper').includes('-of'), 'whisper lost the -of workaround and now prints nothing');
+
+  fs.rmSync(path.join(dir, P.exe));
   // A directory named like the binary is not the binary.
-  fs.rmSync(path.join(dir, whisper.EXE));
-  fs.mkdirSync(path.join(dir, whisper.EXE));
+  fs.rmSync(path.join(dir, W.exe));
+  fs.mkdirSync(path.join(dir, W.exe));
   assert.strictEqual(whisper.installed(empty), false, 'a directory passed as the binary');
   fs.rmSync(empty, { recursive: true, force: true });
   assert.strictEqual(whisper.installed(empty), false, 'a missing folder threw instead of answering');
+  assert.strictEqual(whisper.installedName(empty), null);
 
   // --- clean: what came back is not always something a person said ---
   assert.strictEqual(whisper.clean(' Set a timer for 10 minutes.\r\n'), 'Set a timer for 10 minutes.');
@@ -1343,10 +1388,15 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // The install location is fixed, and nothing user-supplied contributes to it.
   // A path to an executable in settings.json would be arbitrary code execution
   // with a nice label on it, which is why there is no such setting to test.
-  const p = whisper.paths('C:\\users\\someone\\AppData\\Roaming\\screenpet');
-  assert.ok(p.exe.endsWith(path.join(whisper.DIR, whisper.EXE)), 'the binary moved');
-  assert.ok(p.model.endsWith(path.join(whisper.DIR, whisper.MODEL)), 'the model moved');
-  assert.ok(!/\.\./.test(p.exe + p.model), 'the install path can be climbed out of');
+  // Every engine name is a bare filename, so nothing in the table can reach out
+  // of the fixed folder, and no engine may be added with a path in its name.
+  for (const e of whisper.ENGINES) {
+    for (const name of [e.exe, e.model]) {
+      assert.strictEqual(path.basename(name), name, `${e.name} names a path, not a file`);
+      assert.ok(!/[\\/]|\.\./.test(name), `${e.name} can be climbed out of`);
+    }
+  }
+  assert.strictEqual(path.basename(whisper.DIR), whisper.DIR, 'the install folder names a path');
 }
 
 // ===== quiet hours =========================================================
