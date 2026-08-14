@@ -1240,7 +1240,8 @@ drops an unterminated block outright, so the bubble stays on the thinking face
 through the reasoning and then fills with the answer. Measured on this machine,
 `deepseek-r1:8b` asked what 17 × 23 is: first visible character at 5.3s, whole
 answer by 5.5s. With a model that does not think first, text appears almost
-immediately.
+immediately — and so does small talk, which asks the same model not to think at
+all. See the model table below.
 
 Two things are deliberately not applied to the pieces as they arrive: the quote
 stripper and the echo stripper. Both are decisions about a whole answer, and a
@@ -1393,6 +1394,26 @@ is a real cost on every question. What it buys is a pet that tells you when it
 has been handed something it cannot actually read, instead of answering anyway —
 and on a tool whose entire job is answering what is on your screen, a confident
 wrong answer is worse than a slow right one.
+
+**Small talk does not pay that cost.** Saying hello is not a question about your
+screen, and there is nothing there for a reasoner to reason about — so `chat()`
+sends `think: false` and the same model answers straight away. Measured against
+one already-loaded `deepseek-r1:8b`: **8613ms to the first word with the
+monologue, 394ms without**, and 425ms through the app's own code path. Nothing
+else moves. No second model, no swap, no extra memory — and that matters more
+than it sounds, because on an 8GB card `deepseek-r1:8b` is 5.6GB and a second
+model does not fit beside it. Alternating between two of them costs a full
+reload every turn: the fast model measured 403ms warm and **8192ms** when it had
+to be swapped back in, which is worse than the problem it was meant to fix.
+
+The switch is only ever thrown one way. A model that cannot think refuses the
+whole request rather than ignoring the field — `"llama3.1:8b" does not support
+thinking` — so asking for reasoning is how you break every model that was never
+the problem.
+
+A follow-up about the screen keeps the reasoning. Answering about text it read a
+moment ago is the one job the careful model was chosen for; measured at 4.5s to
+the first word, with the thinking face up while it works.
 
 If you would rather have the speed and do not mind that, `llama3.1:8b` is one
 dropdown away in Settings. It is fine on prose; it is the code and the damaged

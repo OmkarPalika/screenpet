@@ -173,15 +173,22 @@ const PERSONA =
 // screen crowds out what was actually said.
 const SCREEN_MEMORY = 700;
 
+// What it read a moment ago, if it read anything worth carrying. Trimmed before
+// it is judged: a read that came back with nothing but whitespace is not a
+// screen, and treating it as one puts an empty block in the prompt and takes
+// the honest "I cannot see it" sentence out with it.
+//
+// One function because two things ask the question - what the prompt says, and
+// whether the answer is worth thinking about - and those two drifting apart is
+// how the pet ends up insisting it cannot see a screen it is reasoning over.
+const screenText = (screen) =>
+  (screen ? String(screen.text || '').trim() : '').slice(0, SCREEN_MEMORY);
+
 function buildChatPrompt(message, { mood = 'neutral', history = [], memory = [], screen = null } = {}) {
   const tone = TONE[mood] || '';
   const notes = Array.isArray(memory) ? memory.filter((l) => typeof l === 'string') : [];
-  // What it read a moment ago, so a follow-up question about it is answerable.
   // Redacted before it got here, and it goes stale on its own - see main.js.
-  // Trimmed before it is judged: a screen read that came back with nothing but
-  // whitespace is not a screen, and treating it as one would put an empty block
-  // in the prompt and take the honest "I cannot see it" sentence out with it.
-  const seen = screen ? String(screen.text || '').trim().slice(0, SCREEN_MEMORY) : '';
+  const seen = screenText(screen);
   return [
     PERSONA,
     'Talk the way a person talks out loud: contractions, plain words, nothing stiff.',
@@ -227,7 +234,23 @@ async function chat(message, opts = {}) {
   // they never leave the machine. On a hosted provider they do, so they are -
   // pasting a key into the chat box must not be how it ends up at OpenAI.
   const safe = opts.provider && !providers.isLocal(opts.provider) ? redact(text) : text;
-  return generate({ model: opts.model || MODEL, prompt: buildChatPrompt(safe, opts) }, opts);
+  const body = { model: opts.model || MODEL, prompt: buildChatPrompt(safe, opts) };
+
+  // Small talk does not need the reasoner's monologue, and on the default model
+  // that monologue IS the wait: measured against one already-loaded
+  // deepseek-r1:8b, 8613ms to the first word with it and 394ms without. Nothing
+  // else changes - same model, same memory, no second one to swap in and out.
+  //
+  // Only ever switched off, never on. A model that cannot think rejects the
+  // request outright rather than ignoring the field - "llama3.1:8b does not
+  // support thinking" - so asking for it would break every model that was never
+  // the problem.
+  //
+  // A question about the screen keeps it. Answering about text it read a moment
+  // ago is the one job the careful model was chosen for.
+  if (!screenText(opts.screen)) body.think = false;
+
+  return generate(body, opts);
   // opts carries onToken straight through, so a typed conversation fills in as
   // it is written exactly as a screen answer does.
 }
