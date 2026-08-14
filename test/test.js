@@ -205,13 +205,45 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(pets.tick(bonded, t0 + 48 * HOUR).bond, 40, 'bond decayed');
 }
 
-// --- sleep regenerates energy instead of draining it ---
+// --- a pet that is awake is resting, not running a marathon ---
 {
   const s = { ...pets.fresh(0), energy: 30 };
   const awake = pets.tick(s, 3 * HOUR, { asleep: false });
   const napped = pets.tick(s, 3 * HOUR, { asleep: true });
   assert.ok(napped.energy > s.energy, 'sleeping did not restore energy');
-  assert.ok(awake.energy < s.energy, 'being awake did not cost energy');
+  // Sitting on your taskbar costs nothing. Being awake used to drain 6 an hour,
+  // which meant a day at your desk left the pet flat and looking asleep while
+  // you sat right there - and `play` refuses under 20, so it could not be
+  // played back out of it either.
+  assert.ok(awake.energy > s.energy, 'being present still tires the pet out');
+  assert.ok(napped.energy > awake.energy, 'a nap is worth no more than sitting there');
+
+  // The whole failure, as one case: a full day at the keyboard, never idle long
+  // enough to nap.
+  let day = pets.fresh(0);
+  for (let h = 1; h <= 24; h++) day = pets.tick(day, h * HOUR, { asleep: false });
+  assert.notStrictEqual(
+    pets.mood(day, { asleep: false }), 'sleepy',
+    'a day at your desk still leaves the pet asleep on its feet'
+  );
+
+  // Every pet already out there has energy at zero, put there by the old rule.
+  // Left alone it would climb out at 4 an hour, so the fix on its own would mean
+  // another five hours of a pet asleep on its feet.
+  const drained = pets.load({ energy: 0 }, 0);
+  assert.notStrictEqual(
+    pets.mood(drained, { asleep: false }), 'sleepy',
+    'a pet drained flat by the old rule is still asleep after the fix'
+  );
+  // Not a reset, though: a pet you have been playing with is still tired.
+  assert.ok(pets.load({ energy: 95 }, 0).energy === 95, 'loading the pet topped it up');
+
+  // ...and playing is what actually tires it, which is what the stat is for.
+  let tired = { ...pets.fresh(0), energy: 40 };
+  for (let i = 0; i < 3; i++) {
+    tired = pets.act(tired, 'play', i * 60000 + 60000).state;
+  }
+  assert.ok(tired.energy < 40, 'playing with the pet no longer tires it');
 }
 
 // --- actions ---
@@ -2750,6 +2782,22 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       'the placement is dropped by the next tick');
     assert.deepStrictEqual(pets.act(placed, 'feed', now + 1000).state.place, { x: 0.4, y: 0.2 },
       'feeding the pet forgets where it is standing');
+
+    // Parking it is a home, not a peg. It used to be a peg: one drag ever set a
+    // flag that stopped wander() dead, the flag was restored from disk at
+    // launch, and a pet parked once was still standing in that exact spot
+    // months later. Both things people want are true of a real pet - it stays
+    // where you put it, and it moves.
+    const rjs = require('fs').readFileSync('./src/renderer/renderer.js', 'utf8');
+    const roam = rjs.slice(rjs.indexOf('function wanderTo('), rjs.indexOf('function quirk('));
+    // Where it goes has to know about home...
+    assert.ok(/home/.test(roam), 'wandering ignores where you parked it');
+    // ...and whether it goes at all must not. That is the exact line that was
+    // wrong, so it is the exact line pinned: any `!home` or `!placed` in the
+    // decision to move is the cage back.
+    const gate = roam.slice(roam.indexOf('function wander('));
+    assert.ok(!/!\s*(home|placed)\b/.test(gate), 'being parked still stops the pet moving at all');
+    assert.ok(/idle\(\)/.test(gate), 'the pet wanders off mid-sentence');
   }
 
   // --- reading the window rather than the wall ---

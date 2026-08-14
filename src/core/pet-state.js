@@ -12,8 +12,24 @@ const HOUR = 3600000;
 
 // Per hour of wall clock. Tuned so the pet wants attention roughly twice a day,
 // not so often that it becomes a chore.
-const DECAY = { fullness: 7, happiness: 5, energy: 6 };
+const DECAY = { fullness: 7, happiness: 5 };
+
+// Energy is the pet's, not yours. It used to fall by 6 an hour whenever the
+// machine was in use, and the only thing that put any back was you leaving the
+// computer alone for five minutes at a stretch. Twelve hours at your desk left
+// it flat, permanently `sleepy` - eyes shut, zzz drifting, while you sat right
+// there - and `play` refuses under 20, so it could not even be played back out
+// of it. A pet asleep because you are present has it exactly the wrong way
+// round.
+//
+// It sits on your taskbar, so it rests. Playing is what costs energy, and what
+// that buys is in ACTIONS below.
+const REST_ENERGY_GAIN = 4;
 const SLEEP_ENERGY_GAIN = 14;
+
+// The lowest a pet can be when the app opens. Just clear of the 20 that makes it
+// `sleepy`, so a session never starts with a pet that looks asleep at you.
+const TIRED_FLOOR = 30;
 
 // Come back after a holiday and the pet should be hungry, not dead. Decay stops
 // counting past a day however long the app was closed.
@@ -133,7 +149,13 @@ function load(raw, now) {
   return {
     fullness: num(raw.fullness, base.fullness),
     happiness: num(raw.happiness, base.happiness),
-    energy: num(raw.energy, base.energy),
+    // Floored on the way in. Every pet that ran the old rule has this at or
+    // near zero - it fell 6 an hour for as long as the machine was in use and
+    // only sleeping put any back - and with the new one it would climb out at 4
+    // an hour, so the fix alone would leave those pets asleep for another five
+    // hours. Under the current rules energy is only spent by playing, so
+    // restarting to a pet that has had a rest is both harmless and about right.
+    energy: Math.max(num(raw.energy, base.energy), TIRED_FLOOR),
     bond: num(raw.bond, base.bond),
     updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
     lastNagAt: Number.isFinite(raw.lastNagAt) ? raw.lastNagAt : 0,
@@ -164,7 +186,7 @@ function tick(state, now, { asleep = false } = {}) {
     fullness: clamp(state.fullness - DECAY.fullness * hours),
     happiness: clamp(state.happiness - DECAY.happiness * hours),
     energy: clamp(
-      state.energy + (asleep ? SLEEP_ENERGY_GAIN : -DECAY.energy) * hours
+      state.energy + (asleep ? SLEEP_ENERGY_GAIN : REST_ENERGY_GAIN) * hours
     ),
     // bond never decays - it is the relationship, not a need
     updatedAt: now,
@@ -802,7 +824,7 @@ module.exports = {
   line, greetKind, expressionFor, milestone, pokeStep, samePokeBout,
   sulking, offend, apologise, faceFor,
   spoke, heard, ignoreStep, gaveUp,
-  ACTIONS, DECAY, SLEEP_ENERGY_GAIN, MAX_DECAY_HOURS, NAG_INTERVAL_MS, CHATTER_INTERVAL_MS,
+  ACTIONS, DECAY, REST_ENERGY_GAIN, SLEEP_ENERGY_GAIN, MAX_DECAY_HOURS, NAG_INTERVAL_MS, CHATTER_INTERVAL_MS,
   LINES, SPECIES_LINES, EXPRESSIONS, FACES, BOND_TIERS, POKE_LADDER, POKE_WINDOW_MS,
   SORRY_GAP_MS, GRUDGE_MS, MAX_OWED,
   IGNORE_SAD, IGNORE_CROSS, IGNORE_QUIET, MAX_IGNORED, IGNORE_COST,

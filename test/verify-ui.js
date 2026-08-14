@@ -603,15 +603,38 @@ app.whenReady().then(async () => {
   await settle();
   check((await js(`flight === null`)) === true, 'a same-tick drag was measured as a throw');
 
-  // Placed by hand is remembered by the main process, and the pet stops
-  // wandering off on its own from that point.
+  // Placed by hand is remembered by the main process, and becomes the spot the
+  // pet wanders around and comes back to.
   check(!!ipc.place.length, 'placing the pet told main nothing, so it is forgotten on restart');
   const at = ipc.place.at(-1);
   check(
     at && at.x >= 0 && at.x <= 1 && at.y >= 0 && at.y <= 1,
     `the saved placement is not a pair of fractions: ${JSON.stringify(at)}`
   );
-  check((await js(`placed`)) === true, 'a hand-placed pet still wanders off on its own');
+  check((await js(`home !== null`)) === true, 'a hand-placed pet did not remember where home is');
+
+  // ...and it still moves. Twenty wanders from a parked pet: every one has to
+  // land near the spot you chose, and they must not all land on it, or it is
+  // furniture again.
+  const roamed = await js(`(() => {
+    const room = window.innerWidth - stage.offsetWidth;
+    const at = home.x * room;
+    const seen = [];
+    for (let i = 0; i < 20; i++) { wanderTo(); seen.push(Math.abs(stageX - at) / (room || 1)); }
+    return { seen, roam: ROAM };
+  })()`);
+  check(
+    roamed.seen.every((d) => d <= roamed.roam + 0.001),
+    `a parked pet wandered ${Math.max(...roamed.seen).toFixed(2)} of the room from home`
+  );
+  check(
+    roamed.seen.some((d) => d > 0.01),
+    'a parked pet never moves at all, which is the thing being fixed'
+  );
+  check(
+    roamed.seen.some((d) => d < 0.001),
+    'a parked pet never comes back to the spot you chose'
+  );
 
   win.setSize(520, 300);
   await settle();
