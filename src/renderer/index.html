@@ -46,6 +46,10 @@
         <div id="cam" class="cam" hidden title="camera on"></div>
         <svg viewBox="0 0 120 110" width="120" height="110" aria-hidden="true">
           <ellipse class="shadow" cx="60" cy="102" rx="34" ry="6" />
+
+          <!-- Everything except the shadow turns with the cursor. The shadow
+               stays where it is, because the floor does not turn. -->
+          <g class="turn">
           <!-- Behind the body on purpose: a tail drawn in front looks stuck on. -->
           <path class="tail" d="" />
           <path class="crest" d="" />
@@ -142,6 +146,7 @@
               <rect class="can" x="90" y="46" width="12" height="18" rx="4" />
             </g>
           </g>
+          </g>
         </svg>
 
         <!-- Widths are set from JS. Inline style attributes would need
@@ -163,6 +168,7 @@
 
     <!-- Before renderer.js, which calls into it. Both are classic scripts, so
          what this declares at the top level is what the other one can see. -->
+    <script src="lighting.js"></script>
     <script src="voices.js"></script>
     <script src="renderer.js"></script>
   </body>

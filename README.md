@@ -96,6 +96,35 @@ one place. The settings swatch paints itself from the same three off its own
 never names a skin, because the version of this that hardcoded four swatch
 colours is exactly how a skin ships as a colourless circle.
 
+### Lit, not drawn
+
+The shapes are flat paths and stay flat paths, and the pet is not flat. What
+makes something look solid on a screen is light rather than geometry, so the
+geometry is left alone and a light is put on it: the shape's own alpha, blurred,
+is the surface; that surface is lit; the result goes back over the colour. It is
+an SVG filter, in [lighting.js](src/renderer/lighting.js), and because it works
+off the alpha it applies to **any** shape — ten species, every outfit, and
+whatever the next one is, all round without anybody drawing a highlight on
+anything.
+
+One light, up and to the left, for every pet on the screen. Two pets lit from two
+directions is the thing that reads as wrong. The shadow underneath is blurred
+rather than a hard ellipse — a hard one is a sticker, a soft one is contact, and
+contact is most of what says the pet is standing on something.
+
+The head **turns towards the cursor**, a few degrees on both axes. Nothing in a
+still frame; most of what makes it read as an object in a room rather than a
+picture of one. Everything except the shadow is inside that group, because the
+floor does not turn.
+
+Every document that draws a pet loads the same file — the pet window, the
+settings previews and the demo stage — so a preview cannot be lit differently
+from the thing it is previewing.
+
+The alternative was a real mesh: ten models, forty faces and nine outfits
+rebuilt in 3D, and no artist. This is one filter, and the whole rig below it
+still works.
+
 Every species keeps the **same face rig**: same classes, same coordinates. Only
 ears, body outline and extras (tail, crest, whiskers) change. That is the whole
 trick — all thirty-nine expressions work on all ten pets without a single extra
@@ -1145,7 +1174,8 @@ src/
                 gets
   system/mac/   the macOS half - one Swift helper and one AppleScript
   renderer/     the pet itself - one HTML file, one settings window, the SVG
-                bodies in pets.css and the voices in voices.js
+                bodies in pets.css, how they are lit in lighting.js and the
+                voices in voices.js
 test/           test.js is node-only and fast; verify-ui.js boots real windows
 assets/         icon.png, the tray and window icon
 build/          the installer icon, and the script that turns TERMS.md into the

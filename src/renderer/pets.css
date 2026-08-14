@@ -25,12 +25,23 @@
 
 /* ---- ink ---- */
 
+/* Where lighting.js puts the filters. It holds no pet and must take up no room;
+   display:none would make Chromium drop the filters with it. */
+#pet-lighting { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* Lit rather than flat - see lighting.js, which every document that draws a pet
+   loads. It works off the shape's own alpha, so a new species arrives round
+   without anybody drawing a highlight on it. */
+.body, .ear, .tail, .crest { filter: url(#pet-volume); }
+
 .body   { fill: var(--body); }
 .ear    { fill: var(--ear); }
 .eye    { fill: #3a2c1e; }
 .glint  { fill: #fff; }
 .cheek  { fill: var(--cheek); opacity: 0.55; }
-.shadow { fill: #000; opacity: 0.16; }
+/* Blurred, and darker to pay for the blur: a hard ellipse reads as a sticker
+   under the pet, a soft one reads as the pet touching the floor. */
+.shadow { fill: #000; opacity: 0.26; filter: url(#pet-soft); }
 .mouth  { fill: none; stroke: #3a2c1e; stroke-width: 2.6; stroke-linecap: round; }
 .lids   { display: none; stroke: #3a2c1e; stroke-width: 2.6; stroke-linecap: round; }
 

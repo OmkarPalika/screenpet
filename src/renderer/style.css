@@ -182,6 +182,16 @@ html, body {
 /* The gaze follows the cursor and the blink squashes the eyes. Both want the
    transform property, and an animation wins it outright, so they live on
    separate elements rather than fighting. */
+/* The head turns towards what it is looking at. A few degrees of it, which is
+   nothing in a still frame and most of what makes the thing read as an object
+   in a room rather than a picture of one. Everything but the shadow is inside
+   .turn, and the movements animate the svg above it, so the two never fight. */
+.turn {
+  transform-origin: 60px 62px;
+  transform: perspective(260px) rotateY(var(--turn-y, 0deg)) rotateX(var(--turn-x, 0deg));
+  transition: transform 260ms cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+
 /* Slightly past the target and back. An eye that arrives at exactly the right
    place and stops dead is a servo; the overshoot is what reads as a glance. */
 .gaze {
