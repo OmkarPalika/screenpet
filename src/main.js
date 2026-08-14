@@ -27,6 +27,26 @@ const pets = require('./core/pet-state');
 const skills = require('./core/skills');
 const config = require('./core/settings');
 
+// One pet. Launching it again - from the Start menu, or the installer's "run
+// when finished" landing on top of a copy already in the tray - shows the one
+// that is there rather than booting a rival with a second tray icon, a second
+// set of timers and a losing bid for the hotkey.
+//
+// app.exit rather than app.quit: quit fires will-quit, which writes pet.json,
+// and this instance has no state loaded. The loser would blank the winner's
+// save on the way out.
+//
+// The smoke check is exempt. It answers once and exits, and having it depend on
+// whether the tray copy happens to be running makes it useless as a check.
+if (!process.env.SCREENPET_SMOKE && !app.requestSingleInstanceLock()) app.exit(0);
+
+app.on('second-instance', () => {
+  // Only ever shows. Toggling would hide the pet of somebody who just asked to
+  // see it - and togglePet already handles a window that is gone, and already
+  // gets the quiet-hours override right for a pet asked for by hand.
+  if (!win || win.isDestroyed() || !win.isVisible()) togglePet();
+});
+
 // Outside src/, but still inside the asar - Electron's patched fs reads it from
 // in there, so unlike the PowerShell scripts an icon needs no asarUnpack.
 const ASSETS = path.join(__dirname, '..', 'assets');

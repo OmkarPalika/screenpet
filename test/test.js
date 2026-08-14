@@ -2571,6 +2571,30 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.deepStrictEqual(stray, [], 'PowerShell scripts outside src/system are packed into the asar unreadable');
   }
 
+  // --- one pet per machine ---
+  {
+    const mjs = require('fs').readFileSync('./src/main.js', 'utf8');
+
+    // Found by installing the app and watching two copies run: the installer's
+    // "run when finished" and one Start menu click is all it takes, and two
+    // pets means two tray icons and a hotkey the second one loses.
+    assert.ok(mjs.includes('app.requestSingleInstanceLock()'), 'nothing stops a second copy of the pet');
+    assert.ok(mjs.includes("app.on('second-instance'"), 'a second launch does nothing at all instead of showing the pet');
+
+    // The loser must not run will-quit. That handler writes pet.json, and an
+    // instance that quit before whenReady has no state to write - it would
+    // blank the running pet's save on its way out.
+    const guard = mjs.match(/requestSingleInstanceLock\(\)\)\s*app\.(\w+)/);
+    assert.ok(guard, 'the lock is taken but nothing acts on losing it');
+    assert.strictEqual(guard[1], 'exit', 'the losing instance quits, which fires will-quit and blanks pet.json');
+
+    // Show, never toggle: a second launch is somebody asking to see the pet.
+    assert.ok(
+      /second-instance[\s\S]{0,400}!win\.isVisible\(\)\) togglePet\(\)/.test(mjs),
+      'a second launch can hide the pet of somebody who just asked for it'
+    );
+  }
+
   // --- the paperwork actually ships, and the installer shows the real terms ---
   {
     const fs = require('fs');
