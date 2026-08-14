@@ -333,7 +333,13 @@ function step(ctx, when = ctx.currentTime) {
   const a = parts(ctx, out, when, FEELINGS.neutral);
   // Noise rather than a tone: a footfall has no pitch, and giving it one turns
   // the pet into a xylophone by the fourth step.
-  a.noise({ dur: 0.035, peak: 0.13, low: 900, high: 160 });
+  //
+  // 0.34 rather than the 0.13 it shipped with. A band this narrow throws most of
+  // the noise away, and what came out peaked at 0.0033 - above the measuring
+  // floor and below anything a person would notice beside a voice at 0.7. Steps
+  // you cannot hear are the feature not existing, and it sat close enough to the
+  // threshold that the check passed or failed on which random noise it got.
+  a.noise({ dur: 0.035, peak: 0.34, low: 900, high: 160 });
   return a.end;
 }
 

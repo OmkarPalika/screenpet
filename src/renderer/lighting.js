@@ -25,6 +25,11 @@ const LIGHT = { x: 24, y: 4, z: 58 };
 // bevel; past about 9 the pet reads as a balloon rather than a body.
 const BEVEL = 6;
 
+// How much of the pet's own colour survives with no light on it at all. The
+// light in a room does not come only from the lamp, and a pet that goes pitch
+// black the moment the lamp is behind it reads as a bug rather than as shading.
+const AMBIENT = 0.45;
+
 const DEFS = `
 <filter id="pet-volume" x="-25%" y="-25%" width="150%" height="150%">
   <!-- The shape's own alpha, blurred, is the surface to light. -->
@@ -36,6 +41,16 @@ const DEFS = `
                      lighting-color="#fff" result="shade">
     <fePointLight x="${LIGHT.x}" y="${LIGHT.y}" z="${LIGHT.z}" />
   </feDiffuseLighting>
+  <!-- The rest of the room. Without it, the moment the light swings behind the
+       pet - which is exactly what happens halfway through a spin - the multiply
+       has nothing to multiply by and the pet turns into a silhouette. Nothing
+       real does that: a toy on a desk with the lamp behind it is dark on this
+       side, not absent. AMBIENT is the floor under the shading. -->
+  <feComponentTransfer in="shade" result="shade">
+    <feFuncR type="linear" slope="${1 - AMBIENT}" intercept="${AMBIENT}" />
+    <feFuncG type="linear" slope="${1 - AMBIENT}" intercept="${AMBIENT}" />
+    <feFuncB type="linear" slope="${1 - AMBIENT}" intercept="${AMBIENT}" />
+  </feComponentTransfer>
   <feComposite in="shade" in2="SourceAlpha" operator="in" result="shade" />
   <feBlend in="SourceGraphic" in2="shade" mode="multiply" result="lit" />
 
@@ -55,6 +70,64 @@ const DEFS = `
   <feGaussianBlur in="SourceGraphic" stdDeviation="2.6" />
 </filter>
 `;
+
+// The middle of the pet in its own viewBox, which is the axis every turn in
+// style.css goes round.
+const CENTRE_X = 60;
+
+/**
+ * Where the light is once the pet has turned this far.
+ *
+ * The filter is applied in the pet's own coordinates, before the CSS transform,
+ * so a highlight painted on the shape turns with it. That is exactly what a
+ * sticker does, and it is what gave the spin away: halfway round the pet is
+ * mirrored and the bright side is the side facing away from the lamp.
+ *
+ * A real object keeps its highlight where the lamp is. So the shape is left to
+ * rotate and the light is rotated the other way about the same axis:
+ *
+ *   x' = cx + dx·cosθ + z·sinθ
+ *   z' =      -dx·sinθ + z·cosθ
+ *
+ * The part that sells it falls out for free. Past a quarter turn z' goes
+ * negative, which is the lamp being behind the pet, and the side you are looking
+ * at goes dark on its own.
+ */
+function lightFor(deg) {
+  const t = (deg * Math.PI) / 180;
+  const dx = LIGHT.x - CENTRE_X;
+  return {
+    x: CENTRE_X + dx * Math.cos(t) + LIGHT.z * Math.sin(t),
+    z: -dx * Math.sin(t) + LIGHT.z * Math.cos(t),
+  };
+}
+
+/** Put the light where the lamp is, given how far the pet has turned. */
+function aimLight(deg, doc = document) {
+  const at = lightFor(deg);
+  for (const el of doc.querySelectorAll('#pet-volume fePointLight')) {
+    el.setAttribute('x', at.x.toFixed(1));
+    el.setAttribute('z', at.z.toFixed(1));
+  }
+}
+
+/**
+ * How far something has been turned about the vertical axis, read back out of
+ * its computed transform.
+ *
+ * Read rather than counted, so it cannot drift out of step with the stylesheet:
+ * the duration, the easing and the number of turns all live in style.css, and
+ * re-implementing any of them here would put the light a little behind the body
+ * on every frame. m11 is the cosine and m31 the sine - measured rather than
+ * reasoned about, because both conventions are defensible and only one is
+ * Chromium's.
+ */
+function turnedBy(el) {
+  const t = getComputedStyle(el).transform;
+  if (!t || t === 'none') return 0;
+  const m = new DOMMatrixReadOnly(t);
+  return (Math.atan2(m.m31, m.m11) * 180) / Math.PI;
+}
 
 /**
  * Put the filters in a document. A zero-sized svg holding nothing but defs:
@@ -76,7 +149,7 @@ function installLighting(doc = document) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { DEFS, LIGHT, BEVEL, installLighting };
+  module.exports = { DEFS, LIGHT, BEVEL, CENTRE_X, lightFor, aimLight, turnedBy, installLighting };
 } else if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => installLighting());
 } else {

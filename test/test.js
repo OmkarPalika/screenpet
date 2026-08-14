@@ -2808,6 +2808,38 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       'without this Windows lies about every coordinate on a scaled display');
   }
 
+  // --- a pet that turns rather than a sticker that spins ---
+  {
+    const lit = require('../src/renderer/lighting');
+
+    // Standing still, the lamp is where it always was.
+    const still = lit.lightFor(0);
+    assert.strictEqual(Math.round(still.x), lit.LIGHT.x);
+    assert.strictEqual(Math.round(still.z), lit.LIGHT.z);
+
+    // Halfway round, the pet is mirrored - so the lamp has to be the same
+    // distance the other side of its middle, or the bright side is the side
+    // facing away from it. This is the whole reason the spin looked flat.
+    const half = lit.lightFor(180);
+    assert.strictEqual(
+      Math.round(half.x - lit.CENTRE_X),
+      lit.CENTRE_X - lit.LIGHT.x,
+      'halfway through a turn the light is still on the side it started'
+    );
+
+    // ...and behind. Past a quarter turn the lamp is on the far side of the pet
+    // and the face you are looking at goes dark on its own, which is the part
+    // that reads as solid rather than as a picture being rotated.
+    assert.ok(half.z < 0, 'the light never goes behind the pet, so it never shades');
+    assert.ok(lit.lightFor(90).z > 0, 'the light is behind the pet at a quarter turn');
+
+    // Back where it started after a full turn, or every spin leaves the pet lit
+    // slightly differently than the last one did.
+    const round = lit.lightFor(360);
+    assert.ok(Math.abs(round.x - lit.LIGHT.x) < 0.01 && Math.abs(round.z - lit.LIGHT.z) < 0.01,
+      'a full turn does not put the light back where it was');
+  }
+
   // --- noticing you move between windows ---
   {
     const win = require('../src/system/window');

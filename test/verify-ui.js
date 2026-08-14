@@ -859,6 +859,98 @@ app.whenReady().then(async () => {
   // The feeling reaches the chirps too: the same words, said miserably, are slower.
   check(chirps.sad.ms > chirps.long.ms, 'a miserable pet chirps exactly like a cheerful one');
 
+  // --- the voice, put through robot.js --------------------------------------
+  // Real audio out of the real speech engine, through the real chain. A synthetic
+  // tone would prove the graph connects and nothing else; what matters is what
+  // happens to a voice, and a voice is the one input that is easy to get hold of.
+  const spoken = await require('../src/system/voice').say(
+    'Hello! I am your desktop pet and I have been reading your screen.', -2
+  );
+  require('../src/system/voice').stop();
+
+  if (!spoken) {
+    check(process.platform !== 'win32', 'the speech engine returned no audio on Windows');
+  } else {
+    const heard = await js(`(async () => {
+      const bytes = Uint8Array.from(atob(${JSON.stringify(spoken)}), (c) => c.charCodeAt(0));
+      // 44100 to match everything else here; the WAV itself is 22050 and
+      // decodeAudioData resamples it.
+      const measure = async (make, seconds) => {
+        const off = new OfflineAudioContext(1, Math.round(44100 * seconds), 44100);
+        const buffer = await off.decodeAudioData(bytes.slice().buffer);
+        make(off, buffer);
+        const d = (await off.startRendering()).getChannelData(0);
+        let peak = 0, sum = 0, voiced = 0;
+        // A coarse shape, the same trick the species calls use: two chains that
+        // fill these bins identically are doing the same thing to the sound.
+        const N = 24, span = d.length / N, bins = new Array(N).fill(0);
+        for (let i = 0; i < d.length; i++) {
+          const v = Math.abs(d[i]);
+          if (v > peak) peak = v;
+          sum += d[i] * d[i];
+          if (v > 0.002) voiced++;
+          bins[Math.min(N - 1, Math.floor(i / span))] += d[i] * d[i];
+        }
+        return {
+          peak, rms: Math.sqrt(sum / d.length), ms: Math.round((voiced / 44100) * 1000),
+          shape: bins.map((x) => Math.round(Math.sqrt(x / span) * 10000)).join(','),
+        };
+      };
+
+      // Everything the chain does.
+      const done = await measure((off, buffer) => robot(off, buffer), 8);
+      // The same audio played the same speed with nothing done to it, as the
+      // thing to compare against.
+      const raw = await measure((off, buffer) => {
+        const s = off.createBufferSource();
+        s.buffer = buffer; s.playbackRate.value = SPEED; s.connect(off.destination); s.start();
+      }, 8);
+      // How much of each is below the low cut. The chain takes the chest out of
+      // the voice, and this is the measurement that says whether it did.
+      // Two lowpasses, for the same reason the chain has two highpasses: one
+      // biquad slopes so gently that "under 170" measures a good deal of the
+      // voice above it, and both signals then look similar whatever the chain
+      // did.
+      const under = async (make) => (await measure((off, buffer) => {
+        const cut = off.createBiquadFilter();
+        cut.type = 'lowpass'; cut.frequency.value = 170;
+        const cut2 = off.createBiquadFilter();
+        cut2.type = 'lowpass'; cut2.frequency.value = 170;
+        cut.connect(cut2); cut2.connect(off.destination);
+        make(off, buffer, cut);
+      }, 8)).rms;
+      const lowDone = await under((off, buffer, cut) => robot(off, buffer, cut));
+      const lowRaw = await under((off, buffer, cut) => {
+        const s = off.createBufferSource();
+        s.buffer = buffer; s.playbackRate.value = SPEED; s.connect(cut); s.start();
+      });
+
+      return { done, raw, lowDone, lowRaw, seconds: robot(new OfflineAudioContext(1, 4410, 44100), await new OfflineAudioContext(1, 4410, 44100).decodeAudioData(bytes.slice().buffer)).seconds };
+    })()`);
+
+    check(heard.done.peak > 0.01, `the pet's voice makes no sound: peak ${heard.done.peak.toFixed(4)}`);
+    check(heard.done.peak < 1, `the pet's voice clips: peak ${heard.done.peak.toFixed(3)}`);
+    // Something has to come out of it. Identical shapes mean the chain is wired
+    // but doing nothing, which is the failure that would ship silently.
+    check(heard.done.shape !== heard.raw.shape, 'the filter chain left the voice exactly as it was');
+    // The chest, gone. A small machine has a small speaker, and this is most of
+    // what makes it read as one rather than as a person with a filter on.
+    //
+    // As a share of each signal rather than as raw energy. The chain is louder
+    // than what went into it - the soft clip lifts everything quiet - so
+    // comparing the two low bands directly compares the volumes and reported
+    // that a pair of 24dB filters had added bass.
+    const shareDone = heard.lowDone / heard.done.rms;
+    const shareRaw = heard.lowRaw / heard.raw.rms;
+    check(
+      shareDone < shareRaw * 0.6,
+      `the low end survived the chain: ${shareDone.toFixed(4)} of it against ${shareRaw.toFixed(4)}`
+    );
+    // Still a sentence, not a chipmunk: the line is synthesised slow and played
+    // back fast, and the two together have to come out near the original length.
+    check(heard.done.ms > 1000, `the voice lasts ${heard.done.ms}ms, which is not a sentence`);
+  }
+
   // The two noises the pet's body makes rather than its voice. Measured the same
   // way as everything else here: a footfall that renders as silence is a walk
   // with nothing under it, and a thud that clips is worse than no thud.
@@ -1056,6 +1148,42 @@ app.whenReady().then(async () => {
       box.append(cell);
     }
   }`);
+
+  // --- the spin turns rather than revolves -----------------------------------
+  // A rotateY on a flat shape with a highlight painted on it is a sticker on a
+  // turntable: halfway round, the pet is mirrored and the bright side is the one
+  // facing away from the lamp. The light has to move the other way, and this is
+  // whether it actually does while the animation is running.
+  const turned = await js(`(async () => {
+    const pet = document.getElementById('pet');
+    const svg = pet.querySelector('svg');
+    const lightX = () => Number(document.querySelector('#pet-volume fePointLight').getAttribute('x'));
+    const before = lightX();
+    pet.dataset.move = 'spin';
+    requestAnimationFrame(function again() {
+      if (!pet.dataset.move) return;
+      aimLight(turnedBy(svg));
+      requestAnimationFrame(again);
+    });
+    // Sampled across a whole turn rather than at one moment: the light passing
+    // through where it started is not the same as it never having moved.
+    const seen = [];
+    for (let i = 0; i < 24; i++) {
+      await new Promise((r) => setTimeout(r, 26));
+      seen.push({ deg: turnedBy(svg), x: lightX() });
+    }
+    delete pet.dataset.move;
+    aimLight(0);
+    return { before, seen, after: lightX() };
+  })()`);
+
+  const swung = turned.seen.filter((s) => s.x > 60);
+  check(swung.length > 0, 'the light never crossed to the far side during a turn');
+  check(
+    Math.max(...turned.seen.map((s) => s.x)) - Math.min(...turned.seen.map((s) => s.x)) > 60,
+    'the light barely moved while the pet turned, so the spin is still a sticker'
+  );
+  check(turned.after === turned.before, 'the pet is lit differently after a spin than before one');
 
   // Movements are time-based, so unlike the faces they show nothing at all in a
   // still. Each is caught partway through instead: a negative delay seeks into

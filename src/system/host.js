@@ -75,6 +75,16 @@ const CAPABILITIES = {
     on: { win32: () => [PWSH, psArgs('wake.ps1')] },
     why: 'I cannot listen for my name on this system!',
   },
+  // The pet's voice as audio rather than as sound, so it can be put through a
+  // filter chain and come out with some character. A host without this is not
+  // mute: the renderer falls back to SpeechSynthesis, which is what every
+  // version of this app used until now.
+  say: {
+    on: {
+      win32: () => [PWSH, psArgs('say.ps1')],
+    },
+    why: 'I can only talk in the plain system voice on this system!',
+  },
   media: {
     on: {
       win32: () => [PWSH, psArgs('media.ps1')],
