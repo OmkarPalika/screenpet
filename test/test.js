@@ -1636,6 +1636,62 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   });
   assert.strictEqual(await ask('What is 17 * 23?', { fetch: ok }), '391.');
 
+  // --- the answer as it is written ---
+  {
+    // Ollama streams newline-delimited JSON, one object per token. The chunks
+    // here deliberately split a JSON object across two of them and put two
+    // objects in one: that is what a socket actually hands you, and a parser
+    // that assumes one line per chunk works perfectly until it does not.
+    const NL = String.fromCharCode(10); // a real newline, not one this file has to hold
+    const pieces = [
+      '{"response":"<think>the user',
+      ' wants 17 times 23","done":false}' + NL + '{"response":" which is 391</think>","done":false}' + NL,
+      '{"response":"391","done":false}' + NL,
+      '{"response":". Seventeen","done":false}' + NL + '{"response":" twenty-thirds of nothing.","done":true}' + NL,
+    ];
+    const streamed = async (_url, init) => {
+      body = JSON.parse(init.body);
+      return {
+        ok: true,
+        body: new ReadableStream({
+          start(c) {
+            for (const p of pieces) c.enqueue(new TextEncoder().encode(p));
+            c.close();
+          },
+        }),
+      };
+    };
+    let body = null;
+    const seen = [];
+    const answer = await ask('What is 17 * 23?', { fetch: streamed, onToken: (t) => seen.push(t) });
+
+    assert.strictEqual(body.stream, true, 'a listener was given but nothing was streamed');
+    assert.strictEqual(answer, '391. Seventeen twenty-thirds of nothing.');
+
+    // The default model is a reasoner and narrates its whole approach first.
+    // Not one character of that may reach the bubble - showing it live is the
+    // exact thing stripThinking exists to prevent, and the bubble is on the
+    // thinking face during it anyway.
+    for (const shown of seen) {
+      assert.ok(!/think|wants 17/.test(shown), `the monologue reached the screen: ${shown}`);
+    }
+    // It arrived in pieces rather than in one go, and each piece is a prefix of
+    // the one after it - text that rewrites itself mid-sentence reads as a bug.
+    assert.ok(seen.length >= 2, `nothing was streamed: ${JSON.stringify(seen)}`);
+    for (let i = 1; i < seen.length; i++) {
+      assert.ok(seen[i].startsWith(seen[i - 1]), `the bubble rewrote itself: ${seen[i - 1]} -> ${seen[i]}`);
+    }
+    assert.strictEqual(seen.at(-1), '391. Seventeen twenty-thirds of nothing.');
+
+    // No listener, no streaming: one response is less to go wrong, and the
+    // hosted providers cannot stream at all.
+    let asked = null;
+    await ask('What is 17 * 23?', {
+      fetch: async (_u, init) => { asked = JSON.parse(init.body); return { ok: true, json: async () => ({ response: 'x' }) }; },
+    });
+    assert.strictEqual(asked.stream, false, 'streamed with nobody listening');
+  }
+
   // Blank screen must not cost an inference call.
   let called = false;
   const spy = async () => { called = true; return ok(); };
@@ -1793,6 +1849,48 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // The whole point of this path is that nothing was captured, and a small model
   // will happily invent a screen if it is not told otherwise.
   assert.ok(/cannot see/i.test(buildChatPrompt('hi')), 'chat prompt lets the pet pretend it can see');
+
+  // --- following up on what it just read ---
+  {
+    const seen = 'Question 4. Which of these is a mammal? A) shark B) dolphin';
+    const after = buildChatPrompt('what about the second one?', { screen: { text: seen } });
+
+    assert.ok(after.includes(seen), 'the screen it just read is not in the follow-up prompt');
+    // It must not claim both. A pet that says it cannot see your screen one
+    // line after answering a question about it is worse than one that never
+    // could, and the model will happily say whichever the prompt tells it to.
+    assert.ok(!/cannot see/i.test(after), 'the pet is told it cannot see a screen it just read');
+    assert.ok(/follow-up|read their screen/i.test(after), 'nothing tells it what the screen text is for');
+
+    // Empty is the same as absent. A screen read that came back with nothing
+    // must not put an empty block in the prompt and take the honest sentence out.
+    for (const nothing of [null, { text: '' }, { text: '   ' }, {}]) {
+      const none = buildChatPrompt('hi', { screen: nothing });
+      assert.ok(/cannot see/i.test(none), `${JSON.stringify(nothing)} counted as a screen`);
+    }
+
+    // Capped, or a full screen of text crowds out the conversation it is
+    // supposed to be context for.
+    const huge = buildChatPrompt('hi', { screen: { text: 'x'.repeat(5000) } });
+    assert.ok(huge.length < 3000, `a whole screen went into the prompt: ${huge.length} chars`);
+  }
+
+  // main.js holds that screen in memory only, drops it when it goes stale, and
+  // must drop it when told to forget - a pet that says it forgot everything and
+  // then quotes your screen back has not.
+  {
+    const mjs = require('fs').readFileSync('./src/main.js', 'utf8');
+    assert.ok(/lastScreen = .*redact\(/s.test(mjs), 'the kept screen text is not redacted');
+    assert.ok(/SCREEN_MEMORY_MS/.test(mjs), 'the kept screen never goes stale');
+    assert.ok(
+      (mjs.match(/lastScreen = null/g) || []).length >= 2,
+      'forgetting everything, or switching memory off, leaves the screen in hand'
+    );
+    assert.ok(
+      !/writeJson\([^)]*lastScreen/.test(mjs),
+      'the screen it read is being written to disk'
+    );
+  }
 
   // Empty input must not wake the model up at all.
   let chatCalled = false;
@@ -2624,6 +2722,62 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       'the placement is dropped by the next tick');
     assert.deepStrictEqual(pets.act(placed, 'feed', now + 1000).state.place, { x: 0.4, y: 0.2 },
       'feeding the pet forgets where it is standing');
+  }
+
+  // --- reading the window rather than the wall ---
+  {
+    const win = require('../src/system/window');
+    const display = { bounds: { x: 0, y: 0 }, scaleFactor: 1.25 };
+    const image = { width: 1920, height: 1080 };
+    const crop = (r, d = display, i = image) => win.cropFor(r, d, i);
+
+    // The ordinary case: a window somewhere on the screen, cropped to it.
+    assert.deepStrictEqual(
+      crop({ x: 100, y: 50, w: 800, h: 600 }),
+      { x: 100, y: 50, width: 800, height: 600 }
+    );
+
+    // Every one of these means "read the whole screen", which is what this app
+    // did before there was a crop at all. None of them is an error.
+    assert.strictEqual(crop(null), null, 'no window rectangle still tried to crop');
+    assert.strictEqual(crop({ x: -9, y: -9, w: 1938, h: 1098 }), null,
+      'cropped to a maximised window, which gains nothing and can lose an edge');
+    assert.strictEqual(crop({ x: 10, y: 10, w: 260, h: 150 }), null,
+      'cropped to a dialog too small to hold a question');
+    assert.strictEqual(crop({ x: 1800, y: 10, w: 900, h: 700 }), null,
+      'cropped to the sliver of a window that is mostly on the other monitor');
+    assert.strictEqual(crop({ x: 4000, y: 0, w: 800, h: 600 }), null,
+      'cropped to a window that is not on this display at all');
+
+    // The second monitor, whose origin is not zero. Getting this wrong crops
+    // the right size from the wrong place, which looks like the model has
+    // started answering about somebody else's screen.
+    assert.deepStrictEqual(
+      crop({ x: 2020, y: 60, w: 800, h: 600 }, { bounds: { x: 1536, y: 0 }, scaleFactor: 1.25 }),
+      { x: 100, y: 60, width: 800, height: 600 }
+    );
+
+    // A window half off the left edge is clipped rather than refused - the part
+    // you can see is the part you were reading.
+    assert.deepStrictEqual(
+      crop({ x: -200, y: 100, w: 1000, h: 700 }),
+      { x: 0, y: 100, width: 800, height: 700 }
+    );
+
+    // Windows only, and the sentence for everywhere else is a sentence.
+    const hostjs = require('../src/system/host');
+    assert.ok(hostjs.supports('window', 'win32'), 'the window rectangle is missing on Windows');
+    assert.ok(!hostjs.supports('window', 'darwin'), 'macOS claims a window rectangle it cannot get');
+    assert.ok(/^I .*!$/.test(hostjs.CAPABILITIES.window.why), 'the refusal is not something the pet can say');
+
+    // The script prints a rectangle and nothing else. A title or a process name
+    // would be the pet knowing which application you are in, which is not a
+    // thing it needs to crop a screenshot.
+    const ps1 = require('fs').readFileSync('./src/system/window.ps1', 'utf8');
+    assert.ok(!/GetWindowText|ProcessName|GetClassName/.test(ps1),
+      'the window script asks for more than a rectangle');
+    assert.ok(/SetProcessDPIAware/.test(ps1),
+      'without this Windows lies about every coordinate on a scaled display');
   }
 
   // --- eyes that are not a servo ---

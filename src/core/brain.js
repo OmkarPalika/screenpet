@@ -168,9 +168,20 @@ function buildVisionPrompt(mood = 'neutral') {
 const PERSONA =
   'You are a small friendly desktop pet, talking to the person whose computer you live on.';
 
-function buildChatPrompt(message, { mood = 'neutral', history = [], memory = [] } = {}) {
+// How much of the last screen read is carried into a typed conversation. Enough
+// for "what about the second one?" to mean something; not so much that the
+// screen crowds out what was actually said.
+const SCREEN_MEMORY = 700;
+
+function buildChatPrompt(message, { mood = 'neutral', history = [], memory = [], screen = null } = {}) {
   const tone = TONE[mood] || '';
   const notes = Array.isArray(memory) ? memory.filter((l) => typeof l === 'string') : [];
+  // What it read a moment ago, so a follow-up question about it is answerable.
+  // Redacted before it got here, and it goes stale on its own - see main.js.
+  // Trimmed before it is judged: a screen read that came back with nothing but
+  // whitespace is not a screen, and treating it as one would put an empty block
+  // in the prompt and take the honest "I cannot see it" sentence out with it.
+  const seen = screen ? String(screen.text || '').trim().slice(0, SCREEN_MEMORY) : '';
   return [
     PERSONA,
     'Talk the way a person talks out loud: contractions, plain words, nothing stiff.',
@@ -181,8 +192,15 @@ function buildChatPrompt(message, { mood = 'neutral', history = [], memory = [] 
     'tell, and never at their expense. If nothing is actually funny, skip it.',
     'No emoji, no asterisks, no narrated actions.',
     'If they ask you something factual, still answer it properly.',
-    'You cannot see their screen right now. If they ask what is on it, say so',
-    'plainly instead of guessing.',
+    // Either it has just read the screen or it has not, and it must not claim
+    // the other one. A pet that says it cannot see your screen right after
+    // answering a question about it is worse than one that never could.
+    ...(seen
+      ? ['You read their screen a moment ago and the text of it is below. Answer',
+         'follow-up questions about it from that text, and say so plainly if the',
+         'answer is not in it. Do not describe the screen unless they ask.']
+      : ['You cannot see their screen right now. If they ask what is on it, say so',
+         'plainly instead of guessing.']),
     ...(tone ? [tone] : []),
     // What the pet has been told to remember, and only what it was told. The
     // instruction is needed: without it a small model treats the notes as the
@@ -190,6 +208,7 @@ function buildChatPrompt(message, { mood = 'neutral', history = [], memory = [] 
     ...(notes.length
       ? ['', ...notes, 'Only mention these if they are actually relevant to what they just said.']
       : []),
+    ...(seen ? ['', '--- WHAT YOU READ ---', seen, '--- END ---'] : []),
     '',
     ...history.flatMap((h) => [`Them: ${h.you}`, `You: ${h.pet}`]),
     `Them: ${message}`,
@@ -209,6 +228,8 @@ async function chat(message, opts = {}) {
   // pasting a key into the chat box must not be how it ends up at OpenAI.
   const safe = opts.provider && !providers.isLocal(opts.provider) ? redact(text) : text;
   return generate({ model: opts.model || MODEL, prompt: buildChatPrompt(safe, opts) }, opts);
+  // opts carries onToken straight through, so a typed conversation fills in as
+  // it is written exactly as a screen answer does.
 }
 
 // Nothing to answer is not an error, and it is not this file's job to have a
@@ -291,12 +312,15 @@ async function generate(body, opts = {}) {
   const endpoint = opts.endpoint || OLLAMA;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs || TIMEOUT_MS);
+  // Streamed only when somebody is listening for the pieces. Without a listener
+  // there is nothing to show them to, and one response is less to go wrong.
+  const live = typeof opts.onToken === 'function';
   try {
     const res = await fetchImpl(`${endpoint}/api/generate`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        stream: false,
+        stream: live,
         keep_alive: KEEP_ALIVE,
         options: { num_ctx: NUM_CTX },
         ...body,
@@ -310,6 +334,10 @@ async function generate(body, opts = {}) {
       return `I do not have "${body.model}" yet.\nRun: ollama pull ${body.model}`;
     }
     if (!res.ok) throw new Error(`Ollama returned ${res.status}`);
+    if (live) {
+      const whole = await drink(res, opts.onToken);
+      return stripMarkup(unquote(stripEcho(stripThinking(whole))));
+    }
     const data = await res.json();
     // Empty means empty. The pet's own voice lives in pet-state's line bank, so
     // inventing a sentence here would put a second, blander personality in the
@@ -321,6 +349,62 @@ async function generate(body, opts = {}) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Read a streamed answer, handing each new piece to `onToken` as it arrives.
+ *
+ * Ollama streams newline-delimited JSON, one object per token, so a chunk off
+ * the socket is very often half an object - the buffer here is why a token
+ * split across two TCP packets does not throw away both halves of it.
+ *
+ * What is shown live is not what is accumulated. The default model is a
+ * reasoner: it narrates its whole approach inside <think> before it answers,
+ * and stripThinking drops an unterminated block outright, so the bubble stays
+ * on the thinking face until the monologue closes and then fills with the
+ * answer. Streaming the raw tokens would put the monologue on your screen,
+ * which is the one thing that file exists to prevent.
+ *
+ * unquote and stripEcho are deliberately not applied to the pieces. Both are
+ * decisions about a whole answer - a line vanishing halfway through being typed
+ * out reads as a bug - so they run once at the end.
+ *
+ * @returns {Promise<string>} everything the model said, uncleaned
+ */
+async function drink(res, onToken) {
+  const reader = res.body.getReader();
+  const decode = new TextDecoder();
+  let pending = '';
+  let whole = '';
+  let shown = '';
+
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    pending += decode.decode(value, { stream: true });
+    const lines = pending.split('\n');
+    pending = lines.pop(); // the last piece is whatever arrived incomplete
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      let piece;
+      try {
+        piece = JSON.parse(line);
+      } catch {
+        continue; // a line Ollama did not finish writing is not an error
+      }
+      if (piece.error) throw new Error(piece.error);
+      whole += piece.response || '';
+      const next = stripMarkup(stripThinking(whole));
+      // Only when it changed: while the model is still thinking every token
+      // leaves this identical, and telling the window so sixty times a second
+      // is work nobody sees.
+      if (next !== shown) {
+        shown = next;
+        onToken(next);
+      }
+    }
+  }
+  return whole;
 }
 
 /** Tier 1: OCR text. Works on any machine, no GPU. */

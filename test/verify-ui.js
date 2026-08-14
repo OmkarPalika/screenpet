@@ -859,6 +859,41 @@ app.whenReady().then(async () => {
   // The feeling reaches the chirps too: the same words, said miserably, are slower.
   check(chirps.sad.ms > chirps.long.ms, 'a miserable pet chirps exactly like a cheerful one');
 
+  // The two noises the pet's body makes rather than its voice. Measured the same
+  // way as everything else here: a footfall that renders as silence is a walk
+  // with nothing under it, and a thud that clips is worse than no thud.
+  const room = await js(`(async () => {
+    const render = async (make) => {
+      const off = new OfflineAudioContext(1, 44100, 44100);
+      make(off);
+      const d = (await off.startRendering()).getChannelData(0);
+      let peak = 0, voiced = 0;
+      for (let i = 0; i < d.length; i++) {
+        const v = Math.abs(d[i]);
+        if (v > peak) peak = v;
+        if (v > 0.002) voiced++;
+      }
+      return { peak, ms: Math.round((voiced / 44100) * 1000) };
+    };
+    return {
+      step: await render((c) => step(c)),
+      soft: await render((c) => thud(c, 0.2)),
+      hard: await render((c) => thud(c, 1)),
+    };
+  })()`);
+  for (const [name, n] of Object.entries(room)) {
+    check(n.peak > 0.004, `the ${name} makes no sound: peak ${n.peak.toFixed(4)}`);
+    check(n.peak < 1, `the ${name} clips: peak ${n.peak.toFixed(3)}`);
+  }
+  // A footfall is a tick, not a note. Eight of them go past in one walk.
+  check(room.step.ms <= 90, `a footstep lasts ${room.step.ms}ms, which is a drum`);
+  // Dropped two pixels and thrown across the screen must not sound the same.
+  // That they do is what gives away that neither of them is real.
+  check(
+    room.hard.peak > room.soft.peak * 1.8,
+    `a hard landing is no louder than a gentle one: ${room.hard.peak.toFixed(3)} vs ${room.soft.peak.toFixed(3)}`
+  );
+
   // End to end through the real bridge. A line the pet came up with itself moves
   // its mouth without handing anything to the platform synthesiser; an answer
   // you asked for is still spoken in words.

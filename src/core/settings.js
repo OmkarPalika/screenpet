@@ -51,6 +51,12 @@ const DEFAULTS = {
   // opens no device; on by default for the same reason the voice is, and muted
   // from the same tray menu.
   sounds: true,
+  // Read the window you are working in rather than the whole screen. On, because
+  // a wide monitor is an editor, a browser, a chat window and a taskbar shredded
+  // into one column of text, and the model has to work out which of it you
+  // meant. Falls back to the whole screen on its own whenever the crop would be
+  // a bad idea - see window.js, which owns every one of those judgements.
+  focus: true,
   // The microphone is opt-in and stays that way. A desktop pet that starts
   // listening because it shipped that way is not a pet, it is an incident.
   mic: false,
@@ -179,6 +185,7 @@ function load(raw) {
     wear: WEAR.includes(s.wear) ? s.wear : DEFAULTS.wear,
     voice: typeof s.voice === 'boolean' ? s.voice : DEFAULTS.voice,
     sounds: typeof s.sounds === 'boolean' ? s.sounds : DEFAULTS.sounds,
+    focus: typeof s.focus === 'boolean' ? s.focus : DEFAULTS.focus,
     // Anything but a literal true leaves these shut. A hand-edited "mic": "yes"
     // or a 1 left over from some other config format must not be the thing that
     // opens a microphone or a camera.

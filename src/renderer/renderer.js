@@ -250,6 +250,21 @@ const MOVES = Object.keys(MOVE_MS);
 
 let moveTimer = null;
 
+// The step cycle in style.css is 620ms long with a foot down at each end of it,
+// so a footfall lands every half cycle. Taken from there rather than guessed:
+// steps that drift out of time with the legs are worse than no steps.
+const STEP_MS = 310;
+let stepTimer = null;
+
+function footsteps(ms) {
+  clearInterval(stepTimer);
+  if (!soundsOn) return;
+  const ctx = audio();
+  step(ctx);
+  stepTimer = setInterval(() => step(ctx), STEP_MS);
+  setTimeout(() => clearInterval(stepTimer), ms - 40);
+}
+
 function move(name) {
   clearTimeout(moveTimer);
   if (!MOVE_MS[name]) { delete petEl.dataset.move; return; }
@@ -258,10 +273,21 @@ function move(name) {
   delete petEl.dataset.move;
   void petEl.offsetWidth;
   petEl.dataset.move = name;
+  if (name === 'walk') footsteps(MOVE_MS[name]);
   moveTimer = setTimeout(() => { delete petEl.dataset.move; }, MOVE_MS[name]);
 }
 
-window.pet.onSay(({ text, kind, expr, move: movement, chatter: chatty }) => {
+window.pet.onSay(({ text, kind, expr, move: movement, chatter: chatty, partial }) => {
+  // An answer arriving as it is written. The bubble fills; nothing else moves.
+  // No face, no noise, and above all nothing spoken - a voice restarting the
+  // sentence from the top on every token is unlistenable, and the words are not
+  // final until the model stops.
+  if (partial) {
+    busy = true;
+    petEl.classList.remove('is-thinking');
+    say(text, { kind, sticky: true });
+    return;
+  }
   busy = kind === 'thinking';
   petEl.classList.toggle('is-thinking', busy);
   // Thinking holds its face until the answer lands, so no timeout on it.
@@ -548,7 +574,8 @@ function fly(now) {
 
   setXY(flight.x, flight.top);
   petEl.style.transform = `rotate(${flight.spin.toFixed(1)}deg)`;
-  if (hit > REST) thump();
+  // Scaled by how hard it hit, against a speed that is a good hard throw.
+  if (hit > REST) thump(hit / 1800);
 
   // Settled: on the floor with nothing left. Checked after the bounce, so the
   // last little hop does not get one more frame of gravity added to it.
@@ -559,7 +586,8 @@ function fly(now) {
 /** The squash of hitting something. Its own class rather than a data-move, so a
  *  pet thrown mid-dance keeps dancing. */
 let thumpTimer = null;
-function thump() {
+function thump(force = 1) {
+  if (soundsOn) thud(audio(), force);
   clearTimeout(thumpTimer);
   petEl.classList.remove('is-thumped');
   void petEl.offsetWidth;
