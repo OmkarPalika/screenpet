@@ -12,8 +12,14 @@ const camera = el('camera');
 const wakeBox = el('wake');
 const bop = el('bop');
 const faces = el('faces');
+const network = el('network');
 const weather = el('weather');
 const city = el('city');
+const web = el('web');
+const providerSel = el('provider');
+const providerModel = el('provider-model');
+const apiKey = el('api-key');
+const keyStatus = el('key-status');
 const memoryBox = el('memory');
 const cheek = el('cheek');
 const status = el('status');
@@ -26,6 +32,10 @@ const ACCELERATOR = /^([A-Za-z0-9]+\+)*[A-Za-z0-9]+$/;
 let current = null;
 let skin = 'butter';
 let species = 'blob';
+let providerList = [];
+// Which providers have a key stored. Booleans - the main process never hands
+// one back, and there is no channel that could.
+let keysPresent = {};
 
 // The previews are drawn by the same stylesheet as the real pet, so they follow
 // the selected skin live and can never disagree with what you actually get.
@@ -101,14 +111,59 @@ function showVision(visionModel) {
 // The main process refuses these combinations anyway; greying them out here is
 // so the reason is visible before you save rather than after a checkbox quietly
 // fails to stick.
+function fillProviders(list, selected) {
+  providerList = list;
+  providerSel.replaceChildren();
+  for (const p of list) {
+    const opt = document.createElement('option');
+    opt.value = p.name;
+    opt.textContent = p.label;
+    providerSel.append(opt);
+  }
+  providerSel.value = selected;
+}
+
+const chosenProvider = () => providerList.find((p) => p.name === providerSel.value) || null;
+
+// What the provider choice actually means, said before you save rather than
+// after. The wording is blunt on purpose - this is the setting that changes
+// where the text read off your screen ends up.
+function showProvider() {
+  const p = chosenProvider();
+  const hint = el('provider-hint');
+  const local = !p || p.local;
+  hint.classList.toggle('warn', !local);
+  hint.textContent = local
+    ? 'Ollama, on this machine. Nothing about your screen leaves.'
+    : `The text read off your screen is sent to ${p.label}. It is redacted for keys,`
+      + ' tokens and card numbers first, but everything else on the screen goes as it'
+      + ` is. Diagrams stop working — a screenshot cannot be redacted, so it is never`
+      + ` uploaded.${p.keys ? ` Keys come from ${p.keys}.` : ''}`;
+
+  providerModel.placeholder = p && p.model ? p.model : '';
+  providerModel.disabled = local;
+  apiKey.disabled = local;
+  el('key-save').disabled = local;
+  el('key-clear').disabled = local || !keysPresent[providerSel.value];
+  keyStatus.textContent = local ? ''
+    : keysPresent[providerSel.value] ? 'A key is stored.' : 'No key stored yet.';
+}
+
 function gateDevices() {
   for (const [box, need] of [
     [wakeBox, mic], [bop, mic], [faces, camera], [cheek, memoryBox],
+    [weather, network], [web, network],
   ]) {
     box.disabled = !need.checked;
     if (!need.checked) box.checked = false;
   }
   city.disabled = !weather.checked;
+  // A hosted provider is one of the things the master switch gates, so turning
+  // the network off has to put the choice back to the local model here too -
+  // otherwise the select shows something the main process has already refused.
+  providerSel.disabled = !network.checked;
+  if (!network.checked) providerSel.value = 'ollama';
+  showProvider();
 }
 
 function validate() {
@@ -123,7 +178,31 @@ hotkeyInput.addEventListener('input', () => {
   status.textContent = '';
 });
 
-for (const box of [mic, camera, weather, memoryBox]) box.addEventListener('change', gateDevices);
+for (const box of [mic, camera, weather, memoryBox, network]) {
+  box.addEventListener('change', gateDevices);
+}
+providerSel.addEventListener('change', showProvider);
+
+// The key never round-trips: it is handed over, and the box is emptied whatever
+// happened next. What comes back is which providers have one.
+el('key-save').addEventListener('click', async () => {
+  const value = apiKey.value.trim();
+  if (!value) return;
+  keyStatus.textContent = 'Storing…';
+  const res = await window.config.setKey(providerSel.value, value);
+  apiKey.value = '';
+  if (res.ok) keysPresent = res.keys;
+  showProvider();
+  if (!res.ok) keyStatus.textContent = res.why;
+});
+
+el('key-clear').addEventListener('click', async () => {
+  const res = await window.config.clearKey(providerSel.value);
+  keysPresent = res.keys;
+  apiKey.value = '';
+  showProvider();
+  keyStatus.textContent = 'Key forgotten.';
+});
 
 saveBtn.addEventListener('click', async () => {
   if (!validate()) return;
@@ -140,8 +219,12 @@ saveBtn.addEventListener('click', async () => {
     wake: wakeBox.checked,
     bop: bop.checked,
     faces: faces.checked,
+    network: network.checked,
     weather: weather.checked,
     city: city.value.trim(),
+    web: web.checked,
+    provider: providerSel.value,
+    providerModel: providerModel.value.trim(),
     memory: memoryBox.checked,
     cheek: cheek.checked,
     autostart: autostart.checked,
@@ -159,6 +242,10 @@ saveBtn.addEventListener('click', async () => {
   faces.checked = current.faces;
   weather.checked = current.weather;
   city.value = current.city;
+  network.checked = current.network;
+  web.checked = current.web;
+  providerSel.value = current.provider;
+  providerModel.value = current.providerModel;
   memoryBox.checked = current.memory;
   cheek.checked = current.cheek;
   gateDevices();
@@ -173,6 +260,9 @@ el('close').addEventListener('click', () => window.config.close());
   skin = current.skin;
   species = current.pet;
 
+  keysPresent = data.keys || {};
+  fillProviders(data.providers || [{ name: 'ollama', label: 'Ollama — on this machine', local: true }],
+    current.provider);
   fillModels(data.models, current.model);
   fillPets(data.pets);
   fillSkins(data.skins);
@@ -198,6 +288,10 @@ el('close').addEventListener('click', () => window.config.close());
   faces.checked = current.faces;
   weather.checked = current.weather;
   city.value = current.city;
+  network.checked = current.network;
+  web.checked = current.web;
+  providerSel.value = current.provider;
+  providerModel.value = current.providerModel;
   memoryBox.checked = current.memory;
   cheek.checked = current.cheek;
   gateDevices();

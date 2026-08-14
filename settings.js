@@ -41,11 +41,28 @@ const DEFAULTS = {
   // cost as the wake word and the same rule: needs `mic`, ships off. Without it
   // the pet still dances when asked, opening the microphone only for the dance.
   bop: false,
-  // The only setting that sends anything to anyone. Off means the pet gives the
-  // refusal it always gave; on means a town name leaves this machine when you
-  // ask about the weather, and nothing else does. See weather.js.
+  // The master switch for everything that leaves this machine. Off - the
+  // default, and the point of the app - means the pet is sealed in: a local
+  // model, and every networked skill answers honestly that it cannot go out.
+  //
+  // On does not itself send anything. It unlocks the settings below, each of
+  // which is its own decision with its own switch. Turning this off turns all of
+  // them off in the same pass, which is what a master switch has to mean.
+  network: false,
+  // Needs `network`. A town name leaves when you ask about the weather, and
+  // nothing else does. See weather.js.
   weather: false,
   city: '',
+  // Needs `network`. The words you typed after "look up", and nothing else.
+  // See net.js.
+  web: false,
+  // Needs `network`. Which model answers: 'ollama' is this machine and is the
+  // default; anything else is a company, and the text read off your screen goes
+  // to them. See providers.js.
+  provider: 'ollama',
+  // Whatever you type wins over the provider's default, because model names go
+  // stale faster than this file will.
+  providerModel: '',
   // Face detection on the camera stream. Off by default, needs `camera` on, and
   // it answers "is there a face" - never whose. See faces.js.
   faces: false,
@@ -93,6 +110,24 @@ const str = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 // this is the only user-typed string in the app that reaches a server.
 const { cleanCity } = require('./weather');
 
+// Which hosted providers exist at all. The table is in providers.js with the
+// URLs; nothing here or in a settings file can add one.
+const { PROVIDERS } = require('./providers');
+
+// A model name, which goes straight into a request body and, for Gemini, into a
+// path segment. Kept to the characters real model names actually use so nothing
+// typed here can reshape a URL.
+function cleanModel(v) {
+  if (typeof v !== 'string') return null;
+  const flat = v.replace(/[^A-Za-z0-9._:/-]/g, '').trim();
+  // A slash is legitimate - NVIDIA names models "meta/llama-3.1-8b-instruct" -
+  // so a dot run is refused instead. providers.js also encodes the name before
+  // it goes anywhere near a path, which is the lock that actually holds; this is
+  // the second one.
+  if (flat.includes('..') || flat.startsWith('/') || flat.endsWith('/')) return null;
+  return flat.length >= 2 && flat.length <= 80 ? flat : null;
+}
+
 /** Anything unrecognised falls back to the default rather than being trusted. */
 function load(raw) {
   const s = raw && typeof raw === 'object' ? raw : {};
@@ -115,8 +150,18 @@ function load(raw) {
     // silently does nothing, and a face check without a camera is the same.
     wake: s.wake === true && s.mic === true,
     bop: s.bop === true && s.mic === true,
-    weather: s.weather === true,
+    // The master switch, and the three things it gates. Each still needs its own
+    // literal true, so switching the network on does not switch anything on -
+    // and switching it off takes all three down in one pass, here, rather than
+    // at each of the call sites that would otherwise have to remember.
+    network: s.network === true,
+    weather: s.weather === true && s.network === true,
     city: cleanCity(s.city) || DEFAULTS.city,
+    web: s.web === true && s.network === true,
+    // A provider that is not on the list, or one chosen with the network off,
+    // falls back to the local model rather than to nothing.
+    provider: s.network === true && PROVIDERS[s.provider] ? s.provider : DEFAULTS.provider,
+    providerModel: cleanModel(s.providerModel) || DEFAULTS.providerModel,
     faces: s.faces === true && s.camera === true,
     // These two default on, so the test is for a literal false rather than a
     // literal true. Nothing is opened either way; the worst a corrupt file can do

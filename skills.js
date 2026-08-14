@@ -14,8 +14,11 @@
 //   expr  - a face, when the default for the kind is wrong
 //   media - a media key for main to press (see KEYS in media.js)
 //   photo - true to ask the renderer for one camera frame
-//   weather - true if this needs the one networked feature, which main gates
+//   weather - true if this needs the weather service, which main gates
+//   lookup - a query for the web, which main gates the same way
 //   memory - { text, hour } to write down, { forget } to drop, or { list: true }
+//   bank  - a line bank in pet-state.js for main to pick from, instead of `say`
+//   follow - { bank, event } said a few seconds after the first line
 //
 // A skill may set `long: true` to opt out of the command length cap below.
 
@@ -302,6 +305,71 @@ const SKILLS = [
     }),
   },
 
+  {
+    name: 'lookup',
+    // Explicit lookup verbs only. "what is a closure" is emphatically not here:
+    // that is the model's job, and a skill that grabbed every "what is" would
+    // answer it from an encyclopedia with total confidence and no context.
+    match: (t) => !!LOOKUP.exec(t),
+    run: (text) => ({
+      // The refusal, which is what you get with the network switch off. main
+      // replaces it with an actual answer when the switch is on - skills.js
+      // cannot see the settings.
+      say: 'I am not allowed out! turn on web access in settings and ask me again',
+      expr: 'curious',
+      lookup: LOOKUP.exec(text)[1].trim(),
+    }),
+  },
+
+  // --- banter ---------------------------------------------------------------
+  //
+  // These return a line bank rather than a line, because the words live in
+  // pet-state.js with everything else the pet says and there is no second copy
+  // of the pet's voice in here. main resolves the bank, which is also how these
+  // pick up the per species variations for free.
+  //
+  // All four are asked for. None of them fires on its own: a pet that starts
+  // roasting you unprompted is a different product, and the cheeky remarks that
+  // *are* unprompted come from memory.js, are built from real numbers, and have
+  // their own switch.
+  {
+    name: 'flirt',
+    // Asking it to flirt, which it does badly.
+    match: (t) => cmd(String.raw`\b(?:flirt with me|say something (?:nice|sweet)|chat me up|do you like me)`)
+      .test(t),
+    run: () => ({ bank: 'flirty', event: 'flirt', follow: { bank: 'smitten', event: 'smitten' } }),
+  },
+  {
+    name: 'charmed',
+    // Being flirted with, which it survives less well.
+    match: (t) => /\bi love you\b|\bi like you\b|\bmarry me\b/i.test(t)
+      || cmd(String.raw`\byou(?:'re| are)\s+(?:cute|adorable|lovely|pretty|handsome|the best|my favourite|my favorite)`)
+        .test(t),
+    run: () => ({ bank: 'charmed', event: 'charmed', move: 'jump' }),
+  },
+  {
+    name: 'tease',
+    match: (t) => cmd(String.raw`\b(?:tease me|make fun of me|be mean to me)`).test(t),
+    run: () => ({ bank: 'teasing', event: 'tease' }),
+  },
+  {
+    name: 'ragebait',
+    // "roast me" is the one people actually type. The rest are here because the
+    // first thing anyone does with a pet that can be provoked is try to provoke it.
+    match: (t) => cmd(String.raw`\b(?:roast me|ragebait me|rage ?bait me|insult me|annoy me|start (?:an argument|a fight)|wind me up|give me your worst)`)
+      .test(t),
+    run: () => ({ bank: 'ragebait', event: 'bait', move: 'spin' }),
+  },
+  {
+    name: 'needled',
+    // Teasing it back. Matched so it has a comeback rather than handing an
+    // insult to a small model and hoping - which is how a pet ends up either
+    // apologising or agreeing with you.
+    match: (t) => cmd(String.raw`\byou(?:'re| are)\s+(?:ugly|dumb|stupid|useless|slow|annoying|the worst|rubbish|boring)`)
+      .test(t),
+    run: () => ({ bank: 'needled', event: 'needled' }),
+  },
+
   // --- memory ---------------------------------------------------------------
   //
   // The language half only, same split as the alarms: what a fact is, how long it
@@ -359,6 +427,10 @@ const SKILLS = [
 const MAX_MEMORY_CHARS = 300;
 
 const REMEMBER = /^(?:please\s+)?(?:remember|note|keep in mind|don't forget|do not forget)(?:\s+that)?\s+(.+?)[!.]*$/i;
+
+// The verbs that mean "go and find out", and nothing softer. Anchored at the
+// front so it is a command rather than a sentence that happens to contain one.
+const LOOKUP = /^(?:can you |please |go |could you )*(?:search(?: the web)?(?: for)?|look up|google|web ?search|wikipedia|who is|who was|what happened (?:to|in))\s+(.{2,}?)[!?.]*$/i;
 
 const FORGET_ALL = /^forget (?:everything|it all|all of it|about it all)[!.]*$/i;
 const FORGET = /^forget (?:that |about |the )?(.{3,}?)[!.]*$/i;

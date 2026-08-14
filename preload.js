@@ -42,4 +42,9 @@ contextBridge.exposeInMainWorld('config', {
   get: () => ipcRenderer.invoke('config:get'),
   save: (patch) => ipcRenderer.invoke('config:save', patch),
   close: () => ipcRenderer.send('config:close'),
+  // API keys go one way. `setKey` hands one to the main process, which wraps it
+  // with DPAPI and writes it; `clearKey` removes it. Both answer with which
+  // providers have a key, never with a key. There is deliberately no getKey.
+  setKey: (provider, key) => ipcRenderer.invoke('keys:set', String(provider), String(key)),
+  clearKey: (provider) => ipcRenderer.invoke('keys:clear', String(provider)),
 });

@@ -3,6 +3,8 @@
 // Everything in here is pure except the functions that call Ollama, and those
 // take a `fetch` so test.js can exercise them without a server.
 
+const providers = require('./providers');
+
 const OLLAMA = process.env.SCREENPET_OLLAMA || 'http://127.0.0.1:11434';
 // Reasoning on purpose, which reverses what this comment used to say. The old
 // claim - that reasoning models blow the timeout - turned out to be the num_ctx
@@ -186,7 +188,11 @@ function buildChatPrompt(message, { mood = 'neutral', history = [], memory = [] 
 async function chat(message, opts = {}) {
   const text = String(message || '').trim().slice(0, 500);
   if (!text) return '';
-  return generate({ model: opts.model || MODEL, prompt: buildChatPrompt(text, opts) }, opts);
+  // Typed text is not redacted on the local path: they are your own words and
+  // they never leave the machine. On a hosted provider they do, so they are -
+  // pasting a key into the chat box must not be how it ends up at OpenAI.
+  const safe = opts.provider && !providers.isLocal(opts.provider) ? redact(text) : text;
+  return generate({ model: opts.model || MODEL, prompt: buildChatPrompt(safe, opts) }, opts);
 }
 
 // Nothing to answer is not an error, and it is not this file's job to have a
@@ -236,9 +242,36 @@ const NUM_CTX = Number(process.env.SCREENPET_NUM_CTX || 4096);
 // unloads immediately after every answer.
 const KEEP_ALIVE = process.env.SCREENPET_KEEP_ALIVE || '30m';
 
-/** Shared transport. Returns an answer string, never throws. */
+/**
+ * Shared transport. Returns an answer string, never throws.
+ *
+ * Two destinations. By default Ollama on loopback, which is the whole point of
+ * this app. With a hosted provider chosen in settings, providers.js instead -
+ * and note what that means for the OCR path: the text read off your screen is
+ * sent to that company. It is redacted first, by the patterns above, which is a
+ * filter for the secrets it knows the shape of and not a promise about the rest.
+ */
 async function generate(body, opts = {}) {
   const fetchImpl = opts.fetch || globalThis.fetch;
+
+  if (opts.provider && !providers.isLocal(opts.provider)) {
+    try {
+      return stripMarkup(unquote(stripEcho(stripThinking(
+        await providers.generate(body.prompt, {
+          provider: opts.provider,
+          model: opts.providerModel,
+          key: opts.key,
+          fetch: fetchImpl,
+          timeoutMs: opts.timeoutMs,
+        })
+      ))));
+    } catch (err) {
+      // providers.js only ever throws messages that are safe to show - it never
+      // puts the key, the prompt or a provider's error body in one.
+      return err.message;
+    }
+  }
+
   const endpoint = opts.endpoint || OLLAMA;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs || TIMEOUT_MS);
@@ -294,6 +327,11 @@ async function ask(screenText, opts = {}) {
  */
 async function askVision(pngBase64, opts = {}) {
   if (!pngBase64) return EMPTY_SCREEN;
+  // A screenshot cannot be redacted the way text can, so it is never sent to a
+  // hosted provider - whatever is on screen would be what they receive, in full.
+  // main already avoids selecting the vision tier when one is chosen; this is
+  // the second lock on the same door.
+  if (opts.provider && !providers.isLocal(opts.provider)) return EMPTY_SCREEN;
   return generate(
     {
       model: opts.model || MODEL,

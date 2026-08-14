@@ -676,12 +676,19 @@ app.whenReady().then(async () => {
       model: 'llama3.1:8b', vision: 'auto', hotkey: 'CommandOrControl+Shift+Space',
       pet: 'cat', skin: 'butter', autostart: false, ollama: 'http://127.0.0.1:11434',
       memory: true, cheek: true,
+      network: false, web: false, weather: false, city: '',
+      provider: 'ollama', providerModel: '',
     },
     skins: ['butter', 'mint', 'blossom', 'slate'],
     pets: ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon'],
     models: ['llama3.1:8b', 'mistral:7b'],
     visionModel: null,
     packaged: false,
+    providers: Object.entries(require('./providers').PROVIDERS).map(([name, spec]) => ({
+      name, label: spec.label, local: spec.local === true,
+      model: spec.model || '', keys: spec.keys || '',
+    })),
+    keys: {},
   }));
   ipcMain.handle('config:save', async (_e, patch) => {
     saved = patch;
@@ -689,7 +696,7 @@ app.whenReady().then(async () => {
   });
 
   const sw = new BrowserWindow({
-    width: 460, height: 900, show: true, // must match openSettings() in main.js
+    width: 460, height: 940, show: true, // must match openSettings() in main.js
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       backgroundThrottling: false,
@@ -756,6 +763,49 @@ app.whenReady().then(async () => {
       return gated && !cheek.disabled;
     })()`),
     'cheek did not follow the memory setting it depends on'
+  );
+  // The master switch. With it off the three networked settings must be
+  // unreachable in the window as well as refused in the main process, and the
+  // provider choice must sit on the local model.
+  check(
+    await sjs(`(() => {
+      const net = document.getElementById('network');
+      const boxes = ['weather', 'web'].map((id) => document.getElementById(id));
+      const provider = document.getElementById('provider');
+      const off = !net.checked && boxes.every((b) => b.disabled) && provider.disabled
+        && provider.value === 'ollama';
+      net.checked = true;
+      net.dispatchEvent(new Event('change'));
+      const on = boxes.every((b) => !b.disabled) && !provider.disabled;
+      net.checked = false;
+      net.dispatchEvent(new Event('change'));
+      return off && on && boxes.every((b) => b.disabled);
+    })()`),
+    'the network switch did not gate the settings that need it'
+  );
+  // Choosing a company has to say so before you save, not after.
+  check(
+    await sjs(`(() => {
+      const net = document.getElementById('network');
+      const provider = document.getElementById('provider');
+      net.checked = true; net.dispatchEvent(new Event('change'));
+      provider.value = 'openai'; provider.dispatchEvent(new Event('change'));
+      const hint = document.getElementById('provider-hint');
+      const warned = hint.classList.contains('warn') && /sent to OpenAI/.test(hint.textContent);
+      const keyable = !document.getElementById('api-key').disabled;
+      provider.value = 'ollama'; provider.dispatchEvent(new Event('change'));
+      net.checked = false; net.dispatchEvent(new Event('change'));
+      return warned && keyable && !/sent to/.test(hint.textContent);
+    })()`),
+    'picking a hosted provider did not warn that the screen text goes to them'
+  );
+  // The key box is write-only. There is no channel that returns one, so there is
+  // nothing here that could ever be populated from a stored key.
+  check(
+    await sjs(`typeof window.config.getKey === 'undefined'
+      && typeof window.config.setKey === 'function'
+      && document.getElementById('api-key').value === ''`),
+    'the settings window has a way to read a stored API key'
   );
   // The window is not resizable, so anything below the fold is unreachable.
   check(

@@ -28,7 +28,8 @@
       "media.ps1",
       "dnd.ps1",
       "wake.ps1",
-      "faces.ps1"
+      "faces.ps1",
+      "keys.ps1"
     ],
     "files": [
       "main.js",
@@ -50,6 +51,10 @@
       "reminders.js",
       "memory.js",
       "weather.js",
+      "net.js",
+      "providers.js",
+      "keys.js",
+      "keys.ps1",
       "pet-state.js",
       "settings.js",
       "icon.png",

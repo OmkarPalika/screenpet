@@ -552,13 +552,56 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       move: 'dance', weather: 'weather?', music: 'next track', photo: 'take a photo',
       remember: 'remember my standup is at 9:30', forget: 'forget the standup',
       memories: 'what do you remember?',
+      flirt: 'flirt with me', charmed: 'I love you', tease: 'tease me',
+      ragebait: 'roast me', needled: 'you are useless',
+      lookup: 'look up the speed of light',
     }[skill.name];
     assert.ok(probe, `no probe for skill "${skill.name}"`);
     const out = skills.match(probe, ctx);
     assert.strictEqual(out && out.name, skill.name, `probe for "${skill.name}" hit ${out && out.name}`);
-    assert.ok(out.say, `skill "${skill.name}" said nothing`);
+    // Either its own words, or a bank in pet-state.js that main resolves.
+    assert.ok(out.say || out.bank, `skill "${skill.name}" said nothing`);
+    if (out.bank) {
+      assert.ok(pets.LINES[out.bank], `skill "${skill.name}" points at missing bank "${out.bank}"`);
+      const face = pets.expressionFor(out.event);
+      assert.ok(face, `skill "${skill.name}" has no expression for event "${out.event}"`);
+      assert.ok(css.includes(`[data-expr="${face}"]`), `"${skill.name}" wears unknown face ${face}`);
+      if (out.follow) {
+        assert.ok(pets.LINES[out.follow.bank], `"${skill.name}" follows with a missing bank`);
+        assert.ok(pets.expressionFor(out.follow.event), `"${skill.name}" follow has no expression`);
+      }
+    }
     if (out.expr) {
       assert.ok(css.includes(`[data-expr="${out.expr}"]`), `"${skill.name}" wears unknown face ${out.expr}`);
+    }
+  }
+
+  // --- banter is asked for, never volunteered, and stays wholesome ----------
+  //
+  // This bank ships to strangers on a cartoon blob. A test rather than a note in
+  // a comment, because "keep it PG" is the kind of intention that survives right
+  // up until somebody adds one more line.
+  {
+    const banter = ['flirty', 'smitten', 'charmed', 'teasing', 'ragebait', 'needled'];
+    const nope = /\b(?:sex\w*|nude|naked|kiss me|bed|hot(?:ties)?|body|kill|hate you|die|idiot|shut up)\b/i;
+    for (const bank of banter) {
+      assert.ok(pets.LINES[bank] && pets.LINES[bank].length >= 4, `bank "${bank}" is too thin`);
+      for (const l of pets.LINES[bank]) {
+        assert.ok(!nope.test(l), `banter line is not fit to ship: "${l}"`);
+        assert.ok(l.length <= 90, `banter line is too long for a bubble: "${l}"`);
+      }
+    }
+
+    // None of these may fire on ordinary conversation.
+    for (const innocent of [
+      'I love this bug', 'you are slow to load the model', 'roast the coffee beans',
+      'how do I tease apart these two functions', 'she is cute in that photo',
+    ]) {
+      const hit = skills.match(innocent, ctx);
+      assert.ok(
+        !hit || !banter.includes(hit.bank),
+        `"${innocent}" triggered banter (${hit && hit.name})`
+      );
     }
   }
 }
@@ -1531,6 +1574,202 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.strictEqual(run('forget the standup').memory.forget, 'standup');
     // The one that has to fall through: people say this in conversation.
     assert.strictEqual(run('forget it'), null, '"forget it" deleted memories');
+  }
+
+  // ===== going outside ========================================================
+  //
+  // Everything below only runs when the network switch is on. These check the
+  // switch actually gates, and that what leaves carries what it says it does.
+
+  {
+    const providers = require('./providers');
+    const net = require('./net');
+    const config = require('./settings');
+
+    // --- the master switch ---------------------------------------------------
+    assert.strictEqual(config.load({}).network, false, 'the network defaulted to on');
+    for (const field of ['weather', 'web']) {
+      assert.strictEqual(
+        config.load({ [field]: true })[field], false,
+        `${field} switched itself on with the network off`
+      );
+      assert.strictEqual(config.load({ network: true, [field]: true })[field], true);
+    }
+    // Turning the master switch off has to take the rest with it in one pass.
+    const wired = config.load({ network: true, weather: true, web: true, provider: 'openai' });
+    const sealed = config.merge(wired, { network: false });
+    assert.deepStrictEqual(
+      [sealed.weather, sealed.web, sealed.provider], [false, false, 'ollama'],
+      'switching the network off left something reachable'
+    );
+
+    // --- the provider choice -------------------------------------------------
+    assert.strictEqual(config.load({}).provider, 'ollama');
+    assert.strictEqual(
+      config.load({ provider: 'openai' }).provider, 'ollama',
+      'a hosted provider was accepted with the network off'
+    );
+    assert.strictEqual(
+      config.load({ network: true, provider: 'not-a-company' }).provider, 'ollama',
+      'an unknown provider was accepted'
+    );
+    // A model name lands in a request body and, for Gemini, in a path segment.
+    for (const [bad, why] of [
+      ['../../admin', 'path traversal'],
+      ['a b?c=1', 'a query string'],
+      ['x', 'too short'],
+    ]) {
+      const got = config.load({ network: true, provider: 'openai', providerModel: bad }).providerModel;
+      assert.ok(!/[?=]/.test(got) && !got.includes('..'), `model name let ${why} through: ${got}`);
+    }
+
+    // --- the key never travels in a URL --------------------------------------
+    //
+    // A URL is the part of a request that ends up in logs, history and
+    // referrers. Every provider here has to carry the key in a header.
+    for (const name of providers.NAMES) {
+      if (providers.isLocal(name)) continue;
+      const url = providers.urlFor(name, providers.modelFor(name, ''));
+      assert.ok(url.startsWith('https://'), `${name} is not https`);
+      assert.ok(!/key|token|auth/i.test(url), `${name} puts credentials in the URL: ${url}`);
+    }
+
+    // --- each shape sends what that provider actually reads -------------------
+    const KEY = 'sk-test-not-a-real-key-000';
+    const seen = {};
+    const spy = async (url, init) => {
+      seen.url = url;
+      seen.init = init;
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'openai said this' } }],
+          content: [{ type: 'text', text: 'anthropic said this' }],
+          candidates: [{ content: { parts: [{ text: 'gemini said this' }] } }],
+        }),
+      };
+    };
+
+    for (const [name, header, expect] of [
+      ['openai', 'authorization', 'openai said this'],
+      ['nvidia', 'authorization', 'openai said this'],
+      ['mistral', 'authorization', 'openai said this'],
+      ['anthropic', 'x-api-key', 'anthropic said this'],
+      ['gemini', 'x-goog-api-key', 'gemini said this'],
+    ]) {
+      const out = await providers.generate('a prompt', { provider: name, key: KEY, fetch: spy });
+      assert.strictEqual(out, expect, `${name} read the wrong field`);
+      const headers = seen.init.headers;
+      assert.ok(
+        String(headers[header]).includes(KEY),
+        `${name} did not send the key in ${header}`
+      );
+      assert.ok(!seen.url.includes(KEY), `${name} leaked the key into the URL`);
+      assert.ok(!seen.init.body.includes(KEY), `${name} leaked the key into the body`);
+      assert.ok(seen.init.body.includes('a prompt'), `${name} lost the prompt`);
+    }
+
+    // No key, no request at all.
+    let called = false;
+    await assert.rejects(
+      () => providers.generate('p', { provider: 'openai', fetch: async () => { called = true; } }),
+      /key/i
+    );
+    assert.strictEqual(called, false, 'a request went out with no key');
+    await assert.rejects(() => providers.generate('p', { provider: 'ollama', key: 'x' }));
+
+    // Failures go in a speech bubble, so none of them may carry the key or the
+    // provider's own error body - some of them echo the request back.
+    const angry = async () => ({ ok: false, status: 401, json: async () => ({ error: KEY }) });
+    await assert.rejects(
+      () => providers.generate('p', { provider: 'openai', key: KEY, fetch: angry }),
+      (e) => !e.message.includes(KEY) && /refused/.test(e.message)
+    );
+    for (const status of [401, 403, 404, 429, 500, 418]) {
+      assert.ok(providers.failure(status).length < 80, `failure(${status}) is not bubble-sized`);
+    }
+
+    // --- what the screen path sends to a company -----------------------------
+    //
+    // The whole trade of this setting. Redaction is not optional on the way out.
+    const grab = { };
+    const catcher = async (_url, init) => {
+      grab.body = init.body;
+      return { ok: true, json: async () => ({ choices: [{ message: { content: 'ok' } }] }) };
+    };
+    await ask('the token is ghp_ABCDEFGHIJKLMNOPQRST1234 and 2+2?', {
+      provider: 'openai', key: KEY, fetch: catcher,
+    });
+    assert.ok(grab.body.includes('[REDACTED]'), 'screen text reached a provider unredacted');
+    assert.ok(!grab.body.includes('ghp_ABC'), 'a token reached a provider');
+
+    // Typed chat is redacted too when it is going to a company, and left alone
+    // when it is not - they are your own words on a machine you own.
+    await chat('my key is sk-abcdefghijklmnop1234', { provider: 'openai', key: KEY, fetch: catcher });
+    assert.ok(!grab.body.includes('sk-abcdefghijklmnop'), 'a pasted key reached a provider');
+    await chat('my key is sk-abcdefghijklmnop1234', { fetch: cgrab, model: 'm' });
+    assert.ok(cbody.prompt.includes('sk-abcdefghijklmnop'), 'local chat was redacted for no reason');
+
+    // A screenshot cannot be redacted, so it is never sent to one.
+    let uploaded = false;
+    const shot = await askVision('AAAA', {
+      provider: 'openai', key: KEY, fetch: async () => { uploaded = true; },
+    });
+    assert.strictEqual(uploaded, false, 'a screenshot was uploaded to a hosted provider');
+    assert.strictEqual(shot, EMPTY_SCREEN);
+
+    // --- the web lookup ------------------------------------------------------
+    assert.strictEqual(net.cleanQuery('  the speed  of light '), 'the speed of light');
+    assert.strictEqual(net.cleanQuery('x'.repeat(200)), null, 'a pasted wall became a query');
+    assert.strictEqual(net.cleanQuery(''), null);
+    assert.strictEqual(net.cleanQuery(42), null);
+
+    const urls = [];
+    const ddg = async (url) => {
+      urls.push(url);
+      return url.includes('duckduckgo')
+        ? { ok: true, json: async () => ({ Answer: '299792458 m/s' }) }
+        : { ok: true, json: async () => ([]) };
+    };
+    assert.strictEqual(await net.lookup('speed of light', { fetch: ddg }), '299792458 m/s');
+    assert.ok(urls[0].startsWith(net.DDG_HOST), 'the lookup went somewhere unexpected');
+    assert.ok(!/[<>"']/.test(urls[0]), 'the query was not encoded into the URL');
+
+    // Nothing from an instant answer falls through to the encyclopedia, and only
+    // ever to these two hosts.
+    urls.length = 0;
+    const wiki = async (url) => {
+      urls.push(url);
+      if (url.includes('duckduckgo')) return { ok: true, json: async () => ({}) };
+      if (url.includes('opensearch')) return { ok: true, json: async () => (['q', ['Photon'], [], []]) };
+      return { ok: true, json: async () => ({ extract: 'A photon is a particle.' }) };
+    };
+    assert.strictEqual(await net.lookup('photon', { fetch: wiki }), 'A photon is a particle.');
+    for (const url of urls) {
+      assert.ok(
+        url.startsWith(net.DDG_HOST) || url.startsWith(net.WIKI_HOST),
+        `the lookup reached an unexpected host: ${url}`
+      );
+    }
+    await assert.rejects(() => net.lookup('nothing', {
+      fetch: async () => ({ ok: true, json: async () => ({}) }),
+    }));
+
+    // --- the lookup skill ----------------------------------------------------
+    const skills = require('./skills');
+    const sctx = { now: new Date(MON_9PM), rand: () => 0 };
+    assert.strictEqual(skills.match('look up the speed of light', sctx).lookup, 'the speed of light');
+    assert.strictEqual(skills.match('search for tardigrades', sctx).lookup, 'tardigrades');
+    assert.strictEqual(skills.match('who is ada lovelace?', sctx).lookup, 'ada lovelace');
+    // With the setting off this is the answer, and it does not pretend otherwise.
+    assert.ok(/settings/.test(skills.match('google tardigrades', sctx).say));
+    // The ones that must reach the model instead of an encyclopedia.
+    for (const own of [
+      'what is a closure', 'how do I look up a value in a map', 'what is the time',
+    ]) {
+      const hit = skills.match(own, sctx);
+      assert.ok(!hit || !hit.lookup, `"${own}" was sent to the web`);
+    }
   }
 
   // --- the settings gate ------------------------------------------------------
