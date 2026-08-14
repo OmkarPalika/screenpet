@@ -16,6 +16,7 @@ const reminders = require('./core/reminders');
 const weather = require('./core/weather');
 const wake = require('./system/wake');
 const windows = require('./system/window');
+const voice = require('./system/voice');
 const faces = require('./system/faces');
 const memory = require('./core/memory');
 const net = require('./core/net');
@@ -1352,6 +1353,22 @@ ipcMain.on('pet:interactive', (_e, interactive) => {
   if (win && !win.isDestroyed()) win.setIgnoreMouseEvents(!interactive, { forward: true });
 });
 
+// A line of speech as audio, for the filter chain in robot.js. Gated on the
+// voice setting here as well as in the renderer: the switch that silences the
+// pet must also stop a speech engine being started to be ignored.
+//
+// null is the ordinary answer on a host without it, and the renderer falls back
+// to the platform voice. Nothing is stored and nothing touches disk - see
+// say.ps1, which synthesises to a buffer for that reason.
+// The rate comes from the renderer because robot.js is where the pairing lives:
+// the line is synthesised slow and played back fast, and one of those two
+// numbers moving on its own is a pet talking at the wrong speed. voice.js and
+// say.ps1 both clamp it, so it is a preference here rather than a trusted value.
+ipcMain.handle('pet:voice', async (_e, text, rate) => {
+  if (!settings.voice) return null;
+  return voice.say(String(text || ''), Number(rate) || 0);
+});
+
 ipcMain.on('pet:ask', answerScreen);
 ipcMain.on('pet:settings', openSettings);
 ipcMain.on('pet:quit', () => { quitting = true; app.quit(); });
@@ -1414,6 +1431,7 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   wake.stop(); // the microphone closes before anything else happens
   windows.unwatch();
+  voice.stop();
   // The timeouts go; the file stays. That is the whole point of the file.
   for (const id of timers.keys()) clearTimeout(id);
   clearTimeout(saveTimer);

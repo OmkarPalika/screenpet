@@ -16,6 +16,10 @@ contextBridge.exposeInMainWorld('pet', {
   // gets to decide what a legal position is.
   place: ({ x, y }) => ipcRenderer.send('pet:place', { x: Number(x), y: Number(y) }),
   chat: (text) => ipcRenderer.send('pet:chat', String(text)),
+  // A line of speech as audio, so the renderer can put it through the filter
+  // chain in robot.js. Resolves to null whenever that is not available, and the
+  // renderer speaks the line with the platform voice instead.
+  voice: (text) => ipcRenderer.invoke('pet:voice', String(text)),
   listen: () => ipcRenderer.send('pet:listen'),
   // 'arrived' | 'left' | 'blind'. Never a frame, never a measurement - the
   // renderer reduces what the camera saw to one of three words before this

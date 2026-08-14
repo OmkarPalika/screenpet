@@ -117,6 +117,25 @@ still frame; most of what makes it read as an object in a room rather than a
 picture of one. Everything except the shadow is inside that group, because the
 floor does not turn.
 
+**And the light stays where the lamp is while the pet turns.** A filter is
+applied in the shape's own coordinates, before the CSS transform, so a highlight
+painted on it goes round with it — which is precisely what a sticker on a
+turntable does, and it was what gave the spin away. Halfway through, the pet is
+mirrored and the bright side is the side facing away from the light.
+
+So the shape is left to rotate and the light is rotated the other way about the
+same axis. The angle is **read back out of the pet's computed transform** rather
+than counted — `m11` is the cosine, `m31` the sine, measured in a browser
+because both conventions are defensible and only one is Chromium's — so the
+duration, the easing and the number of turns all stay in the stylesheet where
+they belong, and the light cannot end up a frame behind the body.
+
+The part that sells it falls out for free: past a quarter turn the light is
+*behind* the pet, and the side you are looking at goes dark on its own. That
+needed one addition — an ambient floor, because with nothing but the lamp the
+pet became a silhouette at half a turn, and nothing real does that. A toy with
+the lamp behind it is dark on this side, not absent.
+
 Every document that draws a pet loads the same file — the pet window, the
 settings previews and the demo stage — so a preview cannot be lit differently
 from the thing it is previewing.
@@ -324,10 +343,45 @@ speaking, because "money with wings" read aloud is not the joke. Mute lives in
 the tray, one click, because the moment you want it quiet is the moment a call
 starts — and it silences both, including a line already halfway out.
 
-Chromium hands out no audio for a spoken utterance, so a robot voice reading
-English words is not something this app can build. Synthesising the chirps
-separately is the version that exists rather than the version that was wanted,
-and it is why the split is where it is.
+Chromium hands out no audio for a spoken utterance — which is why the chirps had
+to be synthesised separately, and for a while it was also why the pet sounded
+like a train station announcement. **Windows will hand the audio over; Chromium
+just will not.** `say.ps1` synthesises to a buffer with `SetOutputToWaveStream`
+and prints it as base64, and from there it is an ordinary `AudioBuffer` and
+anything can be done to it.
+
+`robot.js` is what is done to it. Five stages, each with a job:
+
+| | |
+| --- | --- |
+| pitch | synthesised slow, played back fast. Chromium has no pitch shifter, and slow-then-fast raises the pitch without changing how long the sentence takes — the difference between a small creature and a tape on the wrong speed |
+| ring | a 52Hz oscillator multiplying the signal. This is the sound people mean by "robot", and the one effect that is unmistakably not a throat. Mixed at 0.3, because a full ring modulator is a Dalek and a Dalek is not a pet |
+| grit | a soft clip, so a quiet consonant does not sound like it came from another room |
+| box | 13ms of feedback delay — a small metallic resonance, the sound of being inside a case |
+| band | 170Hz to 5.2kHz, twice over. A machine the size of a mug has no chest and no air, and that absence is most of the illusion |
+
+The band limit goes **last**, and that was measured rather than assumed: in the
+middle of the chain it made the low end *worse* than the untouched voice. Ring
+modulation puts sidebands below every frequency it touches, the soft clip makes
+intermodulation products out of them, and a 13ms comb resonates at 77Hz — all
+three arrive after the filter and walk straight past it.
+
+`verify:ui` renders a real sentence from the real speech engine through the real
+chain and checks four things: it is audible, it does not clip, its shape is not
+identical to the untouched voice, and the share of it below 170Hz is well under
+what went in. That last one was wrong twice before it was right — first
+comparing absolute energy between signals at different volumes, then measuring
+"under 170Hz" with a filter too gentle to mean it.
+
+`SetOutputToAudioStream` is the trap, incidentally. It sounds like the more
+precise of the two and writes raw PCM with no RIFF header, which
+`decodeAudioData` refuses.
+
+Nothing is written to disk on the way. A WAV of everything the pet has ever said
+to you is exactly the sort of file this app promises not to leave lying around,
+and a `MemoryStream` costs nothing to use instead. A host that cannot do any of
+this is not mute — the renderer falls back to the platform voice, which is what
+every version before this one used.
 
 The mouth moving while it talks is a **class**, not an expression, and that
 distinction is load-bearing: an expression would replace whatever face the pet

@@ -47,6 +47,11 @@ anything to us, and there is no server to send it to.
 | Camera | Only with the camera setting on | Answers "did anything move" and "is there a face" — never *whose* face. The detector used on each system — Windows.Media.FaceAnalysis, or Vision on macOS — is asked only to count. Neither is asked for landmarks or a face print, and no identify or compare call is made |
 | Which window is in front | Windows only, while the app is running | Nowhere. A rectangle arrives when you switch windows and the pet looks over at it. Never the title, the process, or the name of the application — the pet cannot tell a bank from a browser game, and nothing about it is written down, remembered between switches, or sent to a model. Nothing is read from that window unless you ask a question |
 
+The pet's own voice is synthesised by Windows on this machine and handed back as
+audio so the app can filter it. That audio exists in memory for as long as the
+sentence takes and is never written to disk — a WAV of everything your pet has
+said to you is exactly the kind of file this promises not to leave behind.
+
 **There is no keyboard hook anywhere in this app.** The pet notices you moving
 between windows, and that is a rectangle changing — it cannot see what you type,
 in its own window or anyone else's. The one keyboard thing it registers is the

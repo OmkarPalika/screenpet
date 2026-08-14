@@ -144,6 +144,13 @@ pickVoice();
 const speakable = (text) =>
   text.replace(/\p{Extended_Pictographic}/gu, '').replace(/\*/g, '').trim();
 
+// Which line is currently allowed to make a noise. The audio for a line is
+// fetched over IPC, so a second line can be asked for while the first is still
+// being synthesised - and the answer arriving late for a line nobody is waiting
+// for any more must not start playing over the top of the new one.
+let sayId = 0;
+let playing = null;
+
 function speak(text, kind, chatty = false) {
   // Cancel unconditionally, even when muted - the toggle has to stop a line
   // that is already halfway out.
@@ -154,11 +161,42 @@ function speak(text, kind, chatty = false) {
   // never chirped: a reply you cannot hear is not a reply, and reading it off
   // the bubble is what the setting is there to avoid.
   if (chatty) return chirp(text, kind === 'error' ? 'oops' : petEl.dataset.expr);
-  if (!voice) return;
 
   const line = speakable(text);
   if (!line) return;
 
+  // The pet's own voice first, and the platform's if that is not available. The
+  // difference is the filter chain in robot.js, which needs the audio itself -
+  // and SpeechSynthesis will speak a sentence but will not hand it over.
+  const mine = ++sayId;
+  const fallback = () => { if (mine === sayId) system(line); };
+  window.pet.voice(line, SLOW).then((wav) => {
+    if (mine !== sayId) return; // a newer line took over while this was coming
+    if (wav) return play(wav, mine, fallback);
+    fallback();
+  }).catch(fallback);
+}
+
+/** Play a base64 WAV through the filter chain. */
+function play(wav, mine, fallback) {
+  const ctx = audio();
+  const bytes = Uint8Array.from(atob(wav), (c) => c.charCodeAt(0));
+  ctx.decodeAudioData(bytes.buffer).then((buffer) => {
+    if (mine !== sayId) return;
+    playing = robot(ctx, buffer);
+    petEl.classList.add('is-talking');
+    // Off the length of the audio rather than an event, because the mouth has
+    // to stop when the sound does, and `ended` on a source that was stopped
+    // early fires after the next line has already started its own.
+    chirpTimer = setTimeout(() => {
+      if (mine === sayId) petEl.classList.remove('is-talking');
+    }, playing.seconds * 1000);
+  }).catch(fallback);
+}
+
+/** The platform voice, which is what this app used before robot.js existed. */
+function system(line) {
+  if (!voice) return;
   const u = new SpeechSynthesisUtterance(line);
   utter = u;
   u.voice = voice;
@@ -225,6 +263,11 @@ function chirp(text, expr) {
  */
 function hush() {
   speechSynthesis.cancel();
+  // Any audio still in flight is for a line that has been superseded. Bumping
+  // the id is what stops it: the fetch cannot be recalled, and without this its
+  // answer arrives and starts playing over whatever is being said now.
+  sayId++;
+  if (playing) { playing.stop(); playing = null; }
   clearTimeout(chirpTimer);
   if (chirpOut) {
     // A ramp rather than a jump: gain to zero in one sample is a click.
@@ -265,6 +308,25 @@ function footsteps(ms) {
   setTimeout(() => clearInterval(stepTimer), ms - 40);
 }
 
+// The pet turns, the light stays where the lamp is. Without this a spin is a
+// sticker on a turntable: the highlight goes round with the shape and is on the
+// dark side by the time the pet is halfway round.
+//
+// Driven off the pet's own computed transform rather than a copy of the timing,
+// so it follows whatever style.css says the movement is - and it costs nothing
+// when the movement does not turn, because then the angle is zero and the light
+// is where it always was.
+const petSvg = petEl.querySelector('svg');
+let turning = 0;
+
+function follow() {
+  const deg = turnedBy(petSvg);
+  aimLight(deg);
+  if (petEl.dataset.move) return requestAnimationFrame(follow);
+  turning = 0;
+  aimLight(0); // back to the lamp on the left, wherever the animation stopped
+}
+
 function move(name) {
   clearTimeout(moveTimer);
   if (!MOVE_MS[name]) { delete petEl.dataset.move; return; }
@@ -274,6 +336,7 @@ function move(name) {
   void petEl.offsetWidth;
   petEl.dataset.move = name;
   if (name === 'walk') footsteps(MOVE_MS[name]);
+  if (!turning) { turning = 1; requestAnimationFrame(follow); }
   moveTimer = setTimeout(() => { delete petEl.dataset.move; }, MOVE_MS[name]);
 }
 
