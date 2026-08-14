@@ -351,6 +351,10 @@ function aim(x, y) {
   const dy = Math.max(-2, Math.min(2, (y - (r.top + r.height / 2)) / 30));
   petEl.style.setProperty('--eye-x', `${(dx + jitter.x).toFixed(2)}px`);
   petEl.style.setProperty('--eye-y', `${(dy + jitter.y).toFixed(2)}px`);
+  // And the head goes with them. Small: past about eight degrees the flat face
+  // slides off the side of a round body and takes the illusion with it.
+  petEl.style.setProperty('--turn-y', `${(dx * 2.4).toFixed(2)}deg`);
+  petEl.style.setProperty('--turn-x', `${(-dy * 2.2).toFixed(2)}deg`);
 }
 
 function gaze(x, y) {

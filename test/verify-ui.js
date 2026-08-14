@@ -419,6 +419,41 @@ app.whenReady().then(async () => {
   await settle();
   check(left !== (await eyeX()), 'the eyes do not follow the cursor');
 
+  // --- it turns to look at you ---------------------------------------------
+  // The lighting makes a still frame look solid; this is the half that makes it
+  // read as solid while it moves. A few degrees, and it has to actually reach
+  // the group rather than sit on a custom property nothing consumes.
+  await js(`document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 0, clientY: 200 }))`);
+  await settle();
+  const leftTurn = await js(`getComputedStyle(document.querySelector('.turn')).transform`);
+  await js(`document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 900, clientY: 200 }))`);
+  await settle();
+  const rightTurn = await js(`getComputedStyle(document.querySelector('.turn')).transform`);
+  check(leftTurn !== 'none', 'the head does not turn towards the cursor at all');
+  check(leftTurn !== rightTurn, 'the head turns the same way whichever side the cursor is on');
+
+  // Lit, not flat. The filters are one definition loaded by every document that
+  // draws a pet, so a preview cannot be lit differently from the real thing.
+  const lit = await js(`(() => {
+    const holder = document.getElementById('pet-lighting');
+    return {
+      installed: !!holder,
+      volume: !!document.getElementById('pet-volume'),
+      soft: !!document.getElementById('pet-soft'),
+      body: getComputedStyle(document.querySelector('.body')).filter,
+      shadow: getComputedStyle(document.querySelector('.shadow')).filter,
+      // A hidden subtree drops the filters with it, and the pet goes flat.
+      shown: getComputedStyle(holder).display,
+      room: holder.getBoundingClientRect().height,
+    };
+  })()`);
+  check(lit.installed, 'nothing installed the lighting');
+  check(lit.volume && lit.soft, 'the lighting filters are missing');
+  check(lit.body.includes('pet-volume'), `the body is unlit: ${lit.body}`);
+  check(lit.shadow.includes('pet-soft'), `the shadow is a hard ellipse: ${lit.shadow}`);
+  check(lit.shown !== 'none', 'the filters are inside a display:none subtree, which drops them');
+  check(lit.room === 0, `the filter holder takes up ${lit.room}px of the window`);
+
   // --- tickle and drag ----------------------------------------------------
   await js(`document.getElementById('pet').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
   await settle();
