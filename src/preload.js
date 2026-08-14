@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld('pet', {
   onLook: (fn) => ipcRenderer.on('pet:look', (_e, look) => fn(look)),
   act: (name) => ipcRenderer.send('pet:act', name),
   react: (event) => ipcRenderer.send('pet:react', String(event)),
+  // Where you put it, as two fractions. Validated again in the main process:
+  // the renderer is the thing that knows where the pet is, not the thing that
+  // gets to decide what a legal position is.
+  place: ({ x, y }) => ipcRenderer.send('pet:place', { x: Number(x), y: Number(y) }),
   chat: (text) => ipcRenderer.send('pet:chat', String(text)),
   listen: () => ipcRenderer.send('pet:listen'),
   // 'arrived' | 'left' | 'blind'. Never a frame, never a measurement - the

@@ -101,10 +101,29 @@ function fresh(now = 0) {
     sorryAt: 0,
     // Lines said to you that you did not answer. Cleared by anything at all.
     ignored: 0,
+    // Where you put it, as a fraction of the display's work area: 0,0 is the
+    // top left and 1,1 the bottom right. Fractions rather than pixels so a
+    // different resolution, or the other monitor, still puts it roughly where
+    // you left it. null until you have moved it by hand, which is also what
+    // tells the pet to stop wandering off on its own.
+    place: null,
   };
 }
 
 const clamp = (n) => Math.max(0, Math.min(MAX_STAT, n));
+
+/**
+ * A hand-placed position, or null. Clamped to the unit square here as well as
+ * in the renderer: a file saying {x: 9000} must not be able to put the pet on a
+ * screen that is not there, and this is the half that can be tested without
+ * booting Electron.
+ */
+const unit = (n) => Math.max(0, Math.min(1, n));
+function place(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (!Number.isFinite(raw.x) || !Number.isFinite(raw.y)) return null;
+  return { x: unit(raw.x), y: unit(raw.y) };
+}
 
 /** Drop anything unexpected from disk rather than trusting the file's shape. */
 function load(raw, now) {
@@ -127,6 +146,7 @@ function load(raw, now) {
     sorryAt: Number.isFinite(raw.sorryAt) && raw.sorryAt >= 0 ? raw.sorryAt : 0,
     ignored: Number.isFinite(raw.ignored)
       ? Math.min(Math.max(Math.round(raw.ignored), 0), MAX_IGNORED) : 0,
+    place: place(raw.place),
   };
 }
 
@@ -777,6 +797,7 @@ function milestone(before, after) {
 }
 
 module.exports = {
+  place,
   fresh, load, tick, act, mood, shouldNag, shouldChatter,
   line, greetKind, expressionFor, milestone, pokeStep, samePokeBout,
   sulking, offend, apologise, faceFor,

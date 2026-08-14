@@ -320,6 +320,89 @@ const CALLS = {
 /** The purpose-written call for this species and feeling, if there is one. */
 const callFor = (species, feeling) => (CALLS[species] || {})[feeling] || null;
 
+// ---- chirp speech ----------------------------------------------------------
+// What the pet says in its own voice, said in its own voice: a run of little
+// square blips rather than an English sentence read by a Windows narrator. The
+// words are still in the bubble - this replaces how they sound, not what is
+// said, and never for an answer you asked a question to get.
+//
+// Squares through a lowpass, and the pitch inside a blip never bends. That is
+// the whole of what makes a thing sound built rather than born, and it is the
+// same rule the robot's own call follows.
+
+const CHIRP_HZ = 620;            // where the little voice sits
+const CHIRP_EVERY = 0.085;       // blip to blip. Faster reads as a modem
+const CHIRP_DUR = 0.062;
+const CHIRP_MAX = 10;            // a long line is still a short noise
+// Semitones off the base. A small scale rather than the chromatic run, because
+// a random pick out of twelve lands on a sour interval about half the time.
+const CHIRP_STEPS = [0, 2, 3, 5, 7];
+
+/** Roughly how many beats a line has in it. Vowel groups, which is close enough. */
+const beats = (line) =>
+  (line.toLowerCase().match(/[aeiouy]+/g) || []).length || line.split(/\s+/).length;
+
+/**
+ * The same sentence chirps the same way every time. A line the pet says twice
+ * sounding different twice reads as noise; this makes it read as a voice, and
+ * costs one integer.
+ */
+function seedOf(line) {
+  let h = 2166136261;
+  for (let i = 0; i < line.length; i++) h = Math.imul(h ^ line.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+/**
+ * Say a line as chirps.
+ *
+ * @param {BaseAudioContext} ctx
+ * @param {string} text  what is in the speech bubble; only its length, its
+ *   vowels and its final punctuation are used, and none of it is stored
+ * @param {string} expr  the face, for the same five feelings the voices use
+ * @param {AudioNode} [dest]  where it comes out. The caller passes its own node
+ *   when it needs to be able to cut a line short - muting has to stop a line
+ *   already halfway out, and blips are scheduled ahead rather than played.
+ * @returns {number} when the last blip ends, so the mouth can stop moving
+ */
+function chatter(ctx, text, expr, when = ctx.currentTime, dest = ctx.destination) {
+  const line = String(text || '').trim();
+  if (!line) return when;
+
+  const out = ctx.createGain();
+  out.gain.value = MASTER;
+  out.connect(dest);
+  const a = parts(ctx, out, when, FEELINGS[feelingOf(expr)] || FEELINGS.neutral);
+
+  const n = Math.max(2, Math.min(CHIRP_MAX, beats(line)));
+  const asking = line.endsWith('?');
+  const excited = line.endsWith('!');
+  let seed = seedOf(line);
+
+  a.pulses(n, CHIRP_EVERY, (at, i) => {
+    seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+    const step = CHIRP_STEPS[(seed >>> 16) % CHIRP_STEPS.length];
+    // The last two blips carry the punctuation, which is the whole of the
+    // sentence that survives: up for a question, flat and hard for a shout,
+    // down for anything else. Without it every line lands the same way.
+    const fromEnd = n - 1 - i;
+    const tail = fromEnd > 1 ? 0
+      : asking ? (2 - fromEnd) * 4
+      : excited ? 2
+      : (fromEnd - 2) * 3;
+    a.tone({
+      type: 'square',
+      from: CHIRP_HZ * Math.pow(2, (step + tail) / 12),
+      at,
+      dur: CHIRP_DUR,
+      peak: excited ? 0.34 : 0.28,
+      low: 2600,
+    });
+  });
+
+  return a.end;
+}
+
 /**
  * Make the noise. Everything is scheduled and nothing is held, so this returns
  * rather than resolves.
@@ -349,5 +432,8 @@ function sound(ctx, species, expr, when = ctx.currentTime) {
 // Loaded by a script tag in the pet window and required by the tests. The window
 // gets globals - `const` at the top level of a classic script is already one.
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { VOICES, CALLS, FEELINGS, FEELING_OF, feelingOf, callFor, sound, MASTER };
+  module.exports = {
+    VOICES, CALLS, FEELINGS, FEELING_OF, feelingOf, callFor, sound, chatter, MASTER,
+    CHIRP_MAX, CHIRP_EVERY,
+  };
 }

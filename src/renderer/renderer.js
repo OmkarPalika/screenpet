@@ -144,11 +144,17 @@ pickVoice();
 const speakable = (text) =>
   text.replace(/\p{Extended_Pictographic}/gu, '').replace(/\*/g, '').trim();
 
-function speak(text, kind) {
+function speak(text, kind, chatty = false) {
   // Cancel unconditionally, even when muted - the toggle has to stop a line
   // that is already halfway out.
-  speechSynthesis.cancel();
-  if (!voiceOn || !voice || kind === 'thinking') return;
+  hush();
+  if (!voiceOn || kind === 'thinking') return;
+
+  // Its own voice for its own words. An answer you asked a question to get is
+  // never chirped: a reply you cannot hear is not a reply, and reading it off
+  // the bubble is what the setting is there to avoid.
+  if (chatty) return chirp(text, kind === 'error' ? 'oops' : petEl.dataset.expr);
+  if (!voice) return;
 
   const line = speakable(text);
   if (!line) return;
@@ -179,13 +185,53 @@ function speak(text, kind) {
 let soundsOn = false;
 let sfx = null;
 
-function bark(expr) {
-  if (!soundsOn) return;
+function audio() {
   if (!sfx) sfx = new AudioContext();
   // Chromium can hand back a suspended context. Without this the first noises
   // are scheduled against a clock that is not running, and never arrive.
   if (sfx.state === 'suspended') sfx.resume();
-  sound(sfx, document.documentElement.dataset.pet || 'blob', expr);
+  return sfx;
+}
+
+function bark(expr) {
+  if (!soundsOn) return;
+  sound(audio(), document.documentElement.dataset.pet || 'blob', expr);
+}
+
+// Chirp speech: the pet's own lines, in its own voice. Shares the noises'
+// AudioContext and voices.js, but not their switch - this is the voice, and
+// muting the voice has to silence it.
+let chirpTimer = null;
+let chirpOut = null;
+
+function chirp(text, expr) {
+  const ctx = audio();
+  chirpOut = ctx.createGain();
+  chirpOut.connect(ctx.destination);
+  const end = chatter(ctx, text, expr, undefined, chirpOut);
+  petEl.classList.add('is-talking');
+  // The same class SpeechSynthesis drives, stopped the same way. A mouth left
+  // moving after the sound stopped is the one failure anybody would notice.
+  chirpTimer = setTimeout(
+    () => petEl.classList.remove('is-talking'),
+    Math.max(0, (end - ctx.currentTime) * 1000)
+  );
+}
+
+/**
+ * Stop talking, whichever way it was talking. Blips are scheduled ahead rather
+ * than played, so silencing them means turning their own tap off - cancelling
+ * the timer alone would leave the rest of the line arriving in an empty room.
+ */
+function hush() {
+  speechSynthesis.cancel();
+  clearTimeout(chirpTimer);
+  if (chirpOut) {
+    // A ramp rather than a jump: gain to zero in one sample is a click.
+    chirpOut.gain.setTargetAtTime(0, sfx.currentTime, 0.008);
+    chirpOut = null;
+  }
+  petEl.classList.remove('is-talking');
 }
 
 // ---- body movements ------------------------------------------------------
@@ -215,7 +261,7 @@ function move(name) {
   moveTimer = setTimeout(() => { delete petEl.dataset.move; }, MOVE_MS[name]);
 }
 
-window.pet.onSay(({ text, kind, expr, move: movement }) => {
+window.pet.onSay(({ text, kind, expr, move: movement, chatter: chatty }) => {
   busy = kind === 'thinking';
   petEl.classList.toggle('is-thinking', busy);
   // Thinking holds its face until the answer lands, so no timeout on it.
@@ -228,7 +274,7 @@ window.pet.onSay(({ text, kind, expr, move: movement }) => {
   // that face is held until the answer lands, and a bark every few seconds of it
   // would be a progress bar with teeth.
   if (!busy) bark(expr);
-  speak(text, kind);
+  speak(text, kind, chatty);
 });
 
 // A bubble in the way is a bubble you want gone - and so is the sentence still
@@ -236,13 +282,16 @@ window.pet.onSay(({ text, kind, expr, move: movement }) => {
 bubble.addEventListener('click', () => {
   if (busy) return;
   bubble.hidden = true;
-  speechSynthesis.cancel();
+  hush();
 });
 
 // ---- stats ---------------------------------------------------------------
 
 window.pet.onStats((s) => {
   petEl.dataset.mood = s.mood;
+  // Where you left it last time. Applied once - after that the pet is where it
+  // is, and a state push arriving mid-drag must not yank it back.
+  applyPlace(s.place);
   for (const el of document.querySelectorAll('[data-bar]')) {
     el.style.width = `${Math.round(s[el.dataset.bar])}%`;
   }
@@ -294,7 +343,7 @@ function gaze(x, y) {
 
 document.addEventListener('mousemove', (e) => {
   gaze(e.clientX, e.clientY);
-  if (held) return dragTo(e.clientX); // never hand focus back mid-drag
+  if (held) return dragTo(e.clientX, e.clientY); // never hand focus back mid-drag
 
   const inside = hitZone().some(
     (b) => e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom
@@ -354,18 +403,18 @@ menu.addEventListener('click', (e) => {
 let held = null;   // { grabX, fromX } while the button is down
 let dragged = false;
 
-function dragTo(x) {
-  if (!dragged && Math.abs(x - held.grabX) > 4) {
+function dragTo(x, y) {
+  if (!dragged && Math.hypot(x - held.grabX, y - held.grabY) > 4) {
     dragged = true;
     petEl.classList.add('is-held');
     express('dizzy', 4000);
   }
-  if (dragged) setX(held.fromX + (x - held.grabX));
+  if (dragged) setXY(held.fromX + (x - held.grabX), held.fromTop + (y - held.grabY));
 }
 
 petEl.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
-  held = { grabX: e.clientX, fromX: stageX };
+  held = { grabX: e.clientX, grabY: e.clientY, fromX: stageX, fromTop: stageTop };
   dragged = false;
   stage.classList.add('is-dragging');
 });
@@ -375,7 +424,13 @@ document.addEventListener('mouseup', () => {
   held = null;
   stage.classList.remove('is-dragging');
   petEl.classList.remove('is-held');
-  if (dragged) window.pet.react('drag');
+  if (dragged) {
+    // Put somewhere on purpose. It stays there, and it is still there next
+    // launch - which is the only reason any of this reaches the main process.
+    placed = true;
+    window.pet.place(where);
+    window.pet.react('drag');
+  }
   // Cleared late so the click event that follows this mouseup can still see it.
   setTimeout(() => { dragged = false; }, 0);
 });
@@ -415,7 +470,7 @@ window.pet.onLook(({ pet, skin, wear, voice: on, sounds, mic, camera, faces, bop
   document.documentElement.dataset.wear = wear || 'none';
   voiceOn = !!on;
   soundsOn = !!sounds;
-  if (!voiceOn) speechSynthesis.cancel();
+  if (!voiceOn) hush();
   // No microphone, no button. An entry that only tells you the feature is off
   // is a worse answer than the entry not being there.
   menu.querySelector('[data-listen]').hidden = !mic;
@@ -792,18 +847,68 @@ window.pet.onRecord(recordPhrase);
 // janky and burns CPU on an app that is idle 99% of the time; translating one
 // div is free and smoother.
 
+// Where the pet is, as the top left corner of the pet itself in window
+// coordinates - not as an offset from an edge, because which edge the stage is
+// pinned to changes when it flips and the pet must not move when it does.
 let stageX = 0;
+let stageTop = 0;
+// You have put it somewhere by hand. It stops wandering off on its own from
+// then on: a pet that walks away from where you deliberately parked it is
+// worse than one that never moves.
+let placed = false;
+// The last position as fractions of the room available, which is what survives
+// the window changing size under it. Same shape as pet-state.js keeps on disk.
+let where = { x: 1, y: 1 };
 
-function setX(x) {
-  stageX = Math.max(0, Math.min(window.innerWidth - stage.offsetWidth, x));
-  stage.style.transform = `translateX(${Math.round(stageX)}px)`;
+// How much room a speech bubble needs above the pet's head. Above this line the
+// stage flips and says everything below itself instead.
+const BUBBLE_ROOM = 160;
+const STAGE_BOTTOM = 4; // matches .stage { bottom: 4px }
+
+const roomX = () => Math.max(0, window.innerWidth - stage.offsetWidth);
+const petH = () => petEl.offsetHeight || 110;
+const roomY = () => Math.max(0, window.innerHeight - petH() - STAGE_BOTTOM);
+
+/**
+ * Put the pet at a window position, clamped so that no part of it can leave the
+ * window - and the window is exactly one display's work area, which is the
+ * whole of "it can never be sent off the screen".
+ */
+function setXY(x, top = stageTop) {
+  stageX = Math.max(0, Math.min(roomX(), x));
+  stageTop = Math.max(0, Math.min(roomY(), top));
+
+  // Flipped, the stage hangs off the top edge and the pet is its first item, so
+  // the offset is the pet's own position. Upright it hangs off the bottom, so
+  // the offset is how far up from the floor the pet has been lifted.
+  const down = stageTop < BUBBLE_ROOM;
+  stage.dataset.flip = down ? 'down' : 'up';
+  const y = down ? stageTop : -(roomY() - stageTop);
+  stage.style.transform = `translate(${Math.round(stageX)}px, ${Math.round(y)}px)`;
+
+  where = { x: roomX() ? stageX / roomX() : 0, y: roomY() ? stageTop / roomY() : 1 };
 }
+
+const setX = (x) => setXY(x);
+
+function applyPlace(place) {
+  if (!place || placed) return;
+  placed = true;
+  setXY(place.x * roomX(), place.y * roomY());
+}
+
+// A resolution change, or the pet sent to a different monitor, resizes the
+// window under it. Re-placed by fraction rather than re-clamped by pixel: a pet
+// parked halfway up a tall display belongs halfway up the short one, not
+// wherever that many pixels happens to land.
+window.addEventListener('resize', () => setXY(where.x * roomX(), where.y * roomY()));
 
 const idle = () =>
   !hovered && !busy && !held && bubble.hidden && menu.hidden && chatForm.hidden;
 
 function wander() {
-  if (idle()) {
+  // Not once you have parked it somewhere by hand.
+  if (idle() && !placed) {
     setX(Math.random() * (window.innerWidth - stage.offsetWidth));
     // The stage transition is what moves it; this is what makes it look like
     // walking rather than sliding, and it runs for exactly that long.
@@ -854,7 +959,8 @@ if (navigator.getBattery) {
   }).catch(() => {}); // no battery, or a desktop - the skill says so
 }
 
-// Start somewhere on the right, where a taskbar pet belongs.
-setX(window.innerWidth - stage.offsetWidth - 40);
+// Start on the floor at the right, where a taskbar pet belongs, until a saved
+// placement arrives with the first push of the pet's state.
+setXY(window.innerWidth - stage.offsetWidth - 40, roomY());
 setTimeout(wander, 12000);
 setTimeout(quirk, 5000);

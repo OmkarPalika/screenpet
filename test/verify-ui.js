@@ -31,13 +31,15 @@ process.on('unhandledRejection', (err) => {
 app.whenReady().then(async () => {
   const errors = [];
   const ipc = {
-    act: [], interactive: [], react: [], chat: [], chatOpen: [], photo: [], ask: 0, listen: 0,
+    act: [], interactive: [], react: [], chat: [], chatOpen: [], photo: [], place: [],
+    ask: 0, listen: 0,
   };
   ipcMain.on('pet:photo-taken', (_e, v) => ipc.photo.push(v));
   ipcMain.on('pet:listen', () => { ipc.listen += 1; });
   ipcMain.on('pet:act', (_e, name) => ipc.act.push(name));
   ipcMain.on('pet:interactive', (_e, v) => ipc.interactive.push(v));
   ipcMain.on('pet:react', (_e, v) => ipc.react.push(v));
+  ipcMain.on('pet:place', (_e, v) => ipc.place.push(v));
   ipcMain.on('pet:chat', (_e, v) => ipc.chat.push(v));
   ipcMain.on('pet:chat-open', (_e, v) => ipc.chatOpen.push(v));
   ipcMain.on('pet:ask', () => { ipc.ask += 1; });
@@ -453,6 +455,99 @@ app.whenReady().then(async () => {
     'dropping the pet counted as a headpat'
   );
 
+  // --- put it anywhere, but never off the screen ---------------------------
+  // The one thing a desktop pet must never do is end up somewhere you cannot
+  // reach it. Every corner is tried by hand rather than trusting one clamp:
+  // there are two axes, and the vertical one flips which edge the stage hangs
+  // off partway up, which is exactly where an off-by-one lives.
+  const dragTo = (x, y) => js(
+    `(() => { const p = document.getElementById('pet'), r = p.getBoundingClientRect();
+       p.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0,
+         clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
+       for (const t of ['mousemove', 'mouseup'])
+         document.dispatchEvent(new MouseEvent(t, { bubbles: true, clientX: ${x}, clientY: ${y} }));
+     })()`
+  );
+  // Taller than the rest of this run needs: this window is 520x300, and at that
+  // height every position on it is inside the bubble reserve, so the flip could
+  // never be seen going back. A display is not 238 pixels tall.
+  win.setSize(520, 760);
+  await settle();
+
+  const petBox = () => js(
+    `(() => { const r = document.getElementById('pet').getBoundingClientRect();
+       return { left: r.left, top: r.top, right: r.right, bottom: r.bottom,
+                w: innerWidth, h: innerHeight,
+                flip: document.getElementById('stage').dataset.flip }; })()`
+  );
+
+  for (const [name, x, y] of [
+    ['the top left', -4000, -4000],
+    ['the top right', 9000, -4000],
+    ['the bottom right', 9000, 9000],
+    ['the bottom left', -4000, 9000],
+  ]) {
+    await dragTo(x, y);
+    await settle();
+    const b = await petBox();
+    check(
+      b.left >= -1 && b.top >= -1 && b.right <= b.w + 1 && b.bottom <= b.h + 1,
+      `shoved at ${name} the pet left the screen: ${JSON.stringify(b)}`
+    );
+  }
+
+  // Vertical placement is the new half, so it is checked for having actually
+  // happened rather than only for staying in bounds. Relative to the window:
+  // this one is 520x300, not a display.
+  const floor = (await petBox()).top;
+  await dragTo(300, Math.round((await petBox()).h / 2));
+  await settle();
+  const mid = await petBox();
+  check(mid.top < floor - 30, `the pet did not move up the screen: ${mid.top} of ${floor}`);
+
+  // Up there the bubble would be off the top of the window, so everything that
+  // sits above the pet flips to below it. Without this the answer is drawn
+  // outside the window and simply is not there.
+  await dragTo(300, 20);
+  await settle();
+  const high = await petBox();
+  check(high.flip === 'down', `near the top the stage did not flip: ${high.flip}`);
+  win.webContents.send('pet:say', { text: 'can you still read me up here?', kind: 'chat', expr: 'smile' });
+  await settle();
+  const bub = await js(
+    `(() => { const r = document.getElementById('bubble').getBoundingClientRect();
+       const p = document.getElementById('pet').getBoundingClientRect();
+       return { top: r.top, bottom: r.bottom, h: innerHeight, below: r.top >= p.top }; })()`
+  );
+  check(bub.top >= 0 && bub.bottom <= bub.h, `the bubble is off the screen: ${JSON.stringify(bub)}`);
+  check(bub.below, 'the bubble stayed above a pet that has no room above it');
+
+  // Down again, where it flips back.
+  await dragTo(300, mid.h + 500);
+  await settle();
+  const back = await petBox();
+  check(back.flip === 'up', `the stage stayed flipped once back on the floor: ${JSON.stringify(back)}`);
+
+  // Placed by hand is remembered by the main process, and the pet stops
+  // wandering off on its own from that point.
+  check(!!ipc.place.length, 'placing the pet told main nothing, so it is forgotten on restart');
+  const at = ipc.place.at(-1);
+  check(
+    at && at.x >= 0 && at.x <= 1 && at.y >= 0 && at.y <= 1,
+    `the saved placement is not a pair of fractions: ${JSON.stringify(at)}`
+  );
+  check((await js(`placed`)) === true, 'a hand-placed pet still wanders off on its own');
+
+  win.setSize(520, 300);
+  await settle();
+  // Back on a short window the pet must still be on it - the clamp runs on
+  // resize, or a pet parked low on a tall display ends up under a short one.
+  const shrunk = await petBox();
+  check(
+    shrunk.bottom <= shrunk.h + 1 && shrunk.top >= -1,
+    `resizing the window left the pet outside it: ${JSON.stringify(shrunk)}`
+  );
+
   // --- chat ---------------------------------------------------------------
   await js(
     `document.getElementById('pet').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
@@ -632,6 +727,78 @@ app.whenReady().then(async () => {
   await settle();
   check((await js(`sfx !== null`)) === true, 'the pet never made a sound with noises on');
   win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', sounds: false });
+  await settle();
+
+  // --- chirp speech ---------------------------------------------------------
+  // The pet's own lines are blips rather than a Windows voice reading them out.
+  // Only a render can say whether that is a sound at all - the first purr in
+  // this file rendered as silence - so the same measurements apply.
+  const chirps = await js(`(async () => {
+    const render = async (text, expr) => {
+      const off = new OfflineAudioContext(1, 132300, 44100); // three seconds
+      const end = chatter(off, text, expr);
+      const d = (await off.startRendering()).getChannelData(0);
+      let peak = 0, voiced = 0, sum = 0;
+      for (let i = 0; i < d.length; i++) {
+        const v = Math.abs(d[i]);
+        if (v > peak) peak = v;
+        if (v > 0.002) voiced++;
+        sum += d[i] * d[i];
+      }
+      return { peak, ms: Math.round((voiced / 44100) * 1000), end, rms: Math.sqrt(sum / d.length) };
+    };
+    const line = 'you have been staring at that for eleven minutes now';
+    return {
+      short: await render('oh!', 'smile'),
+      long: await render(line, 'smile'),
+      huge: await render('aeiou '.repeat(80), 'smile'),
+      same: await render('the same line twice', 'smile'),
+      again: await render('the same line twice', 'smile'),
+      asked: await render('are you there?', 'smile'),
+      told: await render('are you there.', 'smile'),
+      sad: await render(line, 'cry'),
+      empty: await render('   ', 'smile'),
+    };
+  })()`);
+
+  for (const name of ['short', 'long', 'sad']) {
+    const c = chirps[name];
+    check(c.peak > 0.01, `the ${name} chirp makes no sound: peak ${c.peak.toFixed(4)}`);
+    check(c.peak < 1, `the ${name} chirp clips: peak ${c.peak.toFixed(3)}`);
+    check(c.end < 3, `the ${name} chirp was scheduled past the end of the render`);
+  }
+  check(chirps.long.ms > chirps.short.ms, 'a long line chirps for no longer than a short one');
+  // Capped, or a long line turns into a modem handshake.
+  check(chirps.huge.ms <= 1200, `a 480 character line chirps for ${chirps.huge.ms}ms`);
+  // The same sentence has to sound the same, or it reads as noise rather than a
+  // voice. That is the whole job of the seed.
+  check(
+    chirps.same.rms.toFixed(6) === chirps.again.rms.toFixed(6),
+    'the same line chirps differently every time'
+  );
+  check(chirps.asked.rms !== chirps.told.rms, 'a question chirps exactly like a statement');
+  check(chirps.empty.peak === 0, 'an empty line still made a noise');
+  // The feeling reaches the chirps too: the same words, said miserably, are slower.
+  check(chirps.sad.ms > chirps.long.ms, 'a miserable pet chirps exactly like a cheerful one');
+
+  // End to end through the real bridge. A line the pet came up with itself moves
+  // its mouth without handing anything to the platform synthesiser; an answer
+  // you asked for is still spoken in words.
+  win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', voice: true, sounds: false, mic: false });
+  win.webContents.send('pet:say', { text: 'I am RIGHT HERE', kind: 'chat', expr: 'annoyed', chatter: true });
+  await settle();
+  check(!(await speaking()), 'the pet read its own line out loud instead of chirping it');
+  check(
+    (await js(`document.getElementById('pet').classList.contains('is-talking')`)) === true,
+    'chirping does not move the mouth'
+  );
+  if (voices.length) {
+    win.webContents.send('pet:say', { text: 'the answer is 391', kind: 'answer', expr: 'proud' });
+    await settle();
+    check(await speaking(), 'an answer was chirped rather than spoken out loud');
+    await js(`speechSynthesis.cancel()`);
+  }
+  win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', voice: false, sounds: false, mic: false });
   await settle();
 
   // --- body movements -------------------------------------------------------
@@ -1093,7 +1260,7 @@ app.whenReady().then(async () => {
     return app.exit(1);
   }
   console.log(
-    'ok - speech, noises, moods, expressions, gaze, species, skins, wardrobe, bars,\n'
+    'ok - speech, chirps, noises, moods, expressions, gaze, species, skins, wardrobe, bars,\n'
     + '     hover, headpat, tickle, drag, chat, menu, settings and IPC all good.'
   );
   console.log(
