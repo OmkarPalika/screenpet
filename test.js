@@ -550,6 +550,8 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       timer: 'set a timer for 5 minutes', time: 'what time is it', date: 'what day is it',
       battery: 'battery?', coin: 'flip a coin', dice: 'roll a dice', rps: 'rock',
       move: 'dance', weather: 'weather?', music: 'next track', photo: 'take a photo',
+      remember: 'remember my standup is at 9:30', forget: 'forget the standup',
+      memories: 'what do you remember?',
     }[skill.name];
     assert.ok(probe, `no probe for skill "${skill.name}"`);
     const out = skills.match(probe, ctx);
@@ -1254,6 +1256,297 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // A pasted wall of text is a prompt blowout, not a conversation.
   await chat('x'.repeat(9000), { fetch: cgrab, model: 'm' });
   assert.ok(cbody.prompt.length < 1200, `chat prompt not capped: ${cbody.prompt.length} chars`);
+
+  // ===== memory ==============================================================
+
+  // Built from local Date parts on purpose: every hour and day rule in memory.js
+  // is about the calendar the person lives in, so a UTC constant would pass here
+  // and be an hour wrong on the machine.
+  const at = (y, mo, d, h = 0) => new Date(y, mo, d, h, 0, 0, 0).getTime();
+  const MON_9PM = at(2026, 0, 5, 21);
+
+  {
+    const memo = require('./memory');
+
+    // --- load: a hand-edited file cannot make it say anything absurd ---------
+    for (const junk of [null, 42, 'nope', [], { facts: 'no' }]) {
+      const m = memo.load(junk, MON_9PM);
+      assert.deepStrictEqual(m.facts, [], `facts survived junk: ${JSON.stringify(junk)}`);
+      assert.strictEqual(m.hours.ask.length, 24);
+      assert.strictEqual(m.days, 1);
+    }
+    {
+      const m = memo.load({
+        days: -5,
+        cross: 1e12,
+        hours: { ask: [1, 2], chat: 'no', care: new Array(24).fill(1e12) },
+        care: { n: -1, best: 'lots', bestDay: 'whenever' },
+        day: 'not-a-day',
+        facts: [null, { text: '   ' }, { text: 'ok', hour: 99 }],
+      }, MON_9PM);
+      assert.strictEqual(m.days, 1, 'negative day count accepted');
+      assert.ok(m.cross <= 1e6, 'counter not capped');
+      assert.strictEqual(m.hours.ask.length, 24, 'short bucket array accepted');
+      assert.strictEqual(m.hours.chat.length, 24, 'non-array buckets accepted');
+      assert.ok(m.hours.care.every((n) => n <= 1e6), 'bucket counts not capped');
+      assert.strictEqual(m.care.best, 0, 'non-numeric best accepted');
+      assert.strictEqual(m.care.bestDay, '', 'malformed day string accepted');
+      assert.deepStrictEqual(m.facts.map((f) => f.text), ['ok'], 'blank facts survived');
+      assert.strictEqual(m.facts[0].hour, null, 'hour 99 accepted');
+    }
+
+    // --- remember: your words, redacted, deduped, capped ---------------------
+    {
+      let m = memo.fresh(MON_9PM);
+      m = memo.remember(m, 'my standup is at 9:30', MON_9PM, 9).mem;
+      assert.strictEqual(m.facts[0].text, 'my standup is at 9:30');
+      assert.strictEqual(m.facts[0].hour, 9);
+
+      // The same thing again replaces rather than duplicates.
+      m = memo.remember(m, 'My Standup is at 9:30!', MON_9PM + 1000).mem;
+      assert.strictEqual(m.facts.length, 1, 'a repeated fact was stored twice');
+      assert.strictEqual(m.facts[0].at, MON_9PM + 1000, 'the newer telling did not win');
+
+      // The same trust boundary as the model prompt. A remembered secret is still
+      // a secret, and this file lives on disk where the chat history does not.
+      const secret = memo.remember(m, 'my key is sk-abcdefghijklmnop1234', MON_9PM).fact;
+      assert.ok(secret.text.includes('[REDACTED]'), 'a secret went into memory.json');
+      assert.ok(!secret.text.includes('sk-abc'), 'redaction let the key through');
+
+      // Nothing usable is not an error, it is nothing.
+      assert.strictEqual(memo.remember(memo.fresh(0), '   ', 0).fact, null);
+
+      // The oldest goes rather than the file growing without limit.
+      let full = memo.fresh(0);
+      for (let i = 0; i < memo.MAX_FACTS + 10; i++) {
+        full = memo.remember(full, `fact number ${i}`, i).mem;
+      }
+      assert.strictEqual(full.facts.length, memo.MAX_FACTS, 'fact list is unbounded');
+      assert.ok(full.facts[0].text.endsWith(' 10'), 'the wrong end of the list was dropped');
+    }
+
+    // --- forget: all of it means all of it -----------------------------------
+    {
+      let m = memo.fresh(0);
+      m = memo.remember(m, 'standup at nine', 1).mem;
+      m = memo.remember(m, 'the cat is called biscuit', 2).mem;
+
+      const one = memo.forget(m, 'biscuit');
+      assert.strictEqual(one.gone, 1);
+      assert.deepStrictEqual(one.mem.facts.map((f) => f.text), ['standup at nine']);
+
+      // A miss says so rather than quietly succeeding.
+      assert.strictEqual(memo.forget(m, 'aardvark').gone, 0);
+      // ...and a term made only of stopwords must not wipe the lot by accident.
+      assert.strictEqual(memo.forget(m, 'that').gone, 0, 'a stopword deleted facts');
+
+      assert.strictEqual(memo.forget(m, null).mem.facts.length, 0, 'forget everything kept some');
+      assert.strictEqual(memo.forget(m, null).gone, 2);
+    }
+
+    // --- recall: shared words, best first ------------------------------------
+    {
+      let m = memo.fresh(0);
+      m = memo.remember(m, 'the cat is called biscuit', 1).mem;
+      m = memo.remember(m, 'I run on tuesdays', 2).mem;
+
+      assert.deepStrictEqual(
+        memo.recall(m, 'how is biscuit today').map((f) => f.text),
+        ['the cat is called biscuit']
+      );
+      assert.deepStrictEqual(memo.recall(m, 'what is the weather'), [], 'recalled on stopwords');
+      assert.deepStrictEqual(memo.recall(m, ''), []);
+
+      // brief() is what reaches the model, and it carries only what recall found.
+      const lines = memo.brief(m, 'is biscuit ok', 0).join('\n');
+      assert.ok(lines.includes('biscuit'), 'brief dropped the relevant fact');
+      assert.ok(!lines.includes('tuesdays'), 'brief sent an irrelevant fact to the model');
+      assert.deepStrictEqual(memo.brief(m, 'zzz', 0), [], 'brief spoke with nothing to say');
+
+      // ...and those lines have to actually survive into the prompt, which is the
+      // only place a memory is ever read out to anything. Loopback, but still.
+      await chat('is biscuit ok', { fetch: cgrab, model: 'm', memory: memo.brief(m, 'is biscuit ok', 0) });
+      assert.ok(cbody.prompt.includes('biscuit'), 'the prompt lost the recalled fact');
+      await chat('is biscuit ok', { fetch: cgrab, model: 'm' });
+      assert.ok(!cbody.prompt.includes('asked you to remember'), 'memory framing leaked with no memory');
+    }
+
+    // --- patterns: counters only, and only when they mean something ----------
+    {
+      let m = memo.fresh(MON_9PM);
+      assert.strictEqual(memo.pattern(m, 'ask'), null, 'a pattern from no data');
+
+      for (let i = 0; i < 5; i++) m = memo.note(m, 'ask', at(2026, 0, 5 + i, 21));
+      assert.strictEqual(memo.pattern(m, 'ask'), null, 'called five observations a habit');
+
+      m = memo.note(m, 'ask', at(2026, 0, 10, 22));
+      const p = memo.pattern(m, 'ask');
+      assert.ok(p && p.hour === 21, `wrong peak hour: ${JSON.stringify(p)}`);
+      assert.strictEqual(p.n, 6);
+
+      // Spread evenly across the day is not a habit.
+      let flat = memo.fresh(MON_9PM);
+      for (let h = 0; h < 24; h++) flat = memo.note(flat, 'chat', at(2026, 0, 5, h));
+      assert.strictEqual(memo.pattern(flat, 'chat'), null, 'called using a computer a habit');
+
+      // An unknown event name changes nothing at all.
+      assert.strictEqual(memo.note(m, 'keystrokes', MON_9PM), m);
+    }
+
+    // --- seen: days, the care record, and noticing an absence ----------------
+    {
+      let m = memo.fresh(at(2026, 0, 5, 10));
+      m = memo.note(m, 'care', at(2026, 0, 5, 10));
+      m = memo.note(m, 'care', at(2026, 0, 5, 11));
+      assert.strictEqual(m.care.n, 2);
+
+      m = memo.seen(m, at(2026, 0, 6, 10));
+      assert.strictEqual(m.days, 2);
+      assert.strictEqual(m.care.n, 0, 'today did not start fresh');
+      assert.strictEqual(m.care.best, 2, 'yesterday was not recorded as the best');
+      assert.strictEqual(m.care.bestDay, '2026-01-05');
+
+      // A quieter day must not overwrite the record.
+      m = memo.note(m, 'care', at(2026, 0, 6, 12));
+      m = memo.seen(m, at(2026, 0, 7, 10));
+      assert.strictEqual(m.care.best, 2, 'a worse day replaced the record');
+
+      // Same day twice is not two days.
+      const twice = memo.seen(memo.seen(m, at(2026, 0, 7, 11)), at(2026, 0, 7, 12));
+      assert.strictEqual(twice.days, m.days, 'ticking counted extra days');
+
+      // Overnight is not an absence; a week is.
+      assert.strictEqual(memo.seen(m, at(2026, 0, 8, 9)).away, 0, 'overnight counted as away');
+      assert.ok(memo.seen(m, at(2026, 0, 14, 9)).away >= memo.AWAY_MS);
+    }
+
+    // --- remark: one thing at a time, and never the same thing twice ---------
+    {
+      let m = memo.fresh(at(2026, 0, 1, 9));
+      m = { ...m, lastSeen: at(2026, 0, 1, 9) };
+      m = memo.seen(m, at(2026, 0, 8, 9));
+
+      const away = memo.remark(m, at(2026, 0, 8, 9), { cheek: false });
+      assert.ok(away && /gone 7 days/.test(away.text), `wrong absence line: ${away && away.text}`);
+      // Consumed, so it is mentioned once and not every hour and a half after.
+      assert.strictEqual(away.mem.away, 0, 'the absence was not cleared');
+      // ...and throttled, so nothing else piles in behind it.
+      assert.strictEqual(
+        memo.remark(away.mem, at(2026, 0, 8, 10), { cheek: true }), null,
+        'the pet talked twice inside the throttle'
+      );
+
+      // A milestone is announced once and then never again.
+      let old = { ...memo.fresh(0), days: 30, lastRemarkAt: 0 };
+      const first = memo.remark(old, MON_9PM, { cheek: false });
+      assert.ok(first && /30 days/.test(first.text), `no milestone: ${first && first.text}`);
+      assert.strictEqual(first.mem.toldDays, 30);
+      const again = memo.remark(
+        { ...first.mem, lastRemarkAt: 0 }, MON_9PM, { cheek: false }
+      );
+      assert.ok(!again || !/30 days/.test(again.text), 'the milestone repeated');
+
+      // A routine comes up at the hour you gave it, and once a day at most.
+      let r = memo.remember(memo.fresh(0), 'stretch', MON_9PM, 21).mem;
+      const due = memo.remark({ ...r, days: 3 }, MON_9PM, { cheek: false });
+      assert.ok(due && due.text.includes('stretch'), `routine missed: ${due && due.text}`);
+      assert.strictEqual(
+        memo.remark({ ...due.mem, lastRemarkAt: 0 }, MON_9PM + 60000, { cheek: false }), null,
+        'the routine repeated within the day'
+      );
+      // The wrong hour is not the hour.
+      assert.ok(
+        !(memo.remark({ ...r, days: 3 }, at(2026, 0, 5, 14), { cheek: false }) || {})
+          .text?.includes('stretch'),
+        'a routine fired at the wrong hour'
+      );
+    }
+
+    // --- cheek: teasing with real numbers, or not at all ---------------------
+    {
+      // It needs a yesterday before it is allowed to have an opinion about today.
+      const fresh = { ...memo.fresh(0), care: { n: 0, best: 9, bestDay: '2026-01-04' } };
+      assert.strictEqual(memo.dig(fresh, at(2026, 0, 5, 15)), null, 'teased on day one');
+
+      const known = { ...fresh, days: 5 };
+      const line = memo.dig(known, at(2026, 0, 5, 15));
+      assert.ok(line && line.includes('9') && line.includes('2026-01-04'), `made up: ${line}`);
+
+      // Every line it can produce has to be backed by something recorded, so an
+      // empty memory has nothing to say however cheeky the setting is.
+      const blank = { ...memo.fresh(0), days: 3 };
+      assert.strictEqual(memo.dig(blank, at(2026, 0, 5, 15)), null, 'invented something to tease with');
+      assert.strictEqual(
+        memo.remark(blank, at(2026, 0, 5, 15), { cheek: true }), null,
+        'remark found a dig where dig found none'
+      );
+
+      // The switch is a switch.
+      const cross = { ...memo.fresh(0), days: 3, cross: 2, lastRemarkAt: 0 };
+      assert.ok(memo.remark(cross, MON_9PM, { cheek: true }), 'cheek on said nothing');
+      assert.strictEqual(memo.remark(cross, MON_9PM, { cheek: false }), null, 'cheek off still teased');
+    }
+
+    // --- listing -------------------------------------------------------------
+    {
+      assert.ok(/nothing yet/.test(memo.listing(memo.fresh(0))));
+      let m = memo.fresh(0);
+      for (let i = 0; i < 5; i++) m = memo.remember(m, `thing ${i}`, i).mem;
+      const said = memo.listing(m, 2);
+      assert.ok(said.includes('thing 4') && said.includes('and 3 more'), `bad listing: ${said}`);
+    }
+  }
+
+  // --- the language half: what actually reaches memory.js --------------------
+  {
+    const skills = require('./skills');
+    const ctx = { now: new Date(MON_9PM), rand: () => 0 };
+    const run = (t) => skills.match(t, ctx);
+
+    const noted = run('remember my standup is at 9:30');
+    assert.strictEqual(noted.name, 'remember');
+    assert.strictEqual(noted.memory.text, 'my standup is at 9:30');
+    assert.strictEqual(noted.memory.hour, 9, 'the clock in a routine was not picked up');
+
+    // A leading "to" is a task, not a fact.
+    assert.strictEqual(run('remember to feed the cat').memory.text, 'feed the cat');
+
+    // ...and with a time in it, it is a reminder and belongs to the timer skill.
+    const timed = run('remember to feed the cat in 20 minutes');
+    assert.strictEqual(timed.name, 'timer');
+    assert.strictEqual(timed.timer.say, 'time to feed the cat!');
+
+    // A sentence is allowed past the command length cap; a document is not.
+    const long = `remember ${'the cat likes it warm. '.repeat(4)}`.trim();
+    assert.ok(long.length > skills.MAX_COMMAND_CHARS);
+    assert.strictEqual(run(long).name, 'remember', 'a long routine fell through to the model');
+    assert.strictEqual(run(`remember ${'x'.repeat(400)}`), null, 'a pasted document became a fact');
+    // ...and the cap is still on for everything else.
+    assert.strictEqual(run(`flip a coin ${'and think about it '.repeat(6)}`), null);
+
+    assert.strictEqual(run('what do you remember?').memory.list, true);
+
+    assert.strictEqual(run('forget everything').memory.forget, null);
+    assert.strictEqual(run('forget it all').memory.forget, null);
+    assert.strictEqual(run('forget the standup').memory.forget, 'standup');
+    // The one that has to fall through: people say this in conversation.
+    assert.strictEqual(run('forget it'), null, '"forget it" deleted memories');
+  }
+
+  // --- the settings gate ------------------------------------------------------
+  {
+    const config = require('./settings');
+    const on = config.load({});
+    assert.strictEqual(on.memory, true, 'memory should be on by default');
+    assert.strictEqual(on.cheek, true);
+
+    assert.strictEqual(config.load({ memory: false }).memory, false);
+    // No memory, nothing to be cheeky about.
+    assert.strictEqual(config.load({ memory: false, cheek: true }).cheek, false);
+    assert.strictEqual(config.load({ cheek: false }).cheek, false);
+    // Neither is a device, so neither can be turned on by a truthy string.
+    assert.strictEqual(config.load({ memory: 'no' }).memory, true);
+  }
 
   console.log('all checks passed');
 })();

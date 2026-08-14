@@ -15,6 +15,9 @@
 //   media - a media key for main to press (see KEYS in media.js)
 //   photo - true to ask the renderer for one camera frame
 //   weather - true if this needs the one networked feature, which main gates
+//   memory - { text, hour } to write down, { forget } to drop, or { list: true }
+//
+// A skill may set `long: true` to opt out of the command length cap below.
 
 const HOUR = 3600000;
 
@@ -144,7 +147,11 @@ const SKILLS = [
     // Needs both a timing word and an actual duration. "how do I set a timer in
     // JavaScript" has the first and not the second, and falls through to the
     // model where it belongs.
-    match: (t) => /\b(timer|alarm|remind me|wake me|nudge me|ping me)\b/i.test(t)
+    // "remember to X in ten minutes" is a reminder, not something to write down,
+    // and this skill sits above the memory ones so it gets first refusal. Without
+    // a time in it, it falls through to memory - which is the right answer for
+    // "remember to be nice to the cat".
+    match: (t) => /\b(timer|alarm|remind me|wake me|nudge me|ping me|remember to)\b/i.test(t)
       && (duration(t) || repeatOf(t)),
     run: (text) => {
       // A repeat rule wins over a bare duration: "every 30 minutes" contains
@@ -153,7 +160,7 @@ const SKILLS = [
       const ms = repeat ? null : duration(text);
       // "remind me to stretch in 20 minutes" - everything between the verb and
       // the timing is what you actually wanted reminding about.
-      const label = (/\b(?:remind|wake|nudge|ping) me (?:to|about) (.+?)(?:\s+in\b|\s+(?:every|each)\b|\s+at\b|\s*$)/i
+      const label = (/\b(?:(?:remind|wake|nudge|ping) me|remember) (?:to|about) (.+?)(?:\s+in\b|\s+(?:every|each)\b|\s+at\b|\s*$)/i
         .exec(text) || [])[1];
       const what = label && label.trim();
       const when = repeat ? spokenRepeat(repeat) : `${spoken(ms)} from now`;
@@ -294,7 +301,67 @@ const SKILLS = [
       weather: true,
     }),
   },
+
+  // --- memory ---------------------------------------------------------------
+  //
+  // The language half only, same split as the alarms: what a fact is, how long it
+  // is kept and what the pet does with it is memory.js's problem. These three are
+  // the only way your words are ever written to memory.json, which is why they
+  // are explicit commands and nothing here is inferred from ordinary chat.
+  {
+    name: 'forget',
+    // "forget it" is a thing people say in conversation and is emphatically not
+    // this - hence the three character floor, which "it" does not clear. Being
+    // wrong here deletes something, so the wording has to be unambiguous.
+    match: (t) => FORGET_ALL.test(t.trim()) || FORGET.test(t.trim()),
+    run: (text) => {
+      const t = text.trim();
+      const all = FORGET_ALL.test(t);
+      const what = all ? null : FORGET.exec(t)[1].trim();
+      return {
+        say: all ? 'Forgotten. All of it' : `Forgetting anything about ${what}`,
+        expr: 'oops',
+        memory: { forget: all ? null : what },
+      };
+    },
+  },
+  {
+    name: 'memories',
+    match: (t) => /\b(?:what do you remember|what do you know about me|your memory)\b/i.test(t),
+    // main replaces this with what is actually stored - only it can see the file.
+    // The fallback is what you get if it somehow cannot, and it is still true.
+    run: () => ({ say: 'let me check my notes', expr: 'curious', memory: { list: true } }),
+  },
+  {
+    name: 'remember',
+    // Not length-capped: a routine worth writing down is often a sentence, and
+    // the ceiling that matters is the one memory.js applies on the way in.
+    long: true,
+    match: (t) => REMEMBER.test(t) && t.length <= MAX_MEMORY_CHARS
+      && !!REMEMBER.exec(t)[1].trim(),
+    run: (text) => {
+      // A leading "to" reads as a task rather than a fact. The timer skill above
+      // has already taken any version of this with a time in it.
+      const body = REMEMBER.exec(text)[1].trim().replace(/^to\s+/i, '');
+      const clock = clockOf(body);
+      return {
+        say: clock ? `Noted, and I will bring it up around ${two(clock.hour)}:00` : `Noted: ${body}`,
+        expr: 'proud',
+        memory: { text: body, hour: clock ? clock.hour : null },
+      };
+    },
+  },
 ];
+
+// Anything longer than this is a document, not a thing to remember. The real cap
+// is 200 characters in memory.js; this one stops the pet cheerfully accepting a
+// paragraph and then storing a third of it.
+const MAX_MEMORY_CHARS = 300;
+
+const REMEMBER = /^(?:please\s+)?(?:remember|note|keep in mind|don't forget|do not forget)(?:\s+that)?\s+(.+?)[!.]*$/i;
+
+const FORGET_ALL = /^forget (?:everything|it all|all of it|about it all)[!.]*$/i;
+const FORGET = /^forget (?:that |about |the )?(.{3,}?)[!.]*$/i;
 
 // Music. The pet presses the keyboard's transport keys, so whatever is already
 // playing obeys - and nothing comes back. It cannot see a track name, an artist
@@ -376,7 +443,7 @@ const MOVE_EXPR = {
  */
 function match(text, ctx = {}) {
   const t = String(text || '').trim();
-  if (!t || t.length > MAX_COMMAND_CHARS) return null;
+  if (!t) return null;
 
   const full = {
     now: ctx.now instanceof Date ? ctx.now : new Date(ctx.now || 0),
@@ -385,6 +452,9 @@ function match(text, ctx = {}) {
   };
 
   for (const skill of SKILLS) {
+    // The length cap is what stops a paragraph tripping a command; a skill that
+    // legitimately takes a sentence opts out and applies its own ceiling.
+    if (t.length > MAX_COMMAND_CHARS && !skill.long) continue;
     if (skill.match(t)) return { name: skill.name, ...skill.run(t, full) };
   }
   return null;
@@ -393,5 +463,5 @@ function match(text, ctx = {}) {
 module.exports = {
   match, duration, spoken, repeatOf, clockOf, spokenRepeat,
   SKILLS, MOVE_WORDS, MOVE_LINES, MOVE_EXPR, MEDIA_WORDS, MEDIA_LINES, PHOTO_WORDS,
-  MAX_TIMER_MS, MAX_COMMAND_CHARS,
+  MAX_TIMER_MS, MAX_COMMAND_CHARS, MAX_MEMORY_CHARS,
 };

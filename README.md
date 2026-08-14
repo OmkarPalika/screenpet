@@ -488,7 +488,8 @@ questions for your favourite desk buddy?`).
 
 The last three exchanges are kept for context **in memory only, never written to
 disk**. A desktop pet that keeps a transcript of your evening in `userData` is a
-liability, not a feature.
+liability, not a feature. It does remember things across sessions, but only the
+ones you told it to — see "What it remembers".
 
 The pet window is `focusable: false` so it can never steal focus from what you
 are actually doing, which also means it cannot receive typing. Focus is granted
@@ -498,10 +499,77 @@ State lives in `pet.json` in Electron's `userData` directory. It is validated on
 load, so a corrupted or hand-edited file degrades to a fresh pet instead of
 crashing.
 
-That directory is the whole of what this app writes: `pet.json`, `settings.json`,
-and `timers.json` if you have set a reminder. Every one of them is validated the
-same way on load, and none of them holds a transcript — conversation history is
-in memory and dies with the process.
+That directory is the whole of what this app writes: `pet.json`,
+`settings.json`, `timers.json` if you have set a reminder, and `memory.json` if
+you have told it to remember something. Every one of them is validated the same
+way on load, and none of them holds a transcript — conversation history is in
+memory and dies with the process.
+
+## What it remembers
+
+The pet keeps something between sessions. This is the only feature here that
+accumulates a file with your words in it, so the rules are narrow and stated
+plainly.
+
+**Your words are written down only when you say `remember`.** Nothing you type
+at it, nothing it reads off your screen, nothing it hears and nothing it sees
+ever reaches `memory.json`. There is no inference, no summarisation of your
+chat, and no "learning from your conversations" — those three commands are the
+entire write path.
+
+```
+remember my standup is at 9:30       -> Noted, and I will bring it up around 09:00
+remember the cat is called biscuit   -> Noted: the cat is called biscuit
+what do you remember                 -> the cat is called biscuit; my standup is at 9:30
+forget the standup                   -> Forgetting anything about standup
+forget everything                    -> Forgotten. All of it
+```
+
+A time in what you tell it becomes a routine, and the pet brings it up at that
+hour — once a day at most. `remember to X in ten minutes` is a reminder rather
+than a fact, and the timer skill takes it first.
+
+Facts go through the same redaction that guards the model prompt, and the pet
+reads back what it actually stored rather than what you typed:
+
+```
+remember my key is sk-abcdefghijklmnop1234
+  -> Noted, with a bit taken out: my key is [REDACTED]
+```
+
+**Everything else it learns is a counter.** Which hour you tend to ask it
+things, how many times you looked after it today, how many times a poking bout
+went all the way to tears. Twenty-four integers per event and three events —
+there are no words in that half of the file at all. It is enough for the pet to
+say `21:00 again. 14 times now. we are both very predictable`, and not enough to
+reconstruct anything you did.
+
+Every line it volunteers is built from something recorded. It teases you with
+your own numbers or it says nothing:
+
+```
+you gave me 9 of those on 2026-01-04. today: nothing. no notes
+I still remember the 2 times you poked me until I cried
+you were gone 7 days. I waited
+30 days now. that is a real friendship, I think
+```
+
+At most one such remark every ninety minutes, it spends the small-talk slot
+rather than adding a second one, and quiet hours silence it like everything
+else. `Let it be cheeky about it` turns off the needling half and keeps the
+rest.
+
+When a fact shares a word with what you just typed, it is put in front of the
+model — which is Ollama, on loopback. That is the only place a memory is ever
+read out to anything.
+
+**Off deletes it.** Unticking the setting removes `memory.json` rather than
+pausing it, because a memory you can only pause is one that quietly keeps the
+file, and the file is the whole of what anyone would object to.
+
+Matching is shared words, not embeddings. It misses paraphrases and always
+will; a vector index inside a desktop pet is not a trade worth making, and the
+miss costs nothing — the model still answers, just without the reminder.
 
 ## Settings
 
@@ -523,6 +591,8 @@ and quit it — the pet has no taskbar button by design.
 | Tell a face from a curtain | Off by default, needs the camera. A count, never a name — see "Faces". |
 | Let it ask about the weather | Off by default. **The only setting that sends anything.** See "The one thing that leaves". |
 | Town | Where to ask about. The only user-typed string here that reaches a server. |
+| Remember things between sessions | **On** by default. Writes only what you asked it to remember. Off deletes the file. See "What it remembers". |
+| Let it be cheeky about it | On by default, needs the above. The pet needling you with what it has. |
 | Start with Windows | Packaged builds only — in development this would register `electron.exe`. |
 
 **Four settings open something, and each needs its own literal `true` plus the
@@ -1060,6 +1130,18 @@ exits. The one path the other two cannot reach.
   one skin, and two feelings out of fifteen — it is the hero image for reading
   the screen, not a tour of the picker or the expression range. `pet-faces.png`
   and `pet-species.png` from `npm run verify:ui` are where those live.
+- **Memory recall is word overlap.** `remember the cat is called biscuit` is
+  found by "biscuit" and not by "my pet". Paraphrases are missed, and the fix
+  would be a vector index inside a desktop pet.
+- **A routine only fires on the hour you gave it.** `remember I stretch at 3`
+  brings it up somewhere in the 15:00 hour, not at 15:00 exactly, and not at all
+  if the app is closed for that hour. Reminders are the exact ones.
+- **Patterns are one three-hour window per event.** Somebody with two distinct
+  work sessions gets one of them called a habit and the other ignored. Six
+  observations and a 40% share is a threshold that felt right, not a measured one.
+- **Nothing prunes an old fact.** Forty are kept, the oldest falls off the end,
+  and something you asked it to remember in March is still quoted back in
+  December unless you say `forget`.
 - **Autostart is wired but not exercised end to end.** It is gated on
   `app.isPackaged` and only reachable from the settings window of a built app.
 - **No auto-update.** Every new version is a manual download.
