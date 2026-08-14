@@ -287,6 +287,14 @@ app.whenReady().then(async () => {
     annoyed: { sel: '.anger', prop: 'display', want: 'block' },
     rage: { sel: '.anger', prop: 'display', want: 'block' },
     cry: { sel: '.tear', prop: 'display', want: 'block' },
+    // The keyboard half. Both props are new elements, so these two are the ones
+    // that would break if the markup and the stylesheet ever drift apart.
+    cool: { sel: '.shades', prop: 'display', want: 'block' },
+    innocent: { sel: '.halo', prop: 'display', want: 'block' },
+    huff: { sel: '.anger', prop: 'display', want: 'block' },
+    pleading: { sel: '.bow', prop: 'display', want: 'block' },
+    grimace: { sel: '.sweat', prop: 'display', want: 'block' },
+    mischief: { sel: '.mouth', prop: 'fill', want: 'rgb(138, 67, 64)' },
   })) {
     win.webContents.send('pet:say', { text: 'hello', kind: 'chat', expr });
     await settle();
@@ -597,8 +605,13 @@ app.whenReady().then(async () => {
     'blank', 'smile', 'grin', 'love', 'yum', 'giggle', 'oh', 'hmm', 'sulk', 'dizzy',
     'shy', 'proud', 'joy', 'annoyed', 'rage', 'cry',
     'listen', 'curious', 'wink', 'doze', 'oops',
+    // The ones you can ask for by name or emoji. Every entry in FACES, so a face
+    // added to the keyboard and never drawn shows up here as a blank cell.
+    'smug', 'cool', 'eyeroll', 'pleading', 'huff', 'flushed', 'grimace', 'shock',
+    'deadpan', 'melt', 'starstruck', 'mischief', 'queasy', 'mindblown', 'shush',
+    'innocent', 'wry', 'hug',
   ];
-  await sheet('pet-faces.png', [660, 640], `(source, box, clone) => {
+  await sheet('pet-faces.png', [660, 1160], `(source, box, clone) => {
     box.style.display = 'flex';
     box.style.flexWrap = 'wrap';
     for (const f of ${JSON.stringify(faces)}) {

@@ -374,13 +374,19 @@ function tick() {
       talk(pets.mood(state, { asleep: napping }), { tone: 'nag' });
     } else if (pets.shouldChatter(state, now, { asleep: napping })) {
       state.lastChatAt = now;
-      // Something it remembers outranks small talk when it has one, which is the
-      // whole point - "you were gone three days" is worth more than "mrrp". It
-      // spends the chatter slot rather than adding a second one, and memory.js
-      // throttles it far harder than chatter is throttled.
-      const said = settings.memory
+      // Sulking outranks all of it: a pet waiting for an apology and making
+      // small talk about the weather is not waiting for an apology.
+      //
+      // Below that, something it remembers outranks small talk when it has one -
+      // "you were gone three days" is worth more than "mrrp". Both spend the
+      // chatter slot rather than adding a second one, and memory.js throttles
+      // its half far harder than chatter is throttled.
+      const sulk = pets.sulking(state, now);
+      const said = !sulk && settings.memory
         && memory.remark(mem, now, { cheek: settings.cheek, index: lineIndex });
-      if (said) {
+      if (sulk) {
+        talk('sulky', { event: 'sulk' });
+      } else if (said) {
         mem = said.mem;
         saveMem();
         lineIndex++;
@@ -539,6 +545,16 @@ function restoreTimers(now) {
   late.forEach((item, i) => setTimeout(() => ring(item.say, true), 2500 + i * 5000));
 }
 
+// How each outcome of an apology sounds. `none` has no bank because the skill's
+// own wording is right there: there was nothing to forgive, and inventing a
+// grievance so the pet has something to forgive would be the joke inverted.
+const APOLOGY = {
+  none: { bank: null, event: null },
+  early: { bank: 'rushed', event: 'rushed' },
+  again: { bank: 'demand', event: 'demand' },
+  done: { bank: 'forgiven', event: 'forgiven' },
+};
+
 /**
  * Skills answer before the model does, so "set a timer for five minutes" is
  * exact and instant rather than a small model's best guess at what you meant.
@@ -633,6 +649,29 @@ function runSkill(text) {
       expr: fact ? skill.expr : 'curious',
     });
     return true;
+  }
+
+  // You said sorry. How that lands depends on how cross the pet actually is,
+  // which skills.js cannot see - it only knows an apology was made.
+  if (skill.apology) {
+    const { state: next, kind } = pets.apologise(state, Date.now());
+    state = next;
+    savePet();
+    pushState();
+    const { bank, event } = APOLOGY[kind];
+    send('pet:say', {
+      text: bank ? pets.line(bank, lineIndex++, settings.pet) : skill.say,
+      kind: 'chat',
+      expr: bank ? pets.expressionFor(event) : skill.expr,
+    });
+    return true;
+  }
+
+  // Naming a rival, or calling it useless. It answers, and it files it.
+  if (skill.offend) {
+    state = pets.offend(state, Date.now(), skill.offend);
+    savePet();
+    pushState();
   }
 
   // The banter skills point at a bank instead of carrying their own words, so
@@ -909,12 +948,15 @@ ipcMain.on('pet:act', (_e, name) => {
     // The one thing it holds against you, and it is a number. Recorded on the
     // step into tears rather than every poke after it, so one long bout counts
     // once however long you keep going.
-    if (event === 'upset' && settings.memory) {
-      const step = pets.pokeStep(pokes - 1);
-      if (step.event !== 'upset') {
+    if (event === 'upset' && pets.pokeStep(pokes - 1).event !== 'upset') {
+      if (settings.memory) {
         mem = memory.upset(mem);
         saveMem();
       }
+      // ...and it wants apologising to, which is a different thing from the
+      // count above: the grudge clears when you say sorry, the count never does.
+      // In pet.json rather than memory.json, so this works with memory off.
+      state = pets.offend(state, now, 2);
     }
     talk(kind, { event, tone: pokes >= 3 ? 'nag' : 'chat' });
   } else if (result.ok) {

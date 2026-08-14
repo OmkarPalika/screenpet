@@ -49,6 +49,22 @@ const ACTIONS = {
   },
 };
 
+// ---- the sulk --------------------------------------------------------------
+//
+// Say the wrong thing and the pet wants an apology, and one is not always
+// enough. Three rules keep this a joke rather than a guilt trip:
+//
+//   * it is always visibly a bit - see the `demand` bank below,
+//   * "sorry sorry sorry" clears nothing, one apology counts per SORRY_GAP_MS,
+//   * and it forgives you on its own after GRUDGE_MS whatever you do. A pet
+//     that can be permanently broken by a sentence is a bug report, not a mood.
+
+const SORRY_GAP_MS = 25000;
+const GRUDGE_MS = 6 * HOUR;
+
+// Four is already comedy. More than that and clearing it is a chore.
+const MAX_OWED = 4;
+
 function fresh(now = 0) {
   return {
     fullness: 80,
@@ -59,6 +75,11 @@ function fresh(now = 0) {
     lastNagAt: 0,
     lastChatAt: 0,
     lastAction: {},
+    // Apologies outstanding, when the sulk started, and when the last one that
+    // counted was accepted.
+    owed: 0,
+    owedAt: 0,
+    sorryAt: 0,
   };
 }
 
@@ -78,6 +99,11 @@ function load(raw, now) {
     lastNagAt: Number.isFinite(raw.lastNagAt) ? raw.lastNagAt : 0,
     lastChatAt: Number.isFinite(raw.lastChatAt) ? raw.lastChatAt : 0,
     lastAction: raw.lastAction && typeof raw.lastAction === 'object' ? raw.lastAction : {},
+    // Clamped rather than trusted: a hand-edited file must not be able to ask
+    // for forty apologies.
+    owed: Number.isFinite(raw.owed) ? Math.min(Math.max(Math.round(raw.owed), 0), MAX_OWED) : 0,
+    owedAt: Number.isFinite(raw.owedAt) && raw.owedAt >= 0 ? raw.owedAt : 0,
+    sorryAt: Number.isFinite(raw.sorryAt) && raw.sorryAt >= 0 ? raw.sorryAt : 0,
   };
 }
 
@@ -118,6 +144,54 @@ function act(state, name, now) {
     next[stat] = clamp(next[stat] + delta);
   }
   return { state: next, ok: true, reason: null };
+}
+
+/** Is there still an apology outstanding? False once the grudge times out. */
+const sulking = (state, now) => state.owed > 0 && now - state.owedAt < GRUDGE_MS;
+
+/**
+ * Something landed badly - a rival named, an insult, a poking bout taken all the
+ * way to tears. Adds to whatever is already owed rather than replacing it.
+ */
+function offend(state, now, n = 1) {
+  const already = sulking(state, now) ? state.owed : 0;
+  return {
+    ...state,
+    owed: Math.min(already + Math.max(1, Math.round(n)), MAX_OWED),
+    owedAt: now,
+    happiness: clamp(state.happiness - 5 * n),
+  };
+}
+
+/**
+ * You said sorry.
+ *
+ * @returns {{state: object, kind: 'none'|'early'|'again'|'done'}}
+ *   none  - nothing to forgive, and it says so rather than inventing a grievance
+ *   early - too soon after the last one to count as a second apology
+ *   again - accepted, and it wants another
+ *   done  - forgiven, completely, with no scorekeeping afterwards
+ */
+function apologise(state, now) {
+  // An expired grudge is cleared here rather than left to rot in the file.
+  if (!sulking(state, now)) {
+    return { state: state.owed ? { ...state, owed: 0 } : state, kind: 'none' };
+  }
+  if (now - state.sorryAt < SORRY_GAP_MS) return { state, kind: 'early' };
+
+  const owed = state.owed - 1;
+  return {
+    state: {
+      ...state,
+      owed,
+      sorryAt: now,
+      happiness: clamp(state.happiness + (owed ? 3 : 10)),
+      // Making up is worth something. Only on the last one, so the bond is not
+      // farmable by being rude on purpose.
+      bond: clamp(state.bond + (owed ? 0 : 2)),
+    },
+    kind: owed ? 'again' : 'done',
+  };
 }
 
 /** Derived, never stored - one source of truth for how the pet looks and sounds. */
@@ -249,6 +323,53 @@ const LINES = {
   // You teased it back. It is fine. It is completely fine.
   needled: ['I am unbothered', 'that one did land, actually', 'rude, and accurate', '*pretends that did not land*'],
 
+  // Jealousy. It cannot tell whether you actually use anything else - it only
+  // knows you said the name, which is more or less how jealousy works anyway.
+  jealous: [
+    'and what does IT do that I do not',
+    'oh. so you have been talking to other software',
+    'I read your screen for free. FREE',
+    'that is fine. I am fine. we are all fine here',
+    'I have been on this taskbar the whole time, but sure',
+    'name one thing it does better. one',
+  ],
+  // Said unprompted while an apology is outstanding, in the small talk slot.
+  // The whole joke is that it does not let it go on its own.
+  sulky: [
+    'I am still thinking about it',
+    'no, no. carry on. do not mind me',
+    'have I said anything? I have not said anything',
+    'just so you know: I remember',
+    '*sighs, audibly, on purpose*',
+    'we can talk about it when you are ready',
+  ],
+  // You apologised and it wants another one. Every line is visibly a bit - a pet
+  // that actually withheld forgiveness would be a guilt trip with a face on.
+  demand: [
+    'say it again. like you mean it',
+    'hm. once more',
+    'I did not quite catch that',
+    'closer. try again',
+    'that was a practice one. go on',
+    'again, and with feeling this time',
+  ],
+  // Three apologies in four seconds is one apology.
+  rushed: [
+    'you said that four seconds ago',
+    'that one did not count and you know it',
+    'no. properly',
+    'you cannot speedrun this bit',
+  ],
+  // ...and then it is over, completely. Whatever the sulk is doing as a joke,
+  // still being cross after "sorry" is not it.
+  forgiven: [
+    'fine. come here',
+    'okay. we are okay',
+    'I was never really cross',
+    'forgiven, obviously. I am mostly pixels',
+    'right, that is that. what are we doing',
+  ],
+
   // Nothing to answer. The pet used to report this as a failure - "I could not
   // read any text on screen" - which is technically true and reads like a broken
   // tool. It looked, there was no question, and that is fine.
@@ -359,6 +480,13 @@ const EXPRESSIONS = {
   tease: 'wink',
   bait: 'grin',
   needled: 'sulk',
+  // The sulk, which is its own little arc: jealous, then quietly aggrieved,
+  // then demanding, then unimpressed by a rushed apology, then over it.
+  jealous: 'huff',
+  sulk: 'sulk',
+  demand: 'pleading',
+  rushed: 'eyeroll',
+  forgiven: 'melt',
   nothing: 'giggle',
   milestone: 'joy',
   doze: 'doze',
@@ -382,6 +510,76 @@ const EXPRESSIONS = {
 };
 
 const expressionFor = (event) => EXPRESSIONS[event] || null;
+
+// ---- the face keyboard ------------------------------------------------------
+//
+// Every face the stylesheet draws, with the emoji it is doing and the words you
+// would use to ask for it. Two things fall out of having this in one table:
+//
+//   * the whole set is reachable - "look smug", or just 😏, and it does it,
+//   * and nothing can be drawn but unreachable, because a test walks this and
+//     checks each `expr` has a rule in style.css.
+//
+// skills.js builds its matcher from `emoji` and `also`, so adding a face here is
+// the only edit needed to make it askable for.
+const FACES = {
+  // the cute end
+  happy:      { expr: 'grin',       emoji: '😄', also: ['smile', 'cheerful'], say: 'like this?' },
+  love:       { expr: 'love',       emoji: '😍', also: ['adoring', 'hearts'], say: '*hearts*' },
+  giggle:     { expr: 'giggle',     emoji: '😆', also: ['laugh', 'lol'], say: 'hee' },
+  shy:        { expr: 'shy',        emoji: '😊', also: ['bashful', 'timid'], say: '*looks away*' },
+  flushed:    { expr: 'flushed',    emoji: '😳', also: ['blush', 'embarrassed'], say: '*goes very pink*' },
+  hug:        { expr: 'hug',        emoji: '🤗', also: ['cuddle', 'hug me'], say: '*hugs*' },
+  innocent:   { expr: 'innocent',   emoji: '😇', also: ['angel', 'halo'], say: 'who, me?' },
+  proud:      { expr: 'proud',      emoji: '😌', also: ['smug about it', 'pleased'], say: 'I know' },
+  party:      { expr: 'joy',        emoji: '🥳', also: ['celebrate', 'excited'], say: 'WOO' },
+  starstruck: { expr: 'starstruck', emoji: '🤩', also: ['amazed', 'wow', 'star eyes'], say: 'WOW' },
+  yum:        { expr: 'yum',        emoji: '😋', also: ['tasty', 'delicious'], say: 'mm' },
+  wink:       { expr: 'wink',       emoji: '😉', also: ['winky'], say: '*wink*' },
+
+  // the sly end
+  smug:       { expr: 'smug',       emoji: '😏', also: ['smirk', 'sly'], say: '*smirks*' },
+  cool:       { expr: 'cool',       emoji: '😎', also: ['shades', 'sunglasses'], say: 'too cool for this taskbar' },
+  mischief:   { expr: 'mischief',   emoji: '😈', also: ['evil', 'devious', 'naughty'], say: 'I have ideas' },
+  shush:      { expr: 'shush',      emoji: '🤫', also: ['quiet', 'secret'], say: 'shh' },
+  wry:        { expr: 'wry',        emoji: '🙃', also: ['upside down', 'ironic'], say: 'this is fine' },
+
+  // the unimpressed end
+  eyeroll:    { expr: 'eyeroll',    emoji: '🙄', also: ['roll your eyes', 'unimpressed'], say: '*rolls eyes*' },
+  deadpan:    { expr: 'deadpan',    emoji: '😐', also: ['blank', 'straight face', 'neutral'], say: 'no comment' },
+  annoyed:    { expr: 'annoyed',    emoji: '😠', also: ['cross', 'grumpy'], say: 'hmph' },
+  huff:       { expr: 'huff',       emoji: '😤', also: ['huffy', 'indignant'], say: 'HMPH' },
+  angry:      { expr: 'rage',       emoji: '😡', also: ['furious', 'rage'], say: 'GRR' },
+  sulk:       { expr: 'sulk',       emoji: '😔', also: ['pout', 'glum'], say: '*sulks*' },
+  grimace:    { expr: 'grimace',    emoji: '😬', also: ['wince', 'awkward', 'yikes'], say: '...awkward' },
+
+  // the soft end
+  pleading:   { expr: 'pleading',   emoji: '🥺', also: ['beg', 'puppy eyes'], say: 'please?' },
+  sad:        { expr: 'cry',        emoji: '😭', also: ['cry', 'sob', 'weep'], say: '*sniff*' },
+  melt:       { expr: 'melt',       emoji: '🫠', also: ['melting', 'goo'], say: 'I am melting slightly' },
+  sleepy:     { expr: 'doze',       emoji: '😴', also: ['sleep', 'nap', 'tired'], say: '*yawn*' },
+
+  // the loud end
+  shock:      { expr: 'shock',      emoji: '😱', also: ['shocked', 'surprised', 'scream', 'gasp'], say: 'WHAT' },
+  mindblown:  { expr: 'mindblown',  emoji: '🤯', also: ['mind blown', 'exploding head'], say: 'my head just went' },
+  dizzy:      { expr: 'dizzy',      emoji: '😵', also: ['woozy', 'spinning'], say: 'everything is turning' },
+  queasy:     { expr: 'queasy',     emoji: '🤢', also: ['sick', 'unwell', 'ill'], say: 'I do not feel well' },
+  oops:       { expr: 'oops',       emoji: '😅', also: ['nervous', 'sweating'], say: 'ha. ha.' },
+
+  // the thinking end
+  think:      { expr: 'hmm',        emoji: '🤔', also: ['thinking', 'ponder'], say: 'hmm' },
+  curious:    { expr: 'curious',    emoji: '🤨', also: ['suspicious', 'skeptical', 'sceptical'], say: 'go on' },
+};
+
+/** A word or an emoji, and the face behind it, or null. */
+function faceFor(word) {
+  const key = String(word || '').trim().toLowerCase();
+  if (FACES[key]) return { name: key, ...FACES[key] };
+  for (const [name, face] of Object.entries(FACES)) {
+    if (face.emoji === key || face.also.includes(key)) return { name, ...face };
+  }
+  return null;
+}
 
 // Keep poking and the pet stops finding it funny. Two giggles, then it gets shy,
 // then cross, then furious, then it cries and you have to leave it alone - which
@@ -434,6 +632,8 @@ function milestone(before, after) {
 module.exports = {
   fresh, load, tick, act, mood, shouldNag, shouldChatter,
   line, greetKind, expressionFor, milestone, pokeStep, samePokeBout,
+  sulking, offend, apologise, faceFor,
   ACTIONS, DECAY, SLEEP_ENERGY_GAIN, MAX_DECAY_HOURS, NAG_INTERVAL_MS, CHATTER_INTERVAL_MS,
-  LINES, SPECIES_LINES, EXPRESSIONS, BOND_TIERS, POKE_LADDER, POKE_WINDOW_MS,
+  LINES, SPECIES_LINES, EXPRESSIONS, FACES, BOND_TIERS, POKE_LADDER, POKE_WINDOW_MS,
+  SORRY_GAP_MS, GRUDGE_MS, MAX_OWED,
 };

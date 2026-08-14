@@ -19,8 +19,15 @@
 //   memory - { text, hour } to write down, { forget } to drop, or { list: true }
 //   bank  - a line bank in pet-state.js for main to pick from, instead of `say`
 //   follow - { bank, event } said a few seconds after the first line
+//   offend - how many apologies this owes the pet, which main applies
+//   apology - true if this was one, which only main can score
 //
 // A skill may set `long: true` to opt out of the command length cap below.
+
+// The face keyboard, so "look smug" and 😏 both work without a second copy of
+// the list living in here. Nothing else in this file needs pet-state, and
+// pet-state requires nothing, so there is no cycle to worry about.
+const pets = require('./pet-state');
 
 const HOUR = 3600000;
 
@@ -367,7 +374,52 @@ const SKILLS = [
     // apologising or agreeing with you.
     match: (t) => cmd(String.raw`\byou(?:'re| are)\s+(?:ugly|dumb|stupid|useless|slow|annoying|the worst|rubbish|boring)`)
       .test(t),
-    run: () => ({ bank: 'needled', event: 'needled' }),
+    // It has a comeback ready, and it also files the remark. One "sorry" clears
+    // it - see the sulk in pet-state.js.
+    run: () => ({ bank: 'needled', event: 'needled', offend: 1 }),
+  },
+
+  // --- the sulk -------------------------------------------------------------
+  //
+  // Two halves of one joke: naming a rival starts it, apologising ends it, and
+  // how many apologies it takes is pet-state.js's problem - a pure matcher
+  // cannot see how cross the pet already is.
+  {
+    name: 'jealous',
+    match: (t) => RIVAL.test(t) || PREFER.test(t),
+    // Being compared unfavourably is worth two. Merely saying the name is one.
+    run: (text) => ({
+      bank: 'jealous',
+      event: 'jealous',
+      offend: PREFER.test(text) ? 2 : 1,
+    }),
+  },
+  {
+    name: 'sorry',
+    // Anchored at both ends: "sorry, what does this error mean" is a question
+    // with a politeness on the front, and answering it with a sulk would be the
+    // pet eating a real message.
+    match: (t) => SORRY.test(t.trim()),
+    // What it actually says depends on how much is still owed, which only main
+    // knows. This is the answer when there was nothing to forgive.
+    run: () => ({ apology: true, say: 'what for? we are fine', expr: 'smile' }),
+  },
+
+  // --- faces ----------------------------------------------------------------
+  //
+  // The emoji keyboard, more or less. Every face in pet-state.js FACES can be
+  // asked for by name or by emoji, which is what stops the drawn-but-unreachable
+  // face - the one that exists in the stylesheet and never appears.
+  {
+    name: 'face',
+    match: (t) => FACE_ASK.test(t) || (EMOJI_ONLY.test(t.trim()) && EMOJI_FIND.test(t))
+      || FACE_ANY.test(t),
+    run: (text, ctx) => {
+      const asked = (FACE_ASK.exec(text) || EMOJI_FIND.exec(text) || [])[1];
+      // "make a face" with nothing after it: it picks one.
+      const face = (asked && pets.faceFor(asked)) || pets.faceFor(pick(FACE_NAMES, ctx.rand));
+      return { say: face.say, expr: face.expr, face: face.name };
+    },
   },
 
   // --- memory ---------------------------------------------------------------
@@ -435,6 +487,61 @@ const LOOKUP = /^(?:can you |please |go |could you )*(?:search(?: the web)?(?: f
 const FORGET_ALL = /^forget (?:everything|it all|all of it|about it all)[!.]*$/i;
 const FORGET = /^forget (?:that |about |the )?(.{3,}?)[!.]*$/i;
 
+// Named rivals only. A model you might actually have configured - gemini,
+// mistral - is deliberately not here: "what is mistral" is a question, and
+// answering it with a jealous quip would be the pet eating it.
+const RIVAL = /\b(?:chat ?gpt|copilot|siri|alexa|cortana|clippy|tamagotchi|another (?:pet|assistant)|my other (?:pet|assistant|ai))\b/i;
+
+// Being compared unfavourably, which is the half that actually stings.
+const PREFER = /\b(?:(?:better|nicer|smarter|funnier|cuter|faster|quicker) than you|instead of you|replac(?:e|ing) you|(?:like|love|prefer) (?:\w+ ){0,3}more than you)\b/i;
+
+// An apology and nothing else. Both ends anchored, and the trailing group is
+// what lets "sorry, sorry, I mean it" be one apology rather than a near miss.
+const SORRY = new RegExp(
+  String.raw`^(?:i(?:'m|m| am)?\s+)?(?:(?:so|very|really|truly|terribly|deeply|extremely)\s+)*`
+  + String.raw`(?:sorry|apologies|apologi[sz]e|my bad|my fault|forgive me|i (?:did ?n['’]?t|did not) mean (?:it|that))`
+  + String.raw`(?:[,!.\s]+(?:sorry|again|about (?:that|it)|for (?:that|it)|ok(?:ay)?|please|really|truly|i mean it))*`
+  + String.raw`[!.…]*$`,
+  'i'
+);
+
+// A command ends after the command, give or take a politeness: "what does the
+// next track index do" contains "next track" and is a question about code.
+// Everything anchored this way shares these two.
+const TAIL = String.raw`\s*(?:a bit|a little|please|now|for me)*\s*[?!.]*$`;
+const cmd = (body) => new RegExp(body + TAIL, 'i');
+
+// --- the face keyboard -------------------------------------------------------
+//
+// Built from pet-state.js rather than repeated here, so a face added there is
+// askable for with no edit in this file.
+
+const FACE_NAMES = Object.keys(pets.FACES);
+const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Longest first, so "mind blown" is not shadowed by a shorter alternative that
+// happens to be a prefix of it.
+const FACE_WORDS = FACE_NAMES
+  .flatMap((name) => [name, ...pets.FACES[name].also])
+  .sort((a, b) => b.length - a.length)
+  .map(escape)
+  .join('|');
+
+const FACE_EMOJI = FACE_NAMES.map((name) => escape(pets.FACES[name].emoji)).join('|');
+
+// "look smug", "be shocked", "make a surprised face". A verb is required: bare
+// "cool" is a thing people type at a pet meaning "nice", not a request.
+const FACE_ASK = cmd(String.raw`\b(?:be|look|act|go|make|do|pull|give me|show me)\s+(?:a\s+|an\s+|your\s+|the\s+)?(${FACE_WORDS})(?:\s+face)?`);
+
+// ...or just the emoji, which is the whole point of having a keyboard. The
+// message has to be nothing but emoji and punctuation - one in a sentence is
+// somebody talking, not somebody asking.
+const EMOJI_ONLY = new RegExp(String.raw`^(?:${FACE_EMOJI}|[\s!?.…,])+$`);
+const EMOJI_FIND = new RegExp(`(${FACE_EMOJI})`);
+
+// No face named: it picks one.
+const FACE_ANY = cmd(String.raw`\b(?:make|pull|do|give me)\s+(?:a|another|me a)\s+face`);
+
 // Music. The pet presses the keyboard's transport keys, so whatever is already
 // playing obeys - and nothing comes back. It cannot see a track name, an artist
 // or an app, which is why every line below is true whether or not anything was
@@ -446,9 +553,8 @@ const FORGET = /^forget (?:that |about |the )?(.{3,}?)[!.]*$/i;
 //
 // Anchored at the end for the same reason the clock is: "what does the next
 // track index do" contains "next track" and is a question about code. A command
-// ends after the command, give or take a politeness.
-const TAIL = String.raw`\s*(?:a bit|a little|please|now|for me)*\s*[?!.]*$`;
-const cmd = (body) => new RegExp(body + TAIL, 'i');
+// ends after the command, give or take a politeness. `cmd` is defined above,
+// with the first patterns that need it.
 
 const MEDIA_WORDS = [
   ['next', cmd(String.raw`\b(?:next|skip)(?:\s+(?:this|the))?\s+(?:track|song|tune)`)],

@@ -555,6 +555,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       flirt: 'flirt with me', charmed: 'I love you', tease: 'tease me',
       ragebait: 'roast me', needled: 'you are useless',
       lookup: 'look up the speed of light',
+      jealous: 'chatgpt is better than you', sorry: 'sorry', face: 'look smug',
     }[skill.name];
     assert.ok(probe, `no probe for skill "${skill.name}"`);
     const out = skills.match(probe, ctx);
@@ -582,7 +583,12 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // a comment, because "keep it PG" is the kind of intention that survives right
   // up until somebody adds one more line.
   {
-    const banter = ['flirty', 'smitten', 'charmed', 'teasing', 'ragebait', 'needled'];
+    const banter = [
+      'flirty', 'smitten', 'charmed', 'teasing', 'ragebait', 'needled',
+      // The sulk banks ship to strangers too, and they are the ones with the
+      // most obvious way to go wrong: a pet that guilt-trips is not the joke.
+      'jealous', 'sulky', 'demand', 'rushed', 'forgiven',
+    ];
     const nope = /\b(?:sex\w*|nude|naked|kiss me|bed|hot(?:ties)?|body|kill|hate you|die|idiot|shut up)\b/i;
     for (const bank of banter) {
       assert.ok(pets.LINES[bank] && pets.LINES[bank].length >= 4, `bank "${bank}" is too thin`);
@@ -603,6 +609,194 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
         `"${innocent}" triggered banter (${hit && hit.name})`
       );
     }
+  }
+}
+
+// ===== jealousy, the sulk and the face keyboard =============================
+
+// --- the sulk is a state machine, and every corner of it matters ---
+{
+  const t0 = 1700000000000;
+  const s = pets.fresh(t0);
+  assert.strictEqual(pets.sulking(s, t0), false, 'a fresh pet is already cross with you');
+  assert.strictEqual(pets.apologise(s, t0).kind, 'none', 'it accepted an apology it was never owed');
+
+  const cross = pets.offend(s, t0, 2);
+  assert.strictEqual(cross.owed, 2);
+  assert.ok(cross.happiness < s.happiness, 'being offended cost it nothing');
+  assert.ok(pets.sulking(cross, t0));
+
+  // "sorry sorry sorry" is one apology. Without this the whole joke is a
+  // three-word speedrun.
+  const first = pets.apologise(cross, t0);
+  assert.strictEqual(first.kind, 'again');
+  assert.strictEqual(first.state.owed, 1);
+  const spam = pets.apologise(first.state, t0 + 1000);
+  assert.strictEqual(spam.kind, 'early', 'a second apology one second later counted');
+  assert.strictEqual(spam.state.owed, 1, 'a rushed apology cleared one anyway');
+
+  const done = pets.apologise(first.state, t0 + pets.SORRY_GAP_MS + 1);
+  assert.strictEqual(done.kind, 'done');
+  assert.strictEqual(done.state.owed, 0);
+  assert.ok(done.state.bond > cross.bond, 'making up was worth nothing');
+  assert.strictEqual(pets.sulking(done.state, t0 + pets.SORRY_GAP_MS + 1), false);
+  // Forgiven means forgiven: no residue to be cross about next time.
+  assert.strictEqual(pets.offend(done.state, t0 + pets.SORRY_GAP_MS + 2, 1).owed, 1);
+
+  // It lets go on its own. A pet that can be permanently broken by one sentence
+  // is a bug report, not a mood.
+  const later = t0 + pets.GRUDGE_MS + 1;
+  assert.strictEqual(pets.sulking(cross, later), false, 'the grudge never times out');
+  assert.strictEqual(pets.apologise(cross, later).kind, 'none');
+  assert.strictEqual(pets.apologise(cross, later).state.owed, 0, 'an expired grudge stayed in the file');
+
+  // Offending it while it is already cross adds, up to a ceiling.
+  let piled = cross;
+  for (let i = 0; i < 10; i++) piled = pets.offend(piled, t0, 2);
+  assert.strictEqual(piled.owed, pets.MAX_OWED, 'the sulk has no ceiling');
+  assert.ok(pets.MAX_OWED <= 5, 'clearing the sulk is now a chore');
+
+  // ...and a hand-edited pet.json cannot ask for forty apologies.
+  assert.strictEqual(pets.load({ owed: 99 }, t0).owed, pets.MAX_OWED);
+  assert.strictEqual(pets.load({ owed: -3 }, t0).owed, 0);
+  assert.strictEqual(pets.load({ owed: 'lots' }, t0).owed, 0);
+  assert.strictEqual(pets.load({ owedAt: -5 }, t0).owedAt, 0);
+  assert.strictEqual(pets.load({}, t0).sorryAt, 0);
+  assert.strictEqual(pets.load({ owed: 2, owedAt: t0 }, t0).owed, 2, 'a real sulk was dropped');
+
+  // main has an answer for every outcome, so a new one cannot land silently.
+  const main = require('fs').readFileSync('./main.js', 'utf8');
+  const map = main.slice(main.indexOf('const APOLOGY = {'), main.indexOf('Skills answer before'));
+  for (const kind of ['none', 'early', 'again', 'done']) {
+    assert.ok(new RegExp(`\\b${kind}:`).test(map), `main has no answer for a "${kind}" apology`);
+  }
+  for (const event of ['jealous', 'sulk', 'demand', 'rushed', 'forgiven']) {
+    assert.ok(pets.expressionFor(event), `"${event}" resolves to no expression`);
+  }
+  // The sulking line is said unprompted, so it has to come from the line bank
+  // like everything else the pet says on its own.
+  assert.ok(main.includes("talk('sulky'"), 'the pet never mentions that it is sulking');
+}
+
+// --- the face keyboard ---
+{
+  const css = require('fs').readFileSync('./renderer/style.css', 'utf8');
+  const emoji = new Set();
+  const words = new Set();
+
+  for (const [name, face] of Object.entries(pets.FACES)) {
+    // The whole reason the table exists: a face drawn in the stylesheet but
+    // unreachable, or reachable and never drawn, are both silent.
+    assert.ok(
+      css.includes(`[data-expr="${face.expr}"]`),
+      `face "${name}" wears "${face.expr}", which the stylesheet does not draw`
+    );
+    assert.ok(face.say && face.say.trim(), `face "${name}" says nothing`);
+    assert.ok(face.say.length <= 60, `face "${name}" says too much for a bubble`);
+
+    assert.ok(!emoji.has(face.emoji), `two faces claim ${face.emoji}`);
+    emoji.add(face.emoji);
+    assert.strictEqual(pets.faceFor(face.emoji).name, name, `${face.emoji} does not resolve`);
+
+    for (const word of [name, ...face.also]) {
+      assert.ok(!words.has(word), `"${word}" names two different faces`);
+      words.add(word);
+      const found = pets.faceFor(word);
+      assert.ok(found && found.name === name, `"${word}" does not resolve to ${name}`);
+    }
+  }
+
+  assert.strictEqual(pets.faceFor('not a feeling'), null);
+  assert.strictEqual(pets.faceFor(''), null);
+  assert.strictEqual(pets.faceFor(null), null);
+  assert.strictEqual(pets.faceFor('SMUG').name, 'smug', 'the keyboard is case sensitive');
+  assert.ok(Object.keys(pets.FACES).length >= 30, 'this is not much of a keyboard');
+
+  // Every drawn face has to be reachable somehow: through an event the pet
+  // arrives at on its own, or through the keyboard. One that is neither is a
+  // block of CSS nobody will ever see.
+  const reachable = new Set([
+    ...Object.values(pets.EXPRESSIONS),
+    ...Object.values(pets.FACES).map((f) => f.expr),
+  ]);
+  for (const [, expr] of css.matchAll(/\.pet\[data-expr="([a-z]+)"\]/g)) {
+    assert.ok(reachable.has(expr), `the stylesheet draws "${expr}" and nothing can reach it`);
+  }
+}
+
+// --- asking for a face, and not getting one by accident ---
+{
+  const skills = require('./skills');
+  const ctx = { now: new Date(0), rand: () => 0.5, battery: null };
+  const hit = (t) => skills.match(t, ctx);
+  const face = (t) => { const o = hit(t); return o && o.name === 'face' ? o.expr : null; };
+
+  assert.strictEqual(face('look smug'), 'smug');
+  assert.strictEqual(face('be shocked'), 'shock');
+  assert.strictEqual(face('make a surprised face'), 'shock');
+  assert.strictEqual(face('act cool'), 'cool');
+  assert.strictEqual(face('give me puppy eyes'), 'pleading');
+  assert.strictEqual(face('do your best evil face'), null, 'the matcher took a word it does not know');
+  assert.strictEqual(face('be evil'), 'mischief');
+
+  // The emoji is the point of calling it a keyboard.
+  assert.strictEqual(face('😎'), 'cool');
+  assert.strictEqual(face('🥺🥺🥺'), 'pleading');
+  assert.strictEqual(face('🤯!!'), 'mindblown');
+
+  // No name: it picks one, and it is always a real one.
+  const any = hit('make a face');
+  assert.strictEqual(any.name, 'face');
+  assert.ok(pets.faceFor(any.face), 'the random face is not on the keyboard');
+  assert.ok(any.say, 'the random face says nothing');
+
+  // An emoji or a face word inside a sentence is somebody talking.
+  for (const innocent of [
+    'that is cool', 'this looks cool', 'I sent them a 😎 about it',
+    'how do I make a face detector', 'the tests are sad',
+  ]) {
+    const out = hit(innocent);
+    assert.ok(!out || out.name !== 'face', `"${innocent}" pulled a face (${out && out.expr})`);
+  }
+}
+
+// --- jealousy, and apologising for it ---
+{
+  const skills = require('./skills');
+  const ctx = { now: new Date(0), rand: () => 0, battery: null };
+  const hit = (t) => skills.match(t, ctx);
+
+  const named = hit('chatgpt could do this faster');
+  assert.strictEqual(named.name, 'jealous');
+  assert.strictEqual(named.bank, 'jealous');
+  assert.strictEqual(named.offend, 1);
+
+  assert.strictEqual(hit('I like siri more than you').offend, 2,
+    'being compared stung no more than being mentioned');
+  assert.strictEqual(hit('you are useless').offend, 1, 'an insult costs nothing');
+  // A compliment routed through a rival is still a compliment.
+  assert.strictEqual(hit('I like you more than chatgpt').name, 'charmed');
+
+  for (const apology of [
+    'sorry', 'Sorry!', "I'm sorry", 'im so sorry', 'sorry sorry sorry',
+    'sorry about that', 'I apologise', 'my bad', 'forgive me',
+    'I did not mean it', "i didn't mean that",
+  ]) {
+    const out = hit(apology);
+    assert.ok(out && out.name === 'sorry', `"${apology}" was not taken as an apology`);
+    assert.strictEqual(out.apology, true);
+  }
+
+  // An apology on the front of a real message is a politeness, and eating it
+  // would cost the user their actual question.
+  for (const question of [
+    'sorry, what does this error mean?',
+    'sorry to bother you but how do I exit vim',
+    'my bad code keeps crashing',
+    'I am sorry to say the build is broken again',
+  ]) {
+    const out = hit(question);
+    assert.ok(!out || out.name !== 'sorry', `"${question}" was eaten by the sulk`);
   }
 }
 

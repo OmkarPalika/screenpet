@@ -91,7 +91,7 @@ every palette, so it is 24 combinations, not six.
 
 Every species keeps the **same face rig**: same classes, same coordinates. Only
 ears, body outline and extras (tail, crest, whiskers) change. That is the whole
-trick — all fifteen expressions work on all six pets without a single extra rule,
+trick — all thirty-eight expressions work on all six pets without a single extra rule,
 and a seventh pet is one CSS block, not a new sprite sheet.
 
 Shapes live in `renderer/pets.css`, which the pet window, the settings previews
@@ -284,6 +284,8 @@ exact, and identical every time:
 | `look up the speed of light`, `who is ada lovelace` | A refusal — unless you switched web lookups on. See "Going outside". |
 | `remember my standup is at 9:30`, `forget everything` | See "What it remembers". |
 | `flirt with me`, `tease me`, `roast me` | See "Banter" below. |
+| `chatgpt is faster than you`, `sorry` | See "Jealousy, and the sulk" below. |
+| `look smug`, `act cool`, `😎`, `make a face` | Any face on the keyboard, by name or by emoji. |
 
 **A reminder is the one thing here that writes down your words.** "Remind me to
 call the bank in an hour" has to survive a restart to be worth setting, and
@@ -342,6 +344,82 @@ Teasing is never about your work. The pet cannot see it well enough to have an
 opinion worth having, and one that mocks code it half-read is just wrong with a
 face on.
 
+## Jealousy, and the sulk
+
+```
+chatgpt is faster than you -> and what does IT do that I do not      [😤]
+sorry                      -> say it again. like you mean it         [🥺]
+sorry                      -> you cannot speedrun this bit           [🙄]
+...25 seconds later...
+sorry, I mean it           -> fine. come here                        [🫠]
+```
+
+Name a rival and it takes offence; say sorry and it wants another one. How many
+it wants lives in `pet.json` as a single number — `owed` — so it works with the
+memory switched off, and so it survives a restart the way a mood should.
+
+Three rules keep this a joke rather than a guilt trip, and all three are in
+[pet-state.js](pet-state.js) with a test each:
+
+- **One apology counts per 25 seconds.** Otherwise the whole bit is a three-word
+  speedrun, and the pet is a button again.
+- **It caps at four.** Clearing it should be funny, not a chore.
+- **It forgives you on its own after six hours, whatever you do.** A pet that can
+  be permanently broken by one sentence is a bug report, not a mood.
+
+Forgiven means forgiven: the count goes to zero and nothing is kept to be cross
+about later. Being poked until it cries owes two — that one *is* also remembered,
+as a number, in [memory.js](memory.js), and the two are different things: the
+grudge clears when you say sorry and the count never does.
+
+**An apology has to be the whole message.** `sorry, what does this error mean` is
+a politeness on the front of a real question, and a pet that ate it to sulk at
+you would have cost you the answer. Same anchoring as every other command here,
+and there is a test with four of these in it.
+
+While there is an apology outstanding the pet sulks *quietly* — it spends its
+small-talk slot on `I am still thinking about it` rather than adding a new
+interruption, and that slot is throttled to one line per 45 minutes as it always
+was. It never blocks an answer, never refuses to help, and never asks twice in a
+row unprompted.
+
+Rivals are a short, named list: ChatGPT, Copilot, Siri, Alexa, Cortana, Clippy.
+Models you might genuinely have configured — Gemini, Mistral — are deliberately
+*not* on it, because `what is mistral` is a question, and answering it with a
+jealous quip would be the pet eating a real message.
+
+## Faces, by name or by emoji
+
+Thirty-eight faces are drawn, and thirty-five of them can be asked for by name
+or by emoji (the other three - the resting smile, the surprised `oh`, the
+listening face - only ever arrive on their own):
+
+```
+look smug -> *smirks*                 😎 -> too cool for this taskbar
+be shocked -> WHAT                    🥺 -> please?
+act innocent -> who, me?              make a face -> (it picks one)
+```
+
+The list is one table — `FACES` in [pet-state.js](pet-state.js) — holding the
+name, the emoji, the words people actually type for it, and what the pet says
+while pulling it. [skills.js](skills.js) builds its matcher from that table, so
+adding a face is one edit rather than four, and a test walks it to check every
+entry has a rule in [style.css](renderer/style.css) *and* that every rule in the
+stylesheet is reachable from something. A face drawn but unreachable is a block
+of CSS nobody will ever see; a face reachable but undrawn is a pet that just
+sits there.
+
+Only two of them needed new SVG — the shades and the halo. Everything else is
+the same rig moved around: lids lowered over the eyes for 😏, the glints blown up
+and throbbing for 🤩, the bob removed entirely for 😐, the whole body rotated 180°
+for 🙃. Both props are worn rather than drawn into a body, like the bow, so all
+six species get them without anyone redrawing anything six times.
+
+A face word inside a sentence is somebody talking: `that is cool` and `this looks
+cool` reach the model, and an emoji only counts when the message is nothing but
+emoji. Verbs are required — `be`, `look`, `act`, `make`, `give me` — because
+"cool" typed at a pet usually means "nice".
+
 **Music is one keypress, not an integration.** [media.ps1](media.ps1) taps a
 single Windows media key — the same one on your keyboard — and whatever holds the
 transport handles it: Spotify, a browser tab, the Groove app. Nothing comes back.
@@ -381,7 +459,7 @@ disk with your notes in it, and this app does not keep one.
 
 ## A body
 
-Six whole-body movements, separate from the twenty-one faces:
+Six whole-body movements, separate from the thirty-eight faces:
 
 `walk` `dance` `spin` `jump` `topple` `peek`
 
