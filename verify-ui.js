@@ -675,6 +675,7 @@ app.whenReady().then(async () => {
     settings: {
       model: 'llama3.1:8b', vision: 'auto', hotkey: 'CommandOrControl+Shift+Space',
       pet: 'cat', skin: 'butter', autostart: false, ollama: 'http://127.0.0.1:11434',
+      memory: true, cheek: true,
     },
     skins: ['butter', 'mint', 'blossom', 'slate'],
     pets: ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon'],
@@ -688,7 +689,7 @@ app.whenReady().then(async () => {
   });
 
   const sw = new BrowserWindow({
-    width: 460, height: 820, show: true, // must match openSettings() in main.js
+    width: 460, height: 900, show: true, // must match openSettings() in main.js
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       backgroundThrottling: false,
@@ -739,6 +740,22 @@ app.whenReady().then(async () => {
   check(
     await sjs(`document.getElementById('autostart').disabled`),
     'autostart was offered in an unpackaged build, where it would register electron.exe'
+  );
+  // A dependent setting has to visibly go with the one it needs, or the reason a
+  // checkbox will not stick is only discoverable by saving and watching it revert.
+  check(
+    await sjs(`(() => {
+      const memory = document.getElementById('memory');
+      const cheek = document.getElementById('cheek');
+      if (!memory.checked || cheek.disabled) return false;
+      memory.checked = false;
+      memory.dispatchEvent(new Event('change'));
+      const gated = cheek.disabled && !cheek.checked;
+      memory.checked = true;
+      memory.dispatchEvent(new Event('change'));
+      return gated && !cheek.disabled;
+    })()`),
+    'cheek did not follow the memory setting it depends on'
   );
   // The window is not resizable, so anything below the fold is unreachable.
   check(

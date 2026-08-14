@@ -139,6 +139,32 @@
     <input id="city" type="text" spellcheck="false" placeholder="Abu Dhabi" />
     <p class="hint">The only thing that ever leaves. You can put the next town over.</p>
 
+    <label class="check">
+      <input id="memory" type="checkbox" />
+      <span>Remember things between sessions</span>
+    </label>
+    <p class="hint">
+      Say <code>remember my standup is at 9</code> and it writes that down, on this
+      machine, and brings it up later. <strong>Only what you tell it to remember is
+      written</strong> — never your chat, your screen, the microphone or the camera.
+      Everything else it picks up is a counter: which hour you tend to ask it things,
+      how often you looked after it today. Say <code>what do you remember</code> to
+      read it back, <code>forget the standup</code> to drop one, or
+      <code>forget everything</code> to empty it. Switching this off deletes the file.
+    </p>
+
+    <label class="check">
+      <input id="cheek" type="checkbox" />
+      <span>Let it be cheeky about it</span>
+    </label>
+    <p class="hint" id="cheek-hint">
+      Needs the setting above. The pet occasionally brings up what it remembers to
+      needle you — how many headpats you managed on your best day against today, the
+      hour you always turn up, the thing you told it you would do. Every one of those
+      numbers is real; it teases with what it has, not with anything invented. At most
+      one remark every ninety minutes, and never during quiet hours.
+    </p>
+
     <div class="row">
       <span class="status" id="status"></span>
       <button id="close" class="ghost">Close</button>

@@ -14,6 +14,8 @@ const bop = el('bop');
 const faces = el('faces');
 const weather = el('weather');
 const city = el('city');
+const memoryBox = el('memory');
+const cheek = el('cheek');
 const status = el('status');
 const saveBtn = el('save');
 
@@ -100,7 +102,9 @@ function showVision(visionModel) {
 // so the reason is visible before you save rather than after a checkbox quietly
 // fails to stick.
 function gateDevices() {
-  for (const [box, need] of [[wakeBox, mic], [bop, mic], [faces, camera]]) {
+  for (const [box, need] of [
+    [wakeBox, mic], [bop, mic], [faces, camera], [cheek, memoryBox],
+  ]) {
     box.disabled = !need.checked;
     if (!need.checked) box.checked = false;
   }
@@ -119,7 +123,7 @@ hotkeyInput.addEventListener('input', () => {
   status.textContent = '';
 });
 
-for (const box of [mic, camera, weather]) box.addEventListener('change', gateDevices);
+for (const box of [mic, camera, weather, memoryBox]) box.addEventListener('change', gateDevices);
 
 saveBtn.addEventListener('click', async () => {
   if (!validate()) return;
@@ -138,6 +142,8 @@ saveBtn.addEventListener('click', async () => {
     faces: faces.checked,
     weather: weather.checked,
     city: city.value.trim(),
+    memory: memoryBox.checked,
+    cheek: cheek.checked,
     autostart: autostart.checked,
   });
   current = res.settings;
@@ -153,6 +159,8 @@ saveBtn.addEventListener('click', async () => {
   faces.checked = current.faces;
   weather.checked = current.weather;
   city.value = current.city;
+  memoryBox.checked = current.memory;
+  cheek.checked = current.cheek;
   gateDevices();
   status.textContent = 'Saved.';
 });
@@ -190,6 +198,8 @@ el('close').addEventListener('click', () => window.config.close());
   faces.checked = current.faces;
   weather.checked = current.weather;
   city.value = current.city;
+  memoryBox.checked = current.memory;
+  cheek.checked = current.cheek;
   gateDevices();
   autostart.checked = current.autostart;
   autostart.disabled = !data.packaged;

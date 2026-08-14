@@ -156,8 +156,9 @@ function buildVisionPrompt(mood = 'neutral') {
 const PERSONA =
   'You are a small friendly desktop pet, talking to the person whose computer you live on.';
 
-function buildChatPrompt(message, { mood = 'neutral', history = [] } = {}) {
+function buildChatPrompt(message, { mood = 'neutral', history = [], memory = [] } = {}) {
   const tone = TONE[mood] || '';
+  const notes = Array.isArray(memory) ? memory.filter((l) => typeof l === 'string') : [];
   return [
     PERSONA,
     'Reply in at most two short sentences. Be warm, fond and a little playful.',
@@ -165,6 +166,12 @@ function buildChatPrompt(message, { mood = 'neutral', history = [] } = {}) {
     'If they ask you something factual, still answer it properly.',
     'You cannot see their screen right now, so never claim to know what is on it.',
     ...(tone ? [tone] : []),
+    // What the pet has been told to remember, and only what it was told. The
+    // instruction is needed: without it a small model treats the notes as the
+    // subject and answers a question nobody asked. See memory.js.
+    ...(notes.length
+      ? ['', ...notes, 'Only mention these if they are actually relevant to what they just said.']
+      : []),
     '',
     ...history.flatMap((h) => [`Them: ${h.you}`, `You: ${h.pet}`]),
     `Them: ${message}`,

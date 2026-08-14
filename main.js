@@ -14,6 +14,7 @@ const reminders = require('./reminders');
 const weather = require('./weather');
 const wake = require('./wake');
 const faces = require('./faces');
+const memory = require('./memory');
 const { ask, askVision, chat, detectVisionModel, listModels, hasEnoughText } = require('./brain');
 const pets = require('./pet-state');
 const skills = require('./skills');
@@ -42,6 +43,7 @@ let win = null;
 let settingsWin = null;
 let tray = null;
 let state = null;
+let mem = null;
 let settings = null;
 let visionModel = null; // resolved model name, or null for the OCR path
 let busy = false;
@@ -50,6 +52,7 @@ let lastPath = 'ocr'; // which tier actually answered, for the smoke check
 let lineIndex = 0;
 let chats = 0;
 let saveTimer = null;
+let memTimer = null;
 let quitting = false;
 let wasAsleep = false;
 
@@ -79,6 +82,29 @@ function writeJson(name, value) {
 function savePet() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => writeJson('pet.json', state), 400);
+}
+
+function dropJson(name) {
+  try {
+    fs.rmSync(filePath(name), { force: true });
+  } catch (err) {
+    console.error(`could not delete ${name}:`, err.message);
+  }
+}
+
+// Nothing is written while the setting is off, and switching it off deletes what
+// is already there - a memory you can only pause is not one you can turn off.
+function saveMem() {
+  clearTimeout(memTimer);
+  if (!settings.memory) return;
+  memTimer = setTimeout(() => writeJson('memory.json', mem), 400);
+}
+
+/** Record an observation. A counter, never anything that was said. See memory.js. */
+function noteEvent(event) {
+  if (!settings.memory) return;
+  mem = memory.note(mem, event, Date.now());
+  saveMem();
 }
 
 const asleep = () => powerMonitor.getSystemIdleTime() >= IDLE_SLEEP_S;
@@ -156,7 +182,7 @@ function openSettings() {
   if (settingsWin && !settingsWin.isDestroyed()) return settingsWin.focus();
   settingsWin = new BrowserWindow({
     width: 460,
-    height: 820,
+    height: 900,
     resizable: false,
     title: 'screenpet',
     icon: path.join(__dirname, 'icon.png'),
@@ -308,16 +334,32 @@ function tick() {
   if (!wasAsleep && napping) talk('dozing', { event: 'doze' });
   wasAsleep = napping;
 
+  if (settings.memory) {
+    mem = memory.seen(mem, now);
+    saveMem();
+  }
+
   if (!busy && !napping) {
     if (pets.shouldNag(state, now, { asleep: napping })) {
       state.lastNagAt = now;
       talk(pets.mood(state, { asleep: napping }), { tone: 'nag' });
     } else if (pets.shouldChatter(state, now, { asleep: napping })) {
       state.lastChatAt = now;
+      // Something it remembers outranks small talk when it has one, which is the
+      // whole point - "you were gone three days" is worth more than "mrrp". It
+      // spends the chatter slot rather than adding a second one, and memory.js
+      // throttles it far harder than chatter is throttled.
+      const said = settings.memory
+        && memory.remark(mem, now, { cheek: settings.cheek, index: lineIndex });
+      if (said) {
+        mem = said.mem;
+        saveMem();
+        lineIndex++;
+        talk(null, { text: said.text, event: said.event });
       // Every other one is a compliment rather than small talk - and then the
       // pet is immediately embarrassed about having said it, which is the whole
       // joke. Praise on every chatter would be flattery and stop landing.
-      if (chats++ % 2) {
+      } else if (chats++ % 2) {
         talk('praised', { event: 'praise' });
         setTimeout(() => talk('bashful', { event: 'bashful' }), 3200);
       } else {
@@ -364,6 +406,8 @@ async function grabScreen() {
 async function answerScreen() {
   if (busy) return;
   busy = true;
+  // The hour, and nothing else. Not what was on the screen, not what was asked.
+  noteEvent('ask');
   send('pet:say', { text: 'thinking', kind: 'thinking' });
   try {
     const png = await grabScreen();
@@ -495,6 +539,54 @@ function runSkill(text) {
     return true;
   }
 
+  // The three commands that write, read back or empty memory.json. Gated here
+  // rather than in skills.js for the same reason the camera is: a pure matcher
+  // cannot see the settings and must not pretend it can.
+  if (skill.memory) {
+    if (!settings.memory) {
+      send('pet:say', {
+        text: 'I am not keeping notes! switch my memory on in settings and tell me again',
+        kind: 'chat',
+        expr: 'curious',
+      });
+      return true;
+    }
+    const now = Date.now();
+    if (skill.memory.list) {
+      send('pet:say', { text: memory.listing(mem), kind: 'chat', expr: 'proud' });
+      return true;
+    }
+    if ('forget' in skill.memory) {
+      const { mem: next, gone } = memory.forget(mem, skill.memory.forget);
+      mem = next;
+      saveMem();
+      send('pet:say', {
+        // Said honestly: "Forgotten" when nothing matched is the pet agreeing to
+        // something it did not do, and you would never find out.
+        text: gone ? skill.say : 'I did not have anything about that',
+        kind: 'chat',
+        expr: gone ? skill.expr : 'curious',
+      });
+      return true;
+    }
+    const { mem: next, fact } = memory.remember(mem, skill.memory.text, now, skill.memory.hour);
+    mem = next;
+    saveMem();
+    // Normally the skill's own wording, which also reads back the hour it picked
+    // out. When redaction or cleaning changed the text, what was actually stored
+    // is echoed instead - a password you told it to remember should visibly come
+    // back as [REDACTED] rather than be quietly altered in a file you never open.
+    const changed = fact && fact.text !== String(skill.memory.text || '').trim();
+    send('pet:say', {
+      text: !fact ? 'there was nothing in that to remember'
+        : changed ? `Noted, with a bit taken out: ${fact.text}`
+        : skill.say,
+      kind: 'chat',
+      expr: fact ? skill.expr : 'curious',
+    });
+    return true;
+  }
+
   // Not through talk(): these are answers to something you asked for, and the
   // wording comes from skills.js rather than the line bank.
   send('pet:say', { text: skill.say, kind: 'chat', expr: skill.expr, move: skill.move });
@@ -518,6 +610,10 @@ function runSkill(text) {
 async function replyTo(message) {
   const text = String(message || '').trim();
   if (!text || busy) return;
+  // Before the skills, not after: "set a timer" is still you talking to it, and a
+  // habit built only from the messages a small model happened to answer would be
+  // a habit about the model rather than about you.
+  noteEvent('chat');
   if (runSkill(text)) return;
   busy = true;
   send('pet:say', { text: 'thinking', kind: 'thinking' });
@@ -525,6 +621,9 @@ async function replyTo(message) {
     const reply = await chat(text, {
       mood: pets.mood(state, { asleep: asleep() }),
       history,
+      // Only the facts you asked it to remember, only the ones sharing a word
+      // with what you just said, and only as far as Ollama on loopback.
+      memory: settings.memory ? memory.brief(mem, text, Date.now()) : [],
       model: settings.model,
       endpoint: endpoint(),
     });
@@ -636,7 +735,15 @@ async function applySettings() {
 
 /** The one way settings change, wherever the change came from. */
 async function saveSettings(patch) {
+  const remembered = settings.memory;
   settings = config.merge(settings, patch);
+  // Off means gone. A memory you can only pause is one that quietly keeps the
+  // file, and the file is the whole thing anyone would object to.
+  if (remembered && !settings.memory) {
+    clearTimeout(memTimer);
+    mem = memory.fresh(Date.now());
+    dropJson('memory.json');
+  }
   writeJson('settings.json', settings);
   await applySettings();
   return settings;
@@ -647,6 +754,9 @@ async function saveSettings(patch) {
 app.whenReady().then(async () => {
   settings = config.load(readJson('settings.json'));
   state = pets.load(readJson('pet.json'), Date.now());
+  // Loaded before seen() runs, so the gap since the last run is still visible -
+  // that is what "you were gone three days" is measured from.
+  mem = memory.load(settings.memory ? readJson('memory.json') : null, Date.now());
 
   // Before any window exists, so nothing can ask for anything in the gap.
   lockPermissions();
@@ -725,8 +835,19 @@ ipcMain.on('pet:act', (_e, name) => {
     pokes = pets.samePokeBout(lastPokeAt, now) ? pokes + 1 : 0;
     lastPokeAt = now;
     const { event, kind } = pets.pokeStep(pokes);
+    // The one thing it holds against you, and it is a number. Recorded on the
+    // step into tears rather than every poke after it, so one long bout counts
+    // once however long you keep going.
+    if (event === 'upset' && settings.memory) {
+      const step = pets.pokeStep(pokes - 1);
+      if (step.event !== 'upset') {
+        mem = memory.upset(mem);
+        saveMem();
+      }
+    }
     talk(kind, { event, tone: pokes >= 3 ? 'nag' : 'chat' });
   } else if (result.ok) {
+    noteEvent('care');
     // A bond milestone outranks the usual line - it only happens four times.
     const reached = pets.milestone(before, state.bond);
     talk(SAID[name], { event: reached ? 'milestone' : name, text: reached });
@@ -850,7 +971,9 @@ app.on('will-quit', () => {
   // The timeouts go; the file stays. That is the whole point of the file.
   for (const id of timers.keys()) clearTimeout(id);
   clearTimeout(saveTimer);
+  clearTimeout(memTimer);
   writeJson('pet.json', state);
+  if (settings.memory) writeJson('memory.json', mem);
 });
 
 // Desktop pet: closing a window is not the same as quitting. The tray is the

@@ -48,6 +48,7 @@
       "faces.js",
       "faces.ps1",
       "reminders.js",
+      "memory.js",
       "weather.js",
       "pet-state.js",
       "settings.js",

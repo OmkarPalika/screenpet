@@ -49,6 +49,16 @@ const DEFAULTS = {
   // Face detection on the camera stream. Off by default, needs `camera` on, and
   // it answers "is there a face" - never whose. See faces.js.
   faces: false,
+  // Remembering things between sessions. On by default, unlike the four above,
+  // because it opens no device and reaches no network - it writes a file on this
+  // machine, and only ever your own words, and only ever the ones you told it to
+  // write down. Off deletes it. See memory.js.
+  memory: true,
+  // The pet being cheeky about what it remembers. Needs `memory`, since it has
+  // nothing to be cheeky about without it, and it is separate because "remember
+  // my standup is at 9" and "you have not petted me all day, no notes" are two
+  // different appetites.
+  cheek: true,
   autostart: false,
   ollama: 'http://127.0.0.1:11434',
 };
@@ -108,6 +118,11 @@ function load(raw) {
     weather: s.weather === true,
     city: cleanCity(s.city) || DEFAULTS.city,
     faces: s.faces === true && s.camera === true,
+    // These two default on, so the test is for a literal false rather than a
+    // literal true. Nothing is opened either way; the worst a corrupt file can do
+    // here is leave the pet remembering, which is what it says on the tin.
+    memory: s.memory !== false,
+    cheek: s.cheek !== false && s.memory !== false,
     autostart: typeof s.autostart === 'boolean' ? s.autostart : DEFAULTS.autostart,
     ollama: validEndpoint(s.ollama) ? s.ollama : DEFAULTS.ollama,
   };
