@@ -2270,6 +2270,29 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     for (const [face, feeling] of Object.entries(voices.FEELING_OF)) {
       assert.ok(voices.FEELINGS[feeling], `${face} sounds ${feeling}, which is not a feeling`);
     }
+
+    // --- the calls: a feeling with a sound of its own ---
+    // Bending pitch and speed covers most faces, but not the ones where the
+    // animal has a different sound entirely - a cross cat hisses, it does not
+    // meow faster. Those are hand-written, and the table must stay reachable:
+    // a call filed under a species or a feeling that does not exist is a sound
+    // nothing can ever play.
+    for (const [species, calls] of Object.entries(voices.CALLS)) {
+      assert.ok(voices.VOICES[species], `there are calls for ${species}, which has no voice`);
+      for (const [feeling, recipe] of Object.entries(calls)) {
+        assert.ok(voices.FEELINGS[feeling], `${species} has a call for ${feeling}, which is not a feeling`);
+        assert.strictEqual(typeof recipe, 'function', `${species}/${feeling} is not a recipe`);
+      }
+      // A call for neutral would be the ordinary voice under another name.
+      assert.ok(!calls.neutral, `${species} has a "call" for neutral, which is just its voice`);
+    }
+    // Cross is the feeling most worth having its own sound - it is the one that
+    // bending a pitch expresses worst - so every species gets one.
+    for (const species of config.PETS) {
+      assert.ok(voices.callFor(species, 'cross'), `${species} has no cross of its own`);
+    }
+    assert.strictEqual(voices.callFor('ferret', 'cross'), null, 'an unknown species had a call');
+    assert.strictEqual(voices.callFor('cat', 'neutral'), null, 'neutral is not a call');
     assert.strictEqual(voices.feelingOf('rage'), 'cross');
     assert.strictEqual(voices.feelingOf('doze'), 'sleepy');
     assert.strictEqual(voices.feelingOf(pets.expressionFor('refuse')), 'sad');

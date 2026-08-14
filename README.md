@@ -284,10 +284,40 @@ goes up before it comes down, through a lowpass filter standing in for a mouth; 
 chirp is over before you can place it.
 
 The **face** decides how it comes out. Five feelings — neutral, happy, sad,
-cross, sleepy — each a pitch, a speed and a volume, so ten species need ten
-recipes rather than fifty: the cat has one meow and five ways of meaning it. A
-crying pet is slower and lower than a delighted one without a second recipe
-existing.
+cross, sleepy — each a pitch, a speed and a volume, so the cat has one meow and
+five ways of meaning it. A crying pet is slower and lower than a delighted one
+without a second recipe existing.
+
+**That is enough for most faces and a lie for the rest.** A cross cat does not
+meow faster, it *hisses*, and there is no setting of pitch and speed that turns a
+meow into a hiss. So there is a second table of hand-written calls — about thirty
+— for the feelings where the animal has a different sound entirely, and the
+species' own voice is used everywhere else:
+
+| | what it does instead of its voice |
+| --- | --- |
+| cat | hisses when cross, yowls when sad, **trills** when pleased, **purrs** when sleepy |
+| pup | growls, whines — a whine goes *up*, which is why it reads as asking for something |
+| bun | **thumps a foot and says nothing at all**, and honks when pleased, which rabbits genuinely do |
+| bird | rattles its beak, sings three rising notes |
+| dragon | roars, idles like an engine, and snores in two parts — in, then out |
+| fox | **gekkers**: the stuttering row foxes have at 3am |
+| axolotl | has no vocal cords, so every feeling is water moving |
+| ghost | moans, and the moan is the one sound allowed to outstay itself |
+| robot | powers down when sad — the only place it is allowed to bend a pitch |
+
+A call is played *straight*, with the feeling not bent into it, because it
+already is the feeling: running a hiss through cross's 1.3× speed makes a shorter
+hiss and nothing else.
+
+Two things had to be measured rather than written. An exponential envelope spends
+over half its length below anything you can hear, so the pulse-based calls — the
+purr, the rattle, the dragon's idle — needed to be about twice as long and twice
+as loud as they looked on paper; the first purr rendered as *silence*. And
+`verify:ui` now renders all fifty species-and-feeling combinations, checking each
+is audible, does not clip, and — the check that matters — sounds measurably
+**different from that species' ordinary voice**. A feeling that renders
+identically has not been expressed.
 
 Assertions can measure a sound but cannot tell you it is *wrong*, so
 `verify:ui` renders every voice into an `OfflineAudioContext` and checks the
