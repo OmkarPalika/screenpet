@@ -531,30 +531,80 @@ app.whenReady().then(async () => {
   // context can answer whether the recipe makes a sound, so each one is rendered
   // offline here and measured: a silent bark and a clipping one both pass every
   // check that does not listen.
+  // Every species in every feeling, not just the pleased one. A face is picked
+  // per feeling rather than a feeling named directly, because feelingOf() is the
+  // thing the app actually calls and a mapping that drifts would otherwise leave
+  // a hand-written hiss unreachable while this file happily rendered it.
+  const FACE_OF = { neutral: 'hmm', happy: 'smile', sad: 'cry', cross: 'rage', sleepy: 'doze' };
   const barks = await js(`(async () => {
     const out = {};
     for (const species of Object.keys(VOICES)) {
-      const off = new OfflineAudioContext(1, 44100, 44100); // one second, mono
-      const end = sound(off, species, 'smile');
-      const d = (await off.startRendering()).getChannelData(0);
-      let peak = 0;
-      let voiced = 0;
-      for (let i = 0; i < d.length; i++) {
-        const v = Math.abs(d[i]);
-        if (v > peak) peak = v;
-        if (v > 0.002) voiced++;
+      for (const [feeling, face] of Object.entries(${JSON.stringify(FACE_OF)})) {
+        // Two seconds: a moan and a snore are both longer than a bark, and a
+        // render that stops at one second would measure them as cut short.
+        const off = new OfflineAudioContext(1, 88200, 44100);
+        const end = sound(off, species, face);
+        const d = (await off.startRendering()).getChannelData(0);
+        let peak = 0;
+        let voiced = 0;
+        for (let i = 0; i < d.length; i++) {
+          const v = Math.abs(d[i]);
+          if (v > peak) peak = v;
+          if (v > 0.002) voiced++;
+        }
+        out[species + '/' + feeling] = {
+          peak, ms: Math.round((voiced / 44100) * 1000), end,
+          call: !!callFor(species, feeling),
+        };
       }
-      out[species] = { peak, ms: Math.round((voiced / 44100) * 1000), end };
     }
     return out;
   })()`);
 
-  for (const [species, b] of Object.entries(barks)) {
-    check(b.peak > 0.01, `the ${species} makes no sound: peak ${b.peak.toFixed(4)}`);
-    check(b.peak < 1, `the ${species} clips: peak ${b.peak.toFixed(3)}`);
+  for (const [name, b] of Object.entries(barks)) {
+    check(b.peak > 0.01, `the ${name} makes no sound: peak ${b.peak.toFixed(4)}`);
+    check(b.peak < 1, `the ${name} clips: peak ${b.peak.toFixed(3)}`);
     // Long enough to hear, short enough to be a noise rather than a ringtone.
-    check(b.ms >= 40 && b.ms <= 700, `the ${species} lasts ${b.ms}ms`);
-    check(b.end < 1, `the ${species} was scheduled past the end of the render`);
+    // A purpose-written call is allowed to run longer: a ghost's moan and a
+    // dragon's snore are long *because* that is what makes them read as one.
+    const ceiling = b.call ? 900 : 700;
+    check(b.ms >= 40 && b.ms <= ceiling, `the ${name} lasts ${b.ms}ms (max ${ceiling})`);
+    check(b.end < 2, `the ${name} was scheduled past the end of the render`);
+  }
+
+  // A feeling that sounds identical to neutral has not been expressed. Every
+  // hand-written call must actually differ from the voice it replaced - this is
+  // the check that a table of thirty-odd recipes is doing anything at all.
+  const distinct = await js(`(async () => {
+    const render = async (species, face) => {
+      const off = new OfflineAudioContext(1, 88200, 44100);
+      sound(off, species, face);
+      const d = (await off.startRendering()).getChannelData(0);
+      // A coarse fingerprint: energy in eight slices of time. Two sounds with the
+      // same shape here are the same sound for a listener at the edge of a screen.
+      // Over the first second only, and finely: eight slices of two seconds put
+      // every one of the bird's 200ms calls in the same bucket, rounded to the
+      // same integer, and reported two obviously different chirps as identical.
+      const N = 32;
+      const span = 44100 / N;
+      const bins = new Array(N).fill(0);
+      for (let i = 0; i < 44100; i++) bins[Math.floor(i / span)] += d[i] * d[i];
+      return bins.map((x) => Math.round(Math.sqrt(x / span) * 100000));
+    };
+    const out = [];
+    for (const species of Object.keys(VOICES)) {
+      const base = (await render(species, 'hmm')).join(',');
+      for (const [feeling, face] of Object.entries(${JSON.stringify(FACE_OF)})) {
+        if (feeling === 'neutral' || !callFor(species, feeling)) continue;
+        out.push([species + '/' + feeling, (await render(species, face)).join(',') !== base]);
+      }
+    }
+    return out;
+  })()`);
+
+  check(distinct.length >= 25, `only ${distinct.length} feelings have a voice of their own`);
+  for (const [name, differs] of distinct) {
+    check(differs, `the ${name} call sounds exactly like the ordinary voice`);
   }
 
   // The feeling has to reach the sound and not only the face. Sleepy is slower
