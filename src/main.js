@@ -6,25 +6,29 @@ const {
 } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { recognise } = require('./ocr');
-const { listen } = require('./speech');
-const dictate = require('./dictate');
-const media = require('./media');
-const dnd = require('./dnd');
-const reminders = require('./reminders');
-const weather = require('./weather');
-const wake = require('./wake');
-const faces = require('./faces');
-const memory = require('./memory');
-const net = require('./net');
-const providers = require('./providers');
-const keys = require('./keys');
+const { recognise } = require('./system/ocr');
+const { listen } = require('./system/speech');
+const dictate = require('./system/dictate');
+const media = require('./system/media');
+const dnd = require('./system/dnd');
+const reminders = require('./core/reminders');
+const weather = require('./core/weather');
+const wake = require('./system/wake');
+const faces = require('./system/faces');
+const memory = require('./core/memory');
+const net = require('./core/net');
+const providers = require('./core/providers');
+const keys = require('./system/keys');
 const {
   ask, askVision, chat, detectVisionModel, listModels, hasEnoughText, redact,
-} = require('./brain');
-const pets = require('./pet-state');
-const skills = require('./skills');
-const config = require('./settings');
+} = require('./core/brain');
+const pets = require('./core/pet-state');
+const skills = require('./core/skills');
+const config = require('./core/settings');
+
+// Outside src/, but still inside the asar - Electron's patched fs reads it from
+// in there, so unlike the PowerShell scripts an icon needs no asarUnpack.
+const ASSETS = path.join(__dirname, '..', 'assets');
 
 const STAGE_H = 300;
 const TICK_MS = 20000;
@@ -219,7 +223,7 @@ function openSettings() {
     height: 940,
     resizable: false,
     title: 'screenpet',
-    icon: path.join(__dirname, 'icon.png'),
+    icon: path.join(ASSETS, 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
   settingsWin.setMenuBarVisibility(false);
@@ -276,7 +280,7 @@ function refreshTray() {
 }
 
 function createTray() {
-  tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'icon.png')));
+  tray = new Tray(nativeImage.createFromPath(path.join(ASSETS, 'icon.png')));
   tray.setToolTip('screenpet');
   tray.on('click', togglePet);
   refreshTray();

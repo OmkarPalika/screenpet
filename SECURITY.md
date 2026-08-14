@@ -31,7 +31,7 @@ The design rules that follow from that are the things worth testing:
   `settings.json`, and nothing a model or a skill can produce, may point them at
   another host. A path traversal through a model name, a settings field that
   becomes a URL, or a redirect that lands off-host all count.
-- **The local endpoint is loopback-only**, validated in `settings.js`. A
+- **The local endpoint is loopback-only**, validated in `src/core/settings.js`. A
   hand-edited settings file must not be able to send screen text to a remote
   "Ollama".
 - **API keys are one-way.** A key is wrapped with Windows DPAPI, stored in
@@ -54,7 +54,7 @@ The design rules that follow from that are the things worth testing:
 These are stated in the README and the Privacy Policy, so they are not
 vulnerabilities — but a way to *widen* one is:
 
-- **Redaction is a coarse net.** `SECRET_PATTERNS` in `brain.js` catches shapes
+- **Redaction is a coarse net.** `SECRET_PATTERNS` in `src/core/brain.js` catches shapes
   it knows — keys, tokens, JWTs, card-like digit runs, `password:` assignments.
   It cannot know that a paragraph is confidential. A pattern that misfires or
   can be trivially evaded is worth reporting; the fact that the net is coarse is
@@ -68,7 +68,7 @@ vulnerabilities — but a way to *widen* one is:
   with the release.
 - **Local dictation runs a binary you supplied.** If a known engine binary and
   its matching model are present in `%APPDATA%\screenpet\whisper\`, the app
-  executes that binary. Only the filenames in `dictate.js`'s `ENGINES` table are
+  executes that binary. Only the filenames in `src/system/dictate.js`'s `ENGINES` table are
   ever run, the folder is fixed, and there is no setting that can point it
   elsewhere — deliberately, because a path to an executable in `settings.json`
   would be arbitrary code execution with a nice label on it. Anyone who can write

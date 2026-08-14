@@ -102,7 +102,7 @@ trick — all thirty-nine expressions work on all ten pets without a single extr
 rule, and the next pet is one CSS block, not a new sprite sheet. The ghost and
 the robot are the two that swap `.body` as well; everything else hangs off it.
 
-Shapes live in `renderer/pets.css`, which the pet window, the settings previews
+Shapes live in `src/renderer/pets.css`, which the pet window, the settings previews
 and the demo stage all load. One definition per pet, so the picker previews are
 drawn by the same rules as the real thing and cannot disagree with it. A test
 asserts no species rule sneaks into `style.css`, which only the pet window
@@ -278,7 +278,7 @@ mouth is not raging. There is a test pinning it.
 **It makes a noise first.** A woof, a meow, a chirp, a rumble — whichever it is —
 in the moment before the words. There are no audio files: nothing is recorded,
 licensed or unpacked out of the asar, because each voice is six lines of
-oscillators and filtered noise in [renderer/voices.js](renderer/voices.js). A
+oscillators and filtered noise in [voices.js](src/renderer/voices.js). A
 bark is a low thump with a burst of noise on it; a meow is a sawtooth whose pitch
 goes up before it comes down, through a lowpass filter standing in for a mouth; a
 chirp is over before you can place it.
@@ -393,7 +393,7 @@ mid-phrase; excluding them moves base.en to 18% and leaves SAPI at 88%.
 prompt that biases decoding, and the app knows its own vocabulary — npm, JSON,
 rebase, Postgres, async. That one constant took base.en from 49% to 21%, and the
 technical phrases from 87% to 29%. Eight of fourteen improved and none regressed.
-It lives in [whisper.js](whisper.js) and it looks exactly like a magic string
+It lives in [dictate.js](src/system/dictate.js) and it looks exactly like a magic string
 somebody should tidy away, which is why there is a test pinning it.
 
 ### Turning it on
@@ -444,7 +444,7 @@ tidying and turns dictation off.
 exists for comes back in a different shape: handed two seconds of a quiet room,
 whisper base.en answers "you". The gate is therefore in two places — the recorder
 does not send audio it measured as silence, and a short list of known
-hallucinations is dropped in [dictate.js](dictate.js). Both are measured, not
+hallucinations is dropped in [dictate.js](src/system/dictate.js). Both are measured, not
 guessed. Parakeet returns nothing at all on silence and needs neither.
 
 ### Parakeet was measured too, and it is a tie
@@ -478,7 +478,7 @@ things that are structural rather than statistical:
   a larger whisper model than this app would ever load.
 
 So both are supported, and the model file you install decides which runs. That
-costs about twenty lines in [dictate.js](dictate.js) — the engines differ in an
+costs about twenty lines in [dictate.js](src/system/dictate.js) — the engines differ in an
 argument list and a model name — and it beats picking a winner on a two-point
 difference across fourteen phrases. Parakeet is preferred when both are properly
 installed; whisper stays the one to reach for first, on size.
@@ -498,7 +498,7 @@ microphone and 215MB of models to say anything.
 ## Skills
 
 Some things a model should not be asked to do. These are matched in
-[skills.js](skills.js) **before** anything reaches Ollama, so they are instant,
+[skills.js](src/core/skills.js) **before** anything reaches Ollama, so they are instant,
 exact, and identical every time:
 
 | Say | Get |
@@ -530,7 +530,7 @@ anything reaches a speech engine, and each line is deleted the moment it fires.
 Reminders that came due while the app was closed are said once on the next
 launch — unless they are more than two days old, at which point nobody wants to
 hear about them. Every bit of that validation is in
-[reminders.js](reminders.js), on the assumption that the file may have been
+[reminders.js](src/core/reminders.js), on the assumption that the file may have been
 hand-edited or corrupted.
 
 **Recurring alarms are four shapes and no more**: every day, every weekday, every
@@ -558,13 +558,13 @@ roast me        -> no notes. well. some notes. many notes.
 you are useless -> rude, and accurate
 ```
 
-Six line banks in [pet-state.js](pet-state.js), where the rest of the pet's voice
+Six line banks in [pet-state.js](src/core/pet-state.js), where the rest of the pet's voice
 lives, so the banter skills point at a bank rather than carrying their own words
 — which also means they pick up the per-species variations for free.
 
 **All of it is asked for. None of it fires on its own.** A pet that starts
 roasting you unprompted is a different product. The remarks that *are* unprompted
-come from [memory.js](memory.js), are built from numbers it actually recorded,
+come from [memory.js](src/core/memory.js), are built from numbers it actually recorded,
 and have their own switch.
 
 Flirting is cheesy and wholesome, and there is a test asserting it stays that
@@ -593,7 +593,7 @@ it wants lives in `pet.json` as a single number — `owed` — so it works with 
 memory switched off, and so it survives a restart the way a mood should.
 
 Three rules keep this a joke rather than a guilt trip, and all three are in
-[pet-state.js](pet-state.js) with a test each:
+[pet-state.js](src/core/pet-state.js) with a test each:
 
 - **One apology counts per 25 seconds.** Otherwise the whole bit is a three-word
   speedrun, and the pet is a button again.
@@ -603,7 +603,7 @@ Three rules keep this a joke rather than a guilt trip, and all three are in
 
 Forgiven means forgiven: the count goes to zero and nothing is kept to be cross
 about later. Being poked until it cries owes two — that one *is* also remembered,
-as a number, in [memory.js](memory.js), and the two are different things: the
+as a number, in [memory.js](src/core/memory.js), and the two are different things: the
 grudge clears when you say sorry and the count never does.
 
 **An apology has to be the whole message.** `sorry, what does this error mean` is
@@ -667,11 +667,11 @@ be shocked -> WHAT                    🥺 -> please?
 act innocent -> who, me?              make a face -> (it picks one)
 ```
 
-The list is one table — `FACES` in [pet-state.js](pet-state.js) — holding the
+The list is one table — `FACES` in [pet-state.js](src/core/pet-state.js) — holding the
 name, the emoji, the words people actually type for it, and what the pet says
-while pulling it. [skills.js](skills.js) builds its matcher from that table, so
+while pulling it. [skills.js](src/core/skills.js) builds its matcher from that table, so
 adding a face is one edit rather than four, and a test walks it to check every
-entry has a rule in [style.css](renderer/style.css) *and* that every rule in the
+entry has a rule in [style.css](src/renderer/style.css) *and* that every rule in the
 stylesheet is reachable from something. A face drawn but unreachable is a block
 of CSS nobody will ever see; a face reachable but undrawn is a pet that just
 sits there.
@@ -687,13 +687,13 @@ cool` reach the model, and an emoji only counts when the message is nothing but
 emoji. Verbs are required — `be`, `look`, `act`, `make`, `give me` — because
 "cool" typed at a pet usually means "nice".
 
-**Music is one keypress, not an integration.** [media.ps1](media.ps1) taps a
+**Music is one keypress, not an integration.** [media.ps1](src/system/media.ps1) taps a
 single Windows media key — the same one on your keyboard — and whatever holds the
 transport handles it: Spotify, a browser tab, the Groove app. Nothing comes back.
 The pet cannot see a track name, an artist or even whether anything was playing,
 which is exactly why it needs no account, no API key and no server. The only
 codes it will press are `0xAD`–`0xB3`, the volume and transport block, checked
-both in [media.js](media.js) and again in the script — this presses real keys on
+both in [media.js](src/system/media.js) and again in the script — this presses real keys on
 a real machine and the caller is a regular expression.
 
 **A photo is the one frame that gets written down.** Everything else the camera
@@ -794,7 +794,7 @@ most of what a page it loaded asks for; this app replaces it with a deny-by-all
 rule and exactly one exception — `media`, video only, and only with the setting
 on. Geolocation, notifications, the microphone through `getUserMedia`, and
 anything Chromium adds in future are refused without being listed. It lives in
-[settings.js](settings.js) as a pure function so the whole truth table is
+[settings.js](src/core/settings.js) as a pure function so the whole truth table is
 testable without booting Electron, and both of Electron's handlers are installed,
 because they are told the media type differently and wiring only one undoes the
 other.
@@ -1029,7 +1029,7 @@ Reading order is reconstructed rather than taken from the OCR engine.
 a four-line code block it returns `const a`, `const b`, `const c`, `if (a[0]`
 and only then the right-hand half of each of those rows, so the model receives
 every left column before any right one. `ocr.ps1` emits each fragment with its
-bounding box and `toReadingOrder` in [ocr.js](ocr.js) groups fragments whose
+bounding box and `toReadingOrder` in [ocr.js](src/system/ocr.js) groups fragments whose
 vertical centres overlap into a row, top to bottom, left to right within a row.
 Nav bars, tables and option grids all read correctly because of it.
 
@@ -1081,6 +1081,35 @@ and decoded from an in-memory stream. Nothing is stored — no history, no cache
 OCR is the OS's, not a bundled model, so there is no download and it runs fine on
 a laptop with no GPU. That matters more than it sounds: a vision model would gate
 the whole app behind 8GB of VRAM.
+
+## Layout
+
+```
+src/
+  main.js       the Electron main process: windows, tray, hotkey, the loop
+  preload.js    the only bridge the renderer gets
+  core/         logic with no Windows in it - runs under plain node, so the
+                tests drive the real thing rather than a mock
+  system/       everything that shells out: each .js next to the .ps1 or the
+                binary it drives
+  renderer/     the pet itself - one HTML file, one settings window, the SVG
+                bodies in pets.css and the voices in voices.js
+test/           test.js is node-only and fast; verify-ui.js boots real windows
+assets/         icon.png, the tray and window icon
+build/          the installer icon, and the script that turns TERMS.md into the
+                licence page NSIS shows
+demo/           a scripted recording of the pet, for the README gif
+```
+
+The split that carries weight is `core/` against `system/`. Nothing in `core/`
+spawns a process or touches Windows, which is why `npm test` can call the real
+modules instead of mocking them, and why it runs in about a second. Anything
+that shells out lives in `system/` next to the script it runs — `ocr.js` beside
+`ocr.ps1` — because the two are one unit and reviewing either alone tells you
+half the story.
+
+`src/system/*.ps1` is in `asarUnpack` and must stay there. See
+[Shipping](#shipping) for why.
 
 ## Requirements
 
@@ -1223,12 +1252,15 @@ Produces two artifacts in `dist/`, each about 95MB:
 `npm run pack` produces `dist/win-unpacked/` only, which is what a Steam depot
 would upload.
 
-**`ocr.ps1` is in `asarUnpack`, and must stay there.** PowerShell cannot read a
-file from inside an asar archive, so packaging it normally breaks OCR in the
-built app while development keeps working — the worst kind of failure. `ocr.js`
-rewrites `app.asar` to `app.asar.unpacked` in the script path, which is a no-op
-in development. The packaged build has been run and confirmed to OCR correctly
-from the unpacked location.
+**`src/system/*.ps1` is in `asarUnpack`, and must stay there.** PowerShell
+cannot read a file from inside an asar archive, so packaging them normally
+breaks OCR, dictation, the wake word, the media keys and the key store in the
+built app while development keeps working — the worst kind of failure. Each
+caller rewrites `app.asar` to `app.asar.unpacked` in the script path, which is a
+no-op in development. It is a glob rather than seven filenames on purpose: a new
+script added to `src/system/` is unpacked without anybody remembering to say so.
+The packaged build has been run and confirmed to OCR correctly from the unpacked
+location.
 
 **The build is unsigned.** Windows SmartScreen will warn on first run and some
 users will not get past that. Shipping properly needs an Authenticode
@@ -1260,7 +1292,7 @@ skill that would need the network says so instead of doing it.
 
 Turning it on **sends nothing by itself**. It unlocks three settings, each its
 own decision with its own switch, and turning the master switch back off turns
-all three off in the same pass — in [settings.js](settings.js), once, rather than
+all three off in the same pass — in [settings.js](src/core/settings.js), once, rather than
 at each of the call sites that would otherwise have to remember.
 
 | Unlocked | What leaves | Where to |
@@ -1281,7 +1313,7 @@ who is ada lovelace
 ```
 
 Instant answers first, the encyclopedia when there is no instant answer. Both
-hosts are hardcoded in [net.js](net.js), the query is capped at 120 characters
+hosts are hardcoded in [net.js](src/core/net.js), the query is capped at 120 characters
 and redacted before it goes, and the reply is cut to two lines at a sentence
 boundary. Nothing from your screen, memory, camera or microphone is ever part of
 a lookup.
@@ -1318,7 +1350,7 @@ Two things stay local whatever you pick:
 
 Five providers, three request shapes — NVIDIA and Mistral both speak OpenAI's
 `chat/completions` verbatim, so there is no adapter layer, just the two that
-genuinely differ. Every URL is hardcoded in [providers.js](providers.js) and the
+genuinely differ. Every URL is hardcoded in [providers.js](src/core/providers.js) and the
 key travels in a header, never in a query string: a URL is the part of a request
 that ends up in logs, history and referrers. There is a test asserting that for
 every provider, and another asserting a failure message never carries the key —
@@ -1331,7 +1363,7 @@ because model names go stale faster than this file will.
 ### Where a key lives
 
 `keys.json`, wrapped with Windows DPAPI under your user account —
-[keys.ps1](keys.ps1). Not in `settings.json`, which is round-tripped through the
+[keys.ps1](src/system/keys.ps1). Not in `settings.json`, which is round-tripped through the
 settings window; a key has no business crossing into a renderer.
 
 The settings window can **store** a key and **forget** a key. It is never told
@@ -1364,7 +1396,7 @@ identifier, nothing from your screen, camera or microphone. [Open-Meteo]
 specifically because it needs no registration — a keyed service would tie every
 forecast you ask for to an identity, which is worse than the forecast is useful.
 
-The hosts are hardcoded in [weather.js](weather.js) and are not configurable by
+The hosts are hardcoded in [weather.js](src/core/weather.js) and are not configurable by
 settings, by a skill, or by the model. A setting that could point this at an
 arbitrary host would be an exfiltration path wearing a weather feature as a hat.
 The tests assert both hosts, assert the town is one encoded parameter, assert the
@@ -1381,14 +1413,14 @@ same microphone.
 word costs and there is no version of it that does not. The honest mitigation is
 not a promise, it is the shape of the thing doing the listening:
 
-[wake.ps1](wake.ps1) loads a SAPI recogniser with a `Choices` grammar containing
+[wake.ps1](src/system/wake.ps1) loads a SAPI recogniser with a `Choices` grammar containing
 exactly the wake phrases. This is not a transcriber that happens to be looking
 for a word — it is **structurally incapable of recognising anything else**. Say
 your card number in front of it and there is no code path that produces those
 digits, because the only symbols in its grammar are "hey pet", "hello pet",
 "okay pet" and "wake up pet".
 
-The only line the process can print is `WAKE`. [wake.js](wake.js) drops anything
+The only line the process can print is `WAKE`. [wake.js](src/system/wake.js) drops anything
 else rather than passing it on, so the single fact that crosses into the app is
 *that you said it* — not what you said, not how confident it was.
 
@@ -1465,7 +1497,7 @@ app, without reading any of this code.
 Screen text is scanned for secrets before it reaches the model — API keys,
 tokens, JWTs, card-shaped digit runs, and `password:`-style assignments are
 replaced with `[REDACTED]`. That is a coarse net, not a guarantee; see
-`SECRET_PATTERNS` in [brain.js](brain.js).
+`SECRET_PATTERNS` in [brain.js](src/core/brain.js).
 
 That net matters much more once a hosted provider is selected, because then the
 screen text leaves the machine rather than crossing to loopback. It is applied on
@@ -1584,7 +1616,7 @@ exits. The one path the other two cannot reach.
   `vision` capability rather than ranking them by size or quality.
 - **Small vision models are brittle about prompts.** `buildVisionPrompt` is one
   short sentence with the mood in front, and that shape was measured rather than
-  chosen — see the comment above `VISION_TASK` in [brain.js](brain.js) before
+  chosen — see the comment above `VISION_TASK` in [brain.js](src/core/brain.js) before
   editing it. Adding a length constraint makes moondream reply `!!!`; moving the
   mood after the task makes it reply with nothing.
 - **A screen with both a diagram and plenty of text takes the text path**, so the
@@ -1680,7 +1712,7 @@ exits. The one path the other two cannot reach.
 
 ## Why it is not slow any more
 
-Two lines in [brain.js](brain.js), both found by measuring rather than guessing,
+Two lines in [brain.js](src/core/brain.js), both found by measuring rather than guessing,
 on an RTX 5050 Laptop with 8GB:
 
 **`num_ctx`.** Ollama sizes the KV cache from the *model's* default context

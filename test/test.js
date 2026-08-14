@@ -4,9 +4,9 @@
 // No framework on purpose - if this file needs fixtures, the code got too clever.
 
 const assert = require('assert');
-const { redact, stripThinking, cleanOcr, buildPrompt, ask, EMPTY_SCREEN } = require('./brain');
-const { toReadingOrder } = require('./ocr');
-const pets = require('./pet-state');
+const { redact, stripThinking, cleanOcr, buildPrompt, ask, EMPTY_SCREEN } = require('../src/core/brain');
+const { toReadingOrder } = require('../src/system/ocr');
+const pets = require('../src/core/pet-state');
 
 const HOUR = 3600000;
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != ${b}`);
@@ -72,7 +72,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 
 // --- unquote: the model narrating dialogue rather than speaking ---
 {
-  const { unquote } = require('./brain');
+  const { unquote } = require('../src/core/brain');
   assert.strictEqual(unquote('"Hey there!'), 'Hey there!');       // opened, never closed
   assert.strictEqual(unquote('"Hey there!"'), 'Hey there!');
   assert.strictEqual(unquote('  “Hello”  '), 'Hello');
@@ -84,7 +84,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 
 // --- stripMarkup: the bubble is a text node, so markdown arrives as clutter ---
 {
-  const { stripMarkup } = require('./brain');
+  const { stripMarkup } = require('../src/core/brain');
   assert.strictEqual(stripMarkup('The answer is **391**'), 'The answer is 391');
   assert.strictEqual(stripMarkup('__really__ sure'), 'really sure');
   assert.strictEqual(stripMarkup('## Heading\nbody'), 'Heading\nbody');
@@ -108,7 +108,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 
 // --- stripEcho: models restate the question however firmly you tell them not to ---
 {
-  const { stripEcho } = require('./brain');
+  const { stripEcho } = require('../src/core/brain');
   assert.strictEqual(stripEcho('What is 17 x 23?\n\nThe answer is 391.'), 'The answer is 391.');
   assert.strictEqual(stripEcho('Is this a bug?'), 'Is this a bug?', 'ate a genuine question');
   assert.strictEqual(stripEcho('The answer is 391.'), 'The answer is 391.');
@@ -151,7 +151,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 // like a person until you type at it. These are the rules that produced the
 // current measured output; if one path loses one of them, it is drifting.
 {
-  const { buildChatPrompt } = require('./brain');
+  const { buildChatPrompt } = require('../src/core/brain');
   for (const [name, p] of [['screen', buildPrompt('q?')], ['chat', buildChatPrompt('hi')]]) {
     assert.ok(/two short sentences/i.test(p), `${name} prompt lost its length cap`);
     assert.ok(/contractions/i.test(p), `${name} prompt no longer asks for spoken English`);
@@ -311,7 +311,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 
 // --- species voices, with the shared bank underneath ---
 {
-  const cfg = require('./settings');
+  const cfg = require('../src/core/settings');
 
   for (const [species, bank] of Object.entries(pets.SPECIES_LINES)) {
     assert.ok(cfg.PETS.includes(species), `SPECIES_LINES has "${species}", which is not a pet`);
@@ -353,7 +353,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 
 // --- expressions are a closed set the stylesheet actually implements ---
 {
-  const css = require('fs').readFileSync('./renderer/style.css', 'utf8');
+  const css = require('fs').readFileSync('./src/renderer/style.css', 'utf8');
   for (const expr of new Set(Object.values(pets.EXPRESSIONS))) {
     assert.ok(
       css.includes(`[data-expr="${expr}"]`),
@@ -371,7 +371,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // Every expression that drops emoji must name characters in the renderer, and
   // every set it names must belong to a real expression - a typo either way is
   // silent, and shows up as a feeling with no rain or rain with no feeling.
-  const rjs = require('fs').readFileSync('./renderer/renderer.js', 'utf8');
+  const rjs = require('fs').readFileSync('./src/renderer/renderer.js', 'utf8');
   const emoji = rjs.slice(rjs.indexOf('const EMOJI'), rjs.indexOf('const rand'));
   const known = new Set(Object.values(pets.EXPRESSIONS));
   for (const feeling of ['love', 'shy', 'joy', 'rage', 'cry', 'annoyed', 'proud']) {
@@ -420,7 +420,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.ok(!bow.includes(`[data-expr="${notCute}"] .bow`), `${notCute} should not wear a bow`);
   }
   assert.ok(
-    require('fs').readFileSync('./renderer/pets.css', 'utf8').includes('.bow      { display: none; }'),
+    require('fs').readFileSync('./src/renderer/pets.css', 'utf8').includes('.bow      { display: none; }'),
     'the bow is not hidden by default, so every pet wears one always'
   );
 }
@@ -432,7 +432,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 // pattern that fires on a real question replaces a correct answer with a dice
 // roll, and nothing anywhere would report it.
 {
-  const skills = require('./skills');
+  const skills = require('../src/core/skills');
   const at = (h, m) => new Date(2026, 7, 13, h, m);
   const fixed = (r) => () => r;
   const ctx = { now: at(14, 5), rand: fixed(0.5), battery: { percent: 42, charging: false } };
@@ -511,7 +511,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   }
 
   // --- music presses a key, and only ever a key it knows ---
-  const KEYS = require('./media').KEYS;
+  const KEYS = require('../src/system/media').KEYS;
   for (const [key, re] of skills.MEDIA_WORDS) {
     assert.ok(KEYS[key], `music pattern maps to unknown key "${key}"`);
     assert.ok(skills.MEDIA_LINES[key], `music key "${key}" has nothing to say`);
@@ -550,7 +550,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.ok(!/\d/.test(weather.say), 'the weather skill invented a number');
 
   // --- every skill stays inside the vocabulary the renderer implements ---
-  const rjs = require('fs').readFileSync('./renderer/renderer.js', 'utf8');
+  const rjs = require('fs').readFileSync('./src/renderer/renderer.js', 'utf8');
   const moves = (rjs.match(/const MOVE_MS = \{([^}]+)\}/) || [])[1] || '';
   // Both halves of the keyboard: the faces events reach for, and the ones you
   // can ask for by name. A movement may wear either - they are all drawn, and
@@ -564,7 +564,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.ok(skills.MOVE_LINES[move], `move "${move}" has nothing to say`);
     assert.ok(faces.has(skills.MOVE_EXPR[move]), `move "${move}" wears an unknown face`);
   }
-  const css = require('fs').readFileSync('./renderer/style.css', 'utf8');
+  const css = require('fs').readFileSync('./src/renderer/style.css', 'utf8');
   for (const [move] of skills.MOVE_WORDS) {
     assert.ok(css.includes(`[data-move="${move}"]`), `move "${move}" has no rule in style.css`);
   }
@@ -724,7 +724,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(pets.load({ owed: 2, owedAt: t0 }, t0).owed, 2, 'a real sulk was dropped');
 
   // main has an answer for every outcome, so a new one cannot land silently.
-  const main = require('fs').readFileSync('./main.js', 'utf8');
+  const main = require('fs').readFileSync('./src/main.js', 'utf8');
   const map = main.slice(main.indexOf('const APOLOGY = {'), main.indexOf('Skills answer before'));
   for (const kind of ['none', 'early', 'again', 'done']) {
     assert.ok(new RegExp(`\\b${kind}:`).test(map), `main has no answer for a "${kind}" apology`);
@@ -807,7 +807,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(pets.load({ ignored: 'lots' }, t0).ignored, 0);
 
   // --- the wiring, which the unit tests cannot reach ---
-  const main = require('fs').readFileSync('./main.js', 'utf8');
+  const main = require('fs').readFileSync('./src/main.js', 'utf8');
   // A line dropped by do not disturb was never said, so talk() has to report
   // back rather than being assumed to have spoken.
   assert.ok(/return false;/.test(main.slice(main.indexOf('function talk('), main.indexOf('function attention('))),
@@ -829,7 +829,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 
 // --- the face keyboard ---
 {
-  const css = require('fs').readFileSync('./renderer/style.css', 'utf8');
+  const css = require('fs').readFileSync('./src/renderer/style.css', 'utf8');
   const emoji = new Set();
   const words = new Set();
 
@@ -875,7 +875,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 
 // --- asking for a face, and not getting one by accident ---
 {
-  const skills = require('./skills');
+  const skills = require('../src/core/skills');
   const ctx = { now: new Date(0), rand: () => 0.5, battery: null };
   const hit = (t) => skills.match(t, ctx);
   const face = (t) => { const o = hit(t); return o && o.name === 'face' ? o.expr : null; };
@@ -911,7 +911,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 
 // --- jealousy, and apologising for it ---
 {
-  const skills = require('./skills');
+  const skills = require('../src/core/skills');
   const ctx = { now: new Date(0), rand: () => 0, battery: null };
   const hit = (t) => skills.match(t, ctx);
 
@@ -955,19 +955,19 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 // machine. These are the two ways it could stop being true.
 {
   const fs = require('fs');
-  const rjs = fs.readFileSync('./renderer/renderer.js', 'utf8');
+  const rjs = fs.readFileSync('./src/renderer/renderer.js', 'utf8');
 
   // Chromium's SpeechRecognition posts audio to a Google endpoint. It is the
   // obvious way to add dictation to an Electron app and it is the one thing
   // this app may never do - hence a test rather than a comment.
-  for (const src of ['./renderer/renderer.js', './main.js', './speech.js', './preload.js']) {
+  for (const src of ['./src/renderer/renderer.js', './src/main.js', './src/system/speech.js', './src/preload.js']) {
     assert.ok(
       !/SpeechRecognition|SpeechGrammarList/.test(fs.readFileSync(src, 'utf8')),
       `${src} uses the Web Speech recogniser, which uploads the audio`
     );
   }
   // Listening is Windows' own on-device recogniser, driven the same way as OCR.
-  const ps1 = fs.readFileSync('./listen.ps1', 'utf8');
+  const ps1 = fs.readFileSync('./src/system/listen.ps1', 'utf8');
   assert.ok(ps1.includes('System.Speech'), 'listen.ps1 does not use the on-device recogniser');
   assert.ok(ps1.includes('DictationGrammar'), 'listen.ps1 recognises nothing you could say');
 
@@ -1014,7 +1014,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 // --- the demo stage draws the same pet the app does ---
 {
   const fs = require('fs');
-  const app = fs.readFileSync('./renderer/index.html', 'utf8');
+  const app = fs.readFileSync('./src/renderer/index.html', 'utf8');
   const stage = fs.readFileSync('./demo/stage.html', 'utf8');
   // Two copies of the SVG is the price of the demo rendering a page behind the
   // pet. Cheap to keep honest, and a drifted demo is a demo of the wrong app.
@@ -1024,7 +1024,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   }
   // Species parts must exist in the settings previews too, or the picker shows
   // six identical buttons while the real pet changes shape.
-  const settingsHtml = fs.readFileSync('./renderer/settings.html', 'utf8');
+  const settingsHtml = fs.readFileSync('./src/renderer/settings.html', 'utf8');
   for (const part of ['tail', 'crest', 'whiskers', 'ear-l', 'ear-r']) {
     for (const [name, html] of [['renderer', app], ['demo stage', stage], ['settings', settingsHtml]]) {
       assert.ok(html.includes(`"${part}"`) || html.includes(` ${part}"`), `${name} has no ${part} slot`);
@@ -1042,8 +1042,8 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 // --- every species is actually drawn, and only from one place ---
 {
   const fs = require('fs');
-  const cfg = require('./settings');
-  const css = fs.readFileSync('./renderer/pets.css', 'utf8');
+  const cfg = require('../src/core/settings');
+  const css = fs.readFileSync('./src/renderer/pets.css', 'utf8');
 
   for (const pet of cfg.PETS) {
     // blob is the shape already in the markup, so it needs no rules of its own.
@@ -1053,10 +1053,10 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // Shapes must live in pets.css alone - style.css is loaded by the pet window
   // only, so a species rule hiding in there would not reach the settings previews.
   assert.ok(
-    !fs.readFileSync('./renderer/style.css', 'utf8').includes('[data-pet='),
+    !fs.readFileSync('./src/renderer/style.css', 'utf8').includes('[data-pet='),
     'a species rule is in style.css, where the settings previews cannot see it'
   );
-  for (const html of ['./renderer/index.html', './renderer/settings.html', './demo/stage.html']) {
+  for (const html of ['./src/renderer/index.html', './src/renderer/settings.html', './demo/stage.html']) {
     assert.ok(fs.readFileSync(html, 'utf8').includes('pets.css'), `${html} does not load pets.css`);
   }
 
@@ -1097,7 +1097,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 // ===== settings ============================================================
 
 {
-  const cfg = require('./settings');
+  const cfg = require('../src/core/settings');
 
   assert.deepStrictEqual(cfg.load(null), cfg.DEFAULTS);
   assert.deepStrictEqual(cfg.load('nonsense'), cfg.DEFAULTS);
@@ -1240,8 +1240,8 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // of this control was marked up with `class="row"`, which in settings.css is
   // the fixed bottom bar - it validated fine and sat on top of the save button.
   {
-    const html = require('fs').readFileSync('./renderer/settings.html', 'utf8');
-    const js = require('fs').readFileSync('./renderer/settings-renderer.js', 'utf8');
+    const html = require('fs').readFileSync('./src/renderer/settings.html', 'utf8');
+    const js = require('fs').readFileSync('./src/renderer/settings-renderer.js', 'utf8');
     assert.ok(html.includes('id="dictation"'), 'the settings window has no recogniser control');
     assert.ok(html.includes('for="dictation"'), 'the recogniser control has no label');
     assert.ok(!/class="row"[^>]*id="dictation"/.test(html), 'the recogniser control is in the fixed bottom bar');
@@ -1285,7 +1285,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 // and looks like dead weight to anyone who did not measure it.
 
 {
-  const whisper = require('./dictate');
+  const whisper = require('../src/system/dictate');
   const os = require('os');
   const fs = require('fs');
   const path = require('path');
@@ -1402,7 +1402,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 // ===== quiet hours =========================================================
 
 {
-  const dnd = require('./dnd');
+  const dnd = require('../src/system/dnd');
 
   // The list is of talkative states, not quiet ones, so anything Windows adds in
   // a future version is treated as "keep quiet". Getting this backwards means a
@@ -1419,7 +1419,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 // ===== reminders ===========================================================
 
 {
-  const rem = require('./reminders');
+  const rem = require('../src/core/reminders');
   const NOW = 1_000_000;
 
   // Split on the clock, oldest first, so a queue of missed ones replays in order.
@@ -1521,7 +1521,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 // ===== recurring alarms: the language half =================================
 
 {
-  const { repeatOf, clockOf, spokenRepeat, match } = require('./skills');
+  const { repeatOf, clockOf, spokenRepeat, match } = require('../src/core/skills');
 
   assert.deepStrictEqual(clockOf('at 7'), { hour: 7, minute: 0 });
   assert.deepStrictEqual(clockOf('at 9:30am'), { hour: 9, minute: 30 });
@@ -1577,7 +1577,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 // ===== weather: the one networked feature ==================================
 
 (async () => {
-  const wx = require('./weather');
+  const wx = require('../src/core/weather');
 
   const seen = [];
   const fake = async (url) => {
@@ -1690,7 +1690,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.match(await ask('hi', { fetch: slow }), /too long/);
 
   // --- vision tier ---------------------------------------------------------
-  const { askVision, detectVisionModel, listModels } = require('./brain');
+  const { askVision, detectVisionModel, listModels } = require('../src/core/brain');
 
   const fakeOllama = (models, caps = {}) => async (url, init) => {
     if (url.endsWith('/api/tags')) {
@@ -1740,7 +1740,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // --- tier routing --------------------------------------------------------
   // OCR wins whenever there is text, because a small vision model is measurably
   // worse at dense screens - moondream returns nothing at all for one.
-  const { hasEnoughText, MIN_SCREEN_TEXT } = require('./brain');
+  const { hasEnoughText, MIN_SCREEN_TEXT } = require('../src/core/brain');
   assert.strictEqual(hasEnoughText(''), false);
   assert.strictEqual(hasEnoughText('   \n \n'), false);
   assert.strictEqual(hasEnoughText(null), false);
@@ -1759,7 +1759,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // Whitespace must not pad a blank screen over the threshold.
   assert.strictEqual(hasEnoughText(' '.repeat(500)), false);
 
-  const { buildVisionPrompt } = require('./brain');
+  const { buildVisionPrompt } = require('../src/core/brain');
   for (const m of ['hungry', 'sleepy', 'sad', 'happy', 'neutral']) {
     const p = buildVisionPrompt(m);
     assert.ok(p.length <= 200, `vision prompt too long for ${m} (${p.length} chars)`);
@@ -1772,7 +1772,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   }
 
   // --- chat ----------------------------------------------------------------
-  const { chat, buildChatPrompt } = require('./brain');
+  const { chat, buildChatPrompt } = require('../src/core/brain');
 
   let cbody = null;
   const cgrab = async (_url, init) => {
@@ -1817,7 +1817,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   const MON_9PM = at(2026, 0, 5, 21);
 
   {
-    const memo = require('./memory');
+    const memo = require('../src/core/memory');
 
     // --- load: a hand-edited file cannot make it say anything absurd ---------
     for (const junk of [null, 42, 'nope', [], { facts: 'no' }]) {
@@ -2050,7 +2050,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 
   // --- the language half: what actually reaches memory.js --------------------
   {
-    const skills = require('./skills');
+    const skills = require('../src/core/skills');
     const ctx = { now: new Date(MON_9PM), rand: () => 0 };
     const run = (t) => skills.match(t, ctx);
 
@@ -2090,9 +2090,9 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // switch actually gates, and that what leaves carries what it says it does.
 
   {
-    const providers = require('./providers');
-    const net = require('./net');
-    const config = require('./settings');
+    const providers = require('../src/core/providers');
+    const net = require('../src/core/net');
+    const config = require('../src/core/settings');
 
     // --- the master switch ---------------------------------------------------
     assert.strictEqual(config.load({}).network, false, 'the network defaulted to on');
@@ -2264,7 +2264,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     }));
 
     // --- the lookup skill ----------------------------------------------------
-    const skills = require('./skills');
+    const skills = require('../src/core/skills');
     const sctx = { now: new Date(MON_9PM), rand: () => 0 };
     assert.strictEqual(skills.match('look up the speed of light', sctx).lookup, 'the speed of light');
     assert.strictEqual(skills.match('search for tardigrades', sctx).lookup, 'tardigrades');
@@ -2282,7 +2282,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 
   // --- the settings gate ------------------------------------------------------
   {
-    const config = require('./settings');
+    const config = require('../src/core/settings');
     const on = config.load({});
     assert.strictEqual(on.memory, true, 'memory should be on by default');
     assert.strictEqual(on.cheek, true);
@@ -2302,8 +2302,8 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // with no recipe is a silent pet, and a face routed to a feeling that does not
   // exist would quietly fall back to neutral forever.
   {
-    const voices = require('./renderer/voices');
-    const config = require('./settings');
+    const voices = require('../src/renderer/voices');
+    const config = require('../src/core/settings');
 
     for (const species of config.PETS) {
       assert.ok(voices.VOICES[species], `${species} has no voice`);
@@ -2355,7 +2355,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 
     // A face given a sound but never drawn is a typo in the table above.
     const drawn = new Set(
-      require('fs').readFileSync('./renderer/style.css', 'utf8')
+      require('fs').readFileSync('./src/renderer/style.css', 'utf8')
         .match(/data-expr="[a-z]+"/g)
         .map((s) => s.slice(11, -1))
     );
@@ -2370,11 +2370,11 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 
     // Wiring: the renderer only barks with the setting on, and never over its
     // own thinking face.
-    const rjs = require('fs').readFileSync('./renderer/renderer.js', 'utf8');
+    const rjs = require('fs').readFileSync('./src/renderer/renderer.js', 'utf8');
     assert.ok(/if \(!soundsOn\) return;/.test(rjs), 'the noise ignores the setting');
     assert.ok(/if \(!busy\) bark\(expr\);/.test(rjs), 'the pet barks while thinking');
     assert.ok(
-      require('fs').readFileSync('./main.js', 'utf8').includes('sounds: settings.sounds'),
+      require('fs').readFileSync('./src/main.js', 'utf8').includes('sounds: settings.sounds'),
       'main never tells the renderer whether noises are on'
     );
   }
@@ -2382,8 +2382,8 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // --- skins --------------------------------------------------------------
   {
     const fs = require('fs');
-    const config = require('./settings');
-    const pcss = fs.readFileSync('./renderer/pets.css', 'utf8');
+    const config = require('../src/core/settings');
+    const pcss = fs.readFileSync('./src/renderer/pets.css', 'utf8');
 
     for (const skin of config.SKINS) {
       const rule = pcss.match(new RegExp(`\\[data-skin="${skin}"\\][^{]*\\{([^}]+)\\}`));
@@ -2400,7 +2400,7 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     // The swatch takes its colour from the same three variables the pet does.
     // A second copy of every palette in settings.css is how a new skin ends up
     // a colourless circle nobody notices until it ships.
-    const scss = fs.readFileSync('./renderer/settings.css', 'utf8');
+    const scss = fs.readFileSync('./src/renderer/settings.css', 'utf8');
     assert.ok(/\.swatch \{[^}]*background: var\(--body\)/.test(scss), 'the swatch has no colour');
     assert.ok(
       !/\.swatch\[data-skin/.test(scss),
@@ -2411,9 +2411,9 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // --- the wardrobe -------------------------------------------------------
   {
     const fs = require('fs');
-    const config = require('./settings');
-    const css = fs.readFileSync('./renderer/pets.css', 'utf8');
-    const html = fs.readFileSync('./renderer/index.html', 'utf8');
+    const config = require('../src/core/settings');
+    const css = fs.readFileSync('./src/renderer/pets.css', 'utf8');
+    const html = fs.readFileSync('./src/renderer/index.html', 'utf8');
 
     // Nothing by default, and an outfit nobody drew is not wearable.
     assert.strictEqual(config.load({}).wear, 'none');
@@ -2456,14 +2456,37 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
 
     // Wiring, both ways: main offers the list and pushes the choice, the
     // renderer puts it where the stylesheet is looking.
-    const mjs = fs.readFileSync('./main.js', 'utf8');
+    const mjs = fs.readFileSync('./src/main.js', 'utf8');
     assert.ok(mjs.includes('wear: config.WEAR'), 'the settings window is never told what there is to wear');
     assert.ok(mjs.includes('wear: settings.wear'), 'main never tells the pet what it has on');
     assert.ok(
-      fs.readFileSync('./renderer/renderer.js', 'utf8')
+      fs.readFileSync('./src/renderer/renderer.js', 'utf8')
         .includes("document.documentElement.dataset.wear = wear || 'none'"),
       'the renderer never puts the outfit on the root element'
     );
+  }
+
+  // --- the layout the build config assumes ---
+  {
+    const fs = require('fs');
+    const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+
+    assert.ok(fs.existsSync(pkg.main), `the entry point ${pkg.main} does not exist`);
+
+    // asarUnpack is the glob src/system/*.ps1, so a script anywhere else is
+    // packed into the asar - where PowerShell cannot read it. That failure only
+    // shows up in a built app, never in development, which is why it is checked
+    // here rather than trusted to whoever adds the next one.
+    const stray = [];
+    (function walk(dir) {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (e.name === 'node_modules' || e.name === 'dist' || e.name === '.git') continue;
+        const p = `${dir}/${e.name}`;
+        if (e.isDirectory()) walk(p);
+        else if (e.name.endsWith('.ps1') && dir !== './src/system') stray.push(p);
+      }
+    })('.');
+    assert.deepStrictEqual(stray, [], 'PowerShell scripts outside src/system are packed into the asar unreadable');
   }
 
   // --- the paperwork actually ships, and the installer shows the real terms ---
