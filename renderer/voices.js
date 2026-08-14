@@ -137,6 +137,29 @@ const VOICES = {
   dragon: (a) => a
     .tone({ type: 'sawtooth', from: 90, to: 55, dur: 0.5, peak: 0.5, low: 400 })
     .noise({ dur: 0.45, peak: 0.22, low: 300 }),
+
+  // A yip is a bark that starts where a bark ends - up, and over before the
+  // pup's has finished its thump.
+  fox: (a) => a
+    .tone({ type: 'triangle', from: 900, to: 1500, dur: 0.06, peak: 0.42 })
+    .tone({ type: 'triangle', from: 1400, to: 480, at: 0.06, dur: 0.17, peak: 0.4, low: 2600 }),
+
+  // Two bubbles rather than a voice. Both rise, which is the one thing nothing
+  // else here does twice in a row.
+  axolotl: (a) => a
+    .tone({ from: 240, to: 540, dur: 0.11, peak: 0.5, low: 900 })
+    .tone({ from: 200, to: 430, at: 0.14, dur: 0.11, peak: 0.4, low: 800 }),
+
+  // Long, quiet and hollow, with just enough breath under it not to be a hum.
+  ghost: (a) => a
+    .tone({ from: 300, to: 190, dur: 0.5, peak: 0.34, low: 700 })
+    .noise({ dur: 0.42, peak: 0.07, low: 500 }),
+
+  // The only square waves in the file, and the only two notes that do not glide
+  // into each other: a robot is the thing that does not bend its pitch.
+  robot: (a) => a
+    .tone({ type: 'square', from: 740, dur: 0.08, peak: 0.26, low: 2600 })
+    .tone({ type: 'square', from: 430, at: 0.11, dur: 0.13, peak: 0.24, low: 2200 }),
 };
 
 /**

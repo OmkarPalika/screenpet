@@ -152,6 +152,7 @@ app.whenReady().then(async () => {
   const blobEars = await earD();
   for (const [species, part] of Object.entries({
     cat: '.whiskers', pup: '.tail', bun: '.ear-l', bird: '.crest', dragon: '.crest',
+    fox: '.tail', axolotl: '.ear-l', ghost: '.body', robot: '.crest',
   })) {
     win.webContents.send('pet:look', { pet: species, skin: 'butter' });
     await settle();
@@ -163,8 +164,9 @@ app.whenReady().then(async () => {
     check(got.pet === species, `species not applied: wanted ${species}, got ${got.pet}`);
     check(got.shown !== 'none', `${species} did not show ${part}`);
     check(/path\(/.test(got.d), `${species} left ${part} with no shape (${got.d})`);
-    // The bird is the exception: it has no ears to reshape, it just loses them.
-    if (species !== 'bird') {
+    // Two exceptions, and both are pets with no ears to reshape rather than
+    // pets whose ear rule failed: the bird has a tuft, the ghost has nothing.
+    if (species !== 'bird' && species !== 'ghost') {
       check(await earD() !== blobEars, `${species} wears the default ears`);
     }
   }
@@ -208,7 +210,7 @@ app.whenReady().then(async () => {
   // resolved animation-name catches the failure that matters: a rule that never
   // matches leaves the pet on the default squish and looks unfinished.
   const quirks = new Set();
-  for (const s of ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon']) {
+  for (const s of require('./settings').PETS) {
     win.webContents.send('pet:look', { pet: s, skin: 'butter' });
     await settle();
     const got = await js(
@@ -223,7 +225,10 @@ app.whenReady().then(async () => {
     check(got.gaze === 'glance', `${s} does not look around while idle (${got.gaze})`);
     quirks.add(`${got.body}/${got.tail}`);
   }
-  check(quirks.size >= 5, `six species share too few idle quirks: ${[...quirks].join(', ')}`);
+  check(
+    quirks.size >= require('./settings').PETS.length - 1,
+    `the species share too few idle quirks: ${[...quirks].join(', ')}`
+  );
 
   // The quirk has to end, or the pet never goes back to its resting bob.
   check(
@@ -761,11 +766,11 @@ app.whenReady().then(async () => {
   // One outfit per row, every species in it. Nothing in the wardrobe is
   // species-aware, so this is the sheet that shows what that costs: a hat has to
   // read as a hat on a bun's ears and over a bird's crest, or it needs redrawing.
-  await sheet('pet-wardrobe.png', [760, 1000], `(source, box, clone) => {
+  await sheet('pet-wardrobe.png', [1260, 1000], `(source, box, clone) => {
     box.style.display = 'grid';
-    box.style.gridTemplateColumns = 'repeat(6, 124px)';
+    box.style.gridTemplateColumns = 'repeat(10, 124px)';
     for (const outfit of ${JSON.stringify(WEAR.filter((w) => w !== 'none'))}) {
-      for (const s of ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon']) {
+      for (const s of ${JSON.stringify(require('./settings').PETS)}) {
         const cell = document.createElement('div');
         cell.dataset.pet = s;
         cell.dataset.wear = outfit;
@@ -776,10 +781,10 @@ app.whenReady().then(async () => {
     }
   }`);
 
-  const allSpecies = ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon'];
-  await sheet('pet-species.png', [760, 1190], `(source, box, clone) => {
+  const allSpecies = require('./settings').PETS;
+  await sheet('pet-species.png', [1260, 1190], `(source, box, clone) => {
     box.style.display = 'grid';
-    box.style.gridTemplateColumns = 'repeat(6, 124px)';
+    box.style.gridTemplateColumns = 'repeat(10, 124px)';
     for (const skin of ${JSON.stringify(require('./settings').SKINS)}) {
       for (const s of ${JSON.stringify(allSpecies)}) {
         const cell = document.createElement('div');
@@ -846,7 +851,8 @@ app.whenReady().then(async () => {
     'settings did not render the skin swatches'
   );
   check(
-    (await sjs(`document.querySelectorAll('#pets .pet-pick svg').length`)) === 6,
+    (await sjs(`document.querySelectorAll('#pets .pet-pick svg').length`))
+      === require('./settings').PETS.length,
     'settings did not draw a preview for every pet'
   );
   check(

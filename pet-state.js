@@ -554,6 +554,30 @@ const SPECIES_LINES = {
     patted: ['*rumbles*', 'you have earned that'],
     played: ['I used only a little fire', 'again, mortal'],
   },
+  fox: {
+    idle: ['*sniffs*', 'I have checked the perimeter', 'thinking three quick thoughts', 'nothing to report. probably.'],
+    fed: ['*crunch*', 'technically I stole that'],
+    patted: ['*leans in*', 'mind the ears'],
+    played: ['I won. I usually win.', 'again, but sneakier'],
+  },
+  axolotl: {
+    idle: ['*blub*', 'the water is fine', 'I am mostly gills', 'floating. thinking. mostly floating.'],
+    fed: ['*glorp*', 'more of that one'],
+    patted: ['*wiggles*', 'gently, I am squishy'],
+    played: ['I went very fast, for me', 'again, but bubblier'],
+  },
+  ghost: {
+    idle: ['*boo*', 'I have haunted this taskbar for years', 'do not mind me', 'I remember Windows 95'],
+    fed: ['it went straight through', 'the thought counts'],
+    patted: ['*shivers pleasantly*', 'nobody has done that in a while'],
+    played: ['*oooOOoo*', 'I floated menacingly'],
+  },
+  robot: {
+    idle: ['systems nominal', 'beep', 'I have counted your files. twice.', 'awaiting input'],
+    fed: ['*charging*', 'battery up four percent'],
+    patted: ['sensor calibrated', 'that was pleasant. logged.'],
+    played: ['recreation subroutine complete', 'again. for science.'],
+  },
 };
 
 /** Index is passed in rather than random so the caller stays deterministic. */

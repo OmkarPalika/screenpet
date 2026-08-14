@@ -85,10 +85,10 @@ nothing to complain about. A pet that talks more than that gets uninstalled.
 
 ## Pets
 
-Six of them: **blob**, **cat**, **pup**, **bun**, **bird**, **dragon**. Pick one
-in Settings, next to the ten skins — butter, mint, blossom, slate, coal, cream,
+Ten of them: **blob**, **cat**, **pup**, **bun**, **bird**, **dragon**, **fox**,
+**axolotl**, **ghost**, **robot**. Pick one in Settings, next to the ten skins — butter, mint, blossom, slate, coal, cream,
 moss, plum, sky, coral. They are orthogonal: every pet works in every palette,
-and every outfit works over both, so it is 6 × 10 × 9 rather than six.
+and every outfit works over both, so it is 10 × 10 × 9 rather than ten.
 
 A palette is **three CSS variables** — `--body`, `--ear`, `--cheek` — defined in
 one place. The settings swatch paints itself from the same three off its own
@@ -98,8 +98,9 @@ colours is exactly how a skin ships as a colourless circle.
 
 Every species keeps the **same face rig**: same classes, same coordinates. Only
 ears, body outline and extras (tail, crest, whiskers) change. That is the whole
-trick — all thirty-nine expressions work on all six pets without a single extra rule,
-and a seventh pet is one CSS block, not a new sprite sheet.
+trick — all thirty-nine expressions work on all ten pets without a single extra
+rule, and the next pet is one CSS block, not a new sprite sheet. The ghost and
+the robot are the two that swap `.body` as well; everything else hangs off it.
 
 Shapes live in `renderer/pets.css`, which the pet window, the settings previews
 and the demo stage all load. One definition per pet, so the picker previews are
@@ -113,14 +114,16 @@ loads — a shape hiding in there would render correctly and preview as a blob.
 
 **Voices.** Each species has its own lines for the things it says most — idling,
 being fed, patted, played with. Everything else falls through to the shared bank,
-so a seventh pet means writing the lines it actually has an opinion about rather
+so a new pet means writing the lines it actually has an opinion about rather
 than filling in a 15-cell grid. The cat says `you may continue`; the pup says
 `again again again`.
 
 **Idle quirks.** Every 9–23 seconds of nothing happening, the pet does something:
 the cat stretches and flicks its tail, the pup hops and wags, the bun twitches an
-ear, the bird pecks, the dragon rumbles and sways, the blob squishes. They all
-glance around while doing it.
+ear, the bird pecks, the dragon rumbles and sways, the blob squishes, the fox
+pounces, the axolotl paddles, the ghost fades as it drifts up, and the robot
+glitches in four hard steps rather than easing anywhere — the one that is not a
+creature should not move like one. They all glance around while doing it.
 
 The renderer only decides *when* — which movement is entirely `pets.css`'s
 business. A species rule replaces the resting bob for the quirk's duration, which
@@ -271,8 +274,8 @@ goes up before it comes down, through a lowpass filter standing in for a mouth; 
 chirp is over before you can place it.
 
 The **face** decides how it comes out. Five feelings — neutral, happy, sad,
-cross, sleepy — each a pitch, a speed and a volume, so six species need six
-recipes rather than thirty: the cat has one meow and five ways of meaning it. A
+cross, sleepy — each a pitch, a speed and a volume, so ten species need ten
+recipes rather than fifty: the cat has one meow and five ways of meaning it. A
 crying pet is slower and lower than a delighted one without a second recipe
 existing.
 
@@ -505,7 +508,7 @@ Only two of them needed new SVG — the shades and the halo. Everything else is
 the same rig moved around: lids lowered over the eyes for 😏, the glints blown up
 and throbbing for 🤩, the bob removed entirely for 😐, the whole body rotated 180°
 for 🙃. Both props are worn rather than drawn into a body, like the bow, so all
-six species get them without anyone redrawing anything six times.
+ten species get them without anyone redrawing anything ten times.
 
 A face word inside a sentence is somebody talking: `that is cool` and `this looks
 cool` reach the model, and an emoji only counts when the message is nothing but
@@ -799,7 +802,7 @@ and quit it — the pet has no taskbar button by design.
 | Model | Picked from what Ollama actually has installed. |
 | Diagrams and images | `Auto` uses a vision model if one exists, `Off` forces text-only. |
 | Hotkey | Validated before saving; a malformed accelerator would crash the app on launch. |
-| Pet | Blob, cat, pup, bun, bird or dragon. Previews are the real thing. |
+| Pet | Blob, cat, pup, bun, bird, dragon, fox, axolotl, ghost or robot. Previews are the real thing. |
 | Skin | Ten palettes — butter, mint, blossom, slate, coal, cream, moss, plum, sky, coral. Applies to whichever pet you picked. |
 | Wearing | Nothing, bow, shades, halo, masked hero, party hat, wizard hat, crown or headphones. See "The wardrobe". |
 | Speak replies out loud | On by default. Mute from the tray without opening this window. |
@@ -1307,7 +1310,7 @@ npm run verify:ui
 ```
 
 Drives both real windows over real IPC — speech, all five moods, every
-expression, cursor tracking, all six species, all ten skins, every outfit, stat
+expression, cursor tracking, all ten species, all ten skins, every outfit, stat
 bars, hover hit-testing, headpat, tickle, drag, the chat box, every menu item,
 and the whole settings form — and fails on any console error. Writes PNGs to
 look at.

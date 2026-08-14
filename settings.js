@@ -9,7 +9,10 @@ const SKINS = [
 
 // Species and skin are orthogonal on purpose: every pet works in every palette,
 // because the difference is shape and the palette is three CSS variables.
-const PETS = ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon'];
+const PETS = [
+  'blob', 'cat', 'pup', 'bun', 'bird', 'dragon',
+  'fox', 'axolotl', 'ghost', 'robot',
+];
 
 // What it has on, orthogonal to both of the above for the same reason. One name
 // rather than a set of them: an outfit is a decision, and a list of items would
