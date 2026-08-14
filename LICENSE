@@ -1,0 +1,20 @@
+screenpet
+Copyright (c) 2026 Omkar Palika. All rights reserved.
+
+This software is licensed, not sold. Your right to install and use it is set out
+in TERMS.md, which is the licence agreement for this software; installing or
+using it means you accept those terms.
+
+In short, and without replacing what TERMS.md says: you may install and use
+screenpet on computers you own or control. You may not sell it, redistribute it,
+sublicense it, or remove its notices. Reverse engineering and modification are
+permitted only where applicable law grants you that right regardless of
+contract.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. SEE SECTIONS 7 AND 8 OF TERMS.md FOR THE FULL DISCLAIMER AND THE LIMIT
+OF LIABILITY.
+
+Components not covered by this notice — Electron, Chromium, Node.js, Ollama, the
+models you run, and the services the optional network features contact — are
+covered by THIRD-PARTY-NOTICES.md.
