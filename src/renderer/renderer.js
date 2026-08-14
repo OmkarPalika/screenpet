@@ -313,8 +313,8 @@ function refreshMenu(s) {
 }
 
 // ---- hit testing ---------------------------------------------------------
-// The window covers the whole bottom strip, so main keeps it click-through and
-// we tell it when the cursor is actually over something clickable.
+// The window covers the whole display, so main keeps it click-through and we
+// tell it when the cursor is actually over something clickable.
 
 function hitZone() {
   const boxes = [petEl.getBoundingClientRect()];
@@ -330,15 +330,65 @@ function setInteractive(v) {
   window.pet.setInteractive(v);
 }
 
-// Eyes track the cursor anywhere on the strip, which costs nothing and is most
+// Eyes track the cursor anywhere on the screen, which costs nothing and is most
 // of what makes the thing feel awake. Clamped small - a pupil that slides to the
 // edge of the eye looks unwell rather than attentive.
-function gaze(x, y) {
+//
+// On top of the cursor there are two things real eyes do that a tracker does
+// not. They flick about a little on their own rather than sitting perfectly
+// still (a saccade), and when nothing is moving they stop tracking and look
+// somewhere else entirely. A gaze locked on the cursor to the pixel is the
+// single most machine-like thing a face can do.
+
+let lookAt = null;      // where the cursor was, or null if it has not moved yet
+let jitter = { x: 0, y: 0 };
+let lastMoveAt = 0;
+const IDLE_GAZE_MS = 4000;
+
+function aim(x, y) {
   const r = petEl.getBoundingClientRect();
   const dx = Math.max(-3, Math.min(3, (x - (r.left + r.width / 2)) / 26));
   const dy = Math.max(-2, Math.min(2, (y - (r.top + r.height / 2)) / 30));
-  petEl.style.setProperty('--eye-x', `${dx.toFixed(2)}px`);
-  petEl.style.setProperty('--eye-y', `${dy.toFixed(2)}px`);
+  petEl.style.setProperty('--eye-x', `${(dx + jitter.x).toFixed(2)}px`);
+  petEl.style.setProperty('--eye-y', `${(dy + jitter.y).toFixed(2)}px`);
+}
+
+function gaze(x, y) {
+  lookAt = { x, y };
+  lastMoveAt = performance.now();
+  aim(x, y);
+}
+
+/**
+ * A flick of the eyes, and - if the cursor has been still a while - a look at
+ * something else in the room. The pet has no idea what is over there, which is
+ * the point: eyes that only ever track the one thing that moves read as a
+ * sensor rather than as attention.
+ */
+function saccade() {
+  const still = performance.now() - lastMoveAt > IDLE_GAZE_MS;
+  jitter = still
+    ? { x: rand(-2.6, 2.6), y: rand(-1.6, 1.2) }
+    : { x: rand(-0.5, 0.5), y: rand(-0.4, 0.4) };
+  if (lookAt) aim(lookAt.x, lookAt.y);
+  // Uneven on purpose. A flick every N seconds exactly is a metronome, and the
+  // eye reads a metronome as a machine faster than it reads anything else.
+  setTimeout(saccade, still ? rand(900, 2600) : rand(1400, 4200));
+}
+
+// Blinking is scheduled rather than a CSS loop, for the same reason: a blink
+// every 5.4 seconds forever is a tell. Real ones come in uneven gaps and
+// sometimes in pairs.
+const eyesEl = document.querySelector('.eyes');
+
+function blink(again = Math.random() < 0.28) {
+  eyesEl.classList.remove('is-blink');
+  void eyesEl.offsetWidth;
+  eyesEl.classList.add('is-blink');
+  setTimeout(() => eyesEl.classList.remove('is-blink'), 200);
+  // A double blink lands close enough to read as one gesture rather than two.
+  if (again) return setTimeout(() => blink(false), 320);
+  setTimeout(() => blink(), rand(2600, 7400));
 }
 
 document.addEventListener('mousemove', (e) => {
@@ -409,26 +459,154 @@ function dragTo(x, y) {
     petEl.classList.add('is-held');
     express('dizzy', 4000);
   }
-  if (dragged) setXY(held.fromX + (x - held.grabX), held.fromTop + (y - held.grabY));
+  if (!dragged) return;
+  setXY(held.fromX + (x - held.grabX), held.fromTop + (y - held.grabY));
+
+  // Enough of the recent path to measure a throw off, and no more: a hand that
+  // slows to a stop before letting go has not thrown anything, and averaging
+  // over the whole drag would say it did.
+  held.path.push({ t: performance.now(), x, y });
+  if (held.path.length > 6) held.path.shift();
+
+  // It swings from where you are holding it. Small, and damped, or a pet held
+  // still ends up wobbling like a metronome.
+  const swing = Math.max(-14, Math.min(14, (x - (held.lastX ?? x)) * 1.6));
+  held.lastX = x;
+  held.tilt = (held.tilt ?? 0) * 0.7 + swing * 0.3;
+  petEl.style.transform = `rotate(${held.tilt.toFixed(1)}deg) scale(1.04)`;
+}
+
+// ---- weight ---------------------------------------------------------------
+// Throw it and it goes. This is the whole of what separates picking a sprite up
+// from picking something up: released, it keeps the speed it had, falls, hits
+// the edge of the screen and loses some of it.
+//
+// A gentle move is still a placement - put it down where you want it and it
+// stays there. Only an actual throw becomes a flight, or the pet could never be
+// parked anywhere but the floor.
+
+const GRAVITY = 3400;   // px/s², about twice real gravity - a light thing falls slowly and reads as floaty
+const BOUNCE = 0.44;    // how much speed survives hitting an edge
+const AIR = 0.55;       // horizontal speed kept per second
+const THROW_MIN = 320;  // px/s, below which letting go is a placement rather than a throw
+const REST = 110;       // px/s at the floor, below which it has stopped bouncing
+
+let flight = null;
+
+/** Speed at the moment of release, from the last few positions. */
+function thrown(path) {
+  if (!path || path.length < 2) return { x: 0, y: 0 };
+  const a = path[0];
+  const b = path[path.length - 1];
+  const dt = (b.t - a.t) / 1000;
+  // Stale samples mean the hand stopped before letting go, which is a place.
+  // Under a frame apart there is no speed to measure, only a huge number from
+  // dividing by nearly zero - and that is a pet fired across the screen by a
+  // drag that never actually moved.
+  if (dt < 0.016 || performance.now() - b.t > 90) return { x: 0, y: 0 };
+  return { x: (b.x - a.x) / dt, y: (b.y - a.y) / dt };
+}
+
+function launch(v) {
+  flight = { vx: v.x, vy: v.y, x: stageX, top: stageTop, last: performance.now(), spin: 0 };
+  stage.classList.add('is-dragging'); // the wander easing would fight every frame
+  petEl.classList.remove('is-held');
+  petEl.classList.add('is-flying');
+  requestAnimationFrame(fly);
+}
+
+function fly(now) {
+  if (!flight) return;
+  // Capped: a background tab hands back one enormous step, and the pet would
+  // teleport through the floor rather than bounce off it.
+  const dt = Math.min(0.032, (now - flight.last) / 1000);
+  flight.last = now;
+
+  flight.vy += GRAVITY * dt;
+  flight.vx *= Math.pow(AIR, dt);
+  flight.x += flight.vx * dt;
+  flight.top += flight.vy * dt;
+  flight.spin += flight.vx * dt * 0.5;
+
+  const maxX = roomX();
+  const maxY = roomY();
+  let hit = 0;
+  if (flight.x < 0) { flight.x = 0; flight.vx = -flight.vx * BOUNCE; hit = Math.abs(flight.vx); }
+  if (flight.x > maxX) { flight.x = maxX; flight.vx = -flight.vx * BOUNCE; hit = Math.abs(flight.vx); }
+  if (flight.top < 0) { flight.top = 0; flight.vy = -flight.vy * BOUNCE; hit = Math.abs(flight.vy); }
+  let floor = false;
+  if (flight.top > maxY) {
+    flight.top = maxY;
+    floor = true;
+    hit = Math.abs(flight.vy);
+    flight.vy = -flight.vy * BOUNCE;
+  }
+
+  setXY(flight.x, flight.top);
+  petEl.style.transform = `rotate(${flight.spin.toFixed(1)}deg)`;
+  if (hit > REST) thump();
+
+  // Settled: on the floor with nothing left. Checked after the bounce, so the
+  // last little hop does not get one more frame of gravity added to it.
+  if (floor && Math.abs(flight.vy) < REST && Math.abs(flight.vx) < REST) return land();
+  requestAnimationFrame(fly);
+}
+
+/** The squash of hitting something. Its own class rather than a data-move, so a
+ *  pet thrown mid-dance keeps dancing. */
+let thumpTimer = null;
+function thump() {
+  clearTimeout(thumpTimer);
+  petEl.classList.remove('is-thumped');
+  void petEl.offsetWidth;
+  petEl.classList.add('is-thumped');
+  thumpTimer = setTimeout(() => petEl.classList.remove('is-thumped'), 260);
+}
+
+function land() {
+  flight = null;
+  stage.classList.remove('is-dragging');
+  petEl.classList.remove('is-flying');
+  petEl.style.transform = '';
+  express('dizzy', 1800);
+  keep();
+}
+
+/** Where it ended up is where it lives now. */
+function keep() {
+  placed = true;
+  window.pet.place(where);
 }
 
 petEl.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
-  held = { grabX: e.clientX, grabY: e.clientY, fromX: stageX, fromTop: stageTop };
+  // A throw in flight is caught rather than fought over.
+  flight = null;
+  stage.classList.remove('is-dragging');
+  petEl.classList.remove('is-flying');
+  held = {
+    grabX: e.clientX, grabY: e.clientY, fromX: stageX, fromTop: stageTop,
+    path: [{ t: performance.now(), x: e.clientX, y: e.clientY }],
+  };
   dragged = false;
   stage.classList.add('is-dragging');
 });
 
 document.addEventListener('mouseup', () => {
   if (!held) return;
+  // Measured before the grip is dropped: the path is the only record of how
+  // fast your hand was going, and it lives on `held`.
+  const v = dragged ? thrown(held.path) : { x: 0, y: 0 };
   held = null;
   stage.classList.remove('is-dragging');
   petEl.classList.remove('is-held');
   if (dragged) {
-    // Put somewhere on purpose. It stays there, and it is still there next
-    // launch - which is the only reason any of this reaches the main process.
-    placed = true;
-    window.pet.place(where);
+    petEl.style.transform = '';
+    // Put somewhere on purpose stays there. Thrown, it goes - and wherever it
+    // lands is where it lives, which is the only reason any of this reaches the
+    // main process at all.
+    if (Math.hypot(v.x, v.y) > THROW_MIN) launch(v);
+    else keep();
     window.pet.react('drag');
   }
   // Cleared late so the click event that follows this mouseup can still see it.
@@ -891,17 +1069,31 @@ function setXY(x, top = stageTop) {
 
 const setX = (x) => setXY(x);
 
+/**
+ * Move without the walk. The stage eases every transform over 2.6 seconds,
+ * which is what makes wandering look like walking and what makes anything else
+ * look like the pet sliding across the room on ice - and mid-glide it can be
+ * outside the window it was just clamped into.
+ */
+function snap(x, top) {
+  stage.classList.add('is-dragging');
+  setXY(x, top);
+  requestAnimationFrame(() => {
+    if (!held && !flight) stage.classList.remove('is-dragging');
+  });
+}
+
 function applyPlace(place) {
   if (!place || placed) return;
   placed = true;
-  setXY(place.x * roomX(), place.y * roomY());
+  snap(place.x * roomX(), place.y * roomY());
 }
 
 // A resolution change, or the pet sent to a different monitor, resizes the
 // window under it. Re-placed by fraction rather than re-clamped by pixel: a pet
 // parked halfway up a tall display belongs halfway up the short one, not
 // wherever that many pixels happens to land.
-window.addEventListener('resize', () => setXY(where.x * roomX(), where.y * roomY()));
+window.addEventListener('resize', () => snap(where.x * roomX(), where.y * roomY()));
 
 const idle = () =>
   !hovered && !busy && !held && bubble.hidden && menu.hidden && chatForm.hidden;
@@ -964,3 +1156,5 @@ if (navigator.getBattery) {
 setXY(window.innerWidth - stage.offsetWidth - 40, roomY());
 setTimeout(wander, 12000);
 setTimeout(quirk, 5000);
+setTimeout(saccade, 1800);
+setTimeout(blink, 2400);

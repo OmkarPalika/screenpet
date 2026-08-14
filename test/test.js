@@ -2626,6 +2626,38 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       'feeding the pet forgets where it is standing');
   }
 
+  // --- eyes that are not a servo ---
+  {
+    const fs = require('fs');
+    const css = fs.readFileSync('./src/renderer/style.css', 'utf8');
+    const rjs = fs.readFileSync('./src/renderer/renderer.js', 'utf8');
+
+    // A blink on a fixed interval forever is the single clearest tell that a
+    // face is a loop rather than a creature, so the schedule lives in the
+    // renderer where it can be uneven and can double.
+    assert.ok(
+      !/\.eyes\s*\{[^}]*animation:\s*blink[^}]*infinite/.test(css),
+      'the blink is back on a fixed CSS loop'
+    );
+    assert.ok(/\.eyes\.is-blink\s*\{[^}]*animation:\s*blink/.test(css), 'nothing renders a blink at all');
+    assert.ok(/is-blink/.test(rjs), 'the renderer never blinks the pet');
+
+    // Overshoot: the eye goes a little past where it was going and comes back.
+    // That is the whole difference between a glance and a servo, and in a
+    // cubic-bezier it is one of the two control point heights being over 1.
+    const curve = css.match(/\.gaze\s*\{[^}]*transition:[^;]*cubic-bezier\(([^)]*)\)/);
+    assert.ok(curve, 'the gaze no longer eases at all');
+    const [, y1, , y2] = curve[1].split(',').map(Number);
+    assert.ok(
+      Math.max(y1, y2) > 1,
+      `the gaze eases straight to the target without overshooting: ${curve[1]}`
+    );
+
+    // It looks somewhere other than the cursor when nothing is moving. Eyes
+    // that only ever track the one moving thing read as a sensor.
+    assert.ok(/IDLE_GAZE_MS/.test(rjs), 'the pet stares at the cursor forever');
+  }
+
   // --- one pet per machine ---
   {
     const mjs = require('fs').readFileSync('./src/main.js', 'utf8');
