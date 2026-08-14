@@ -11,9 +11,9 @@ exactly what each of those sends and to whom.
 
 ![screenpet reading a quiz question and answering it](demo/screenpet-demo.gif)
 
-Phase 3. The pet has a care loop, lives in the tray, has a settings window and
-four skins, uses a vision model when there is no text to read, and builds into a
-Windows installer.
+Phase 3. The pet has a care loop, lives in the tray, has a settings window, four
+skins and a wardrobe, uses a vision model when there is no text to read, and
+builds into a Windows installer.
 
 ## The one rule
 
@@ -144,6 +144,32 @@ species wear it with no per-species rules. It appears for the cute half of the
 range only — `love` `shy` `giggle` `proud` `joy` `wink` — and a test asserts
 `rage`, `cry` and `oops` never get one. A pet in tears wearing a party bow is a
 different feeling entirely.
+
+### The wardrobe
+
+Eight outfits, picked in Settings, worn by every species:
+
+`bow` `shades` `halo` `hero` `party` `wizard` `crown` `headphones`
+
+The first three were already drawn — the bow for the cute faces, the shades for
+`cool`, the halo for `innocent` — so wearing one costs a CSS rule rather than a
+shape. `hero` is a **mask and a cape**, and the cape is drawn before the body in
+the markup for the same reason the tail is: in front, it is a bib.
+
+The mask is cut with **holes rather than lenses**. A solid mask over both eyes
+would take the gaze, the blink and most of the thirty-nine faces with it, so it
+is one path with `fill-rule="evenodd"` and two ellipses punched out of it. A
+check asserts the eyes are still `display: block` under every outfit.
+
+What is on is **one value** on the root element, not a set. An outfit is a
+decision — "hero" is two shapes and one choice — and a list of items would need a
+second validator to stop a hand-edited settings file asking for four hats.
+
+Nothing in the wardrobe is species-aware. A hat on a bun sits between the ears
+rather than on top of them; six sets of per-species nudges to make it read as a
+slightly better hat is not a trade worth making. `npm run verify:ui` writes
+`pet-wardrobe.png` — every outfit on every pet — so that stays a decision rather
+than an accident.
 
 Every face is reachable from something that actually happens, which is why there
 are twenty-one and not fifty: `listen` while the microphone is open, `curious`
@@ -758,6 +784,7 @@ and quit it — the pet has no taskbar button by design.
 | Hotkey | Validated before saving; a malformed accelerator would crash the app on launch. |
 | Pet | Blob, cat, pup, bun, bird or dragon. Previews are the real thing. |
 | Skin | Butter, mint, blossom or slate. Applies to whichever pet you picked. |
+| Wearing | Nothing, bow, shades, halo, masked hero, party hat, wizard hat, crown or headphones. See "The wardrobe". |
 | Speak replies out loud | On by default. Mute from the tray without opening this window. |
 | Little noises | On by default. A woof, a meow, a chirp — synthesised, not played from a file. Muted separately from the voice. |
 | Let me talk to it | Off by default. Adds `Listen…` to the pet's menu. |

@@ -2135,5 +2135,63 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     );
   }
 
+  // --- the wardrobe -------------------------------------------------------
+  {
+    const fs = require('fs');
+    const config = require('./settings');
+    const css = fs.readFileSync('./renderer/pets.css', 'utf8');
+    const html = fs.readFileSync('./renderer/index.html', 'utf8');
+
+    // Nothing by default, and an outfit nobody drew is not wearable.
+    assert.strictEqual(config.load({}).wear, 'none');
+    assert.strictEqual(config.load({ wear: 'hero' }).wear, 'hero');
+    assert.strictEqual(config.load({ wear: 'sombrero' }).wear, 'none');
+    assert.strictEqual(config.load({ wear: ['hero'] }).wear, 'none');
+
+    for (const outfit of config.WEAR) {
+      if (outfit === 'none') continue;
+      assert.ok(
+        css.includes(`[data-wear="${outfit}"]`),
+        `"${outfit}" is on the list and the stylesheet does not draw it`
+      );
+    }
+    // And the other way: a rule nobody can select is a rule nobody sees.
+    for (const [, outfit] of css.matchAll(/\[data-wear="([a-z]+)"\]/g)) {
+      assert.ok(config.WEAR.includes(outfit), `the stylesheet draws "${outfit}" and it cannot be chosen`);
+    }
+
+    // Every part an outfit switches on has to exist in the markup, and start off.
+    for (const part of ['cape', 'mask', 'hat-party', 'hat-wizard', 'crown', 'cans']) {
+      assert.ok(html.includes(`class="${part}"`), `the wardrobe wears .${part} and nothing draws it`);
+    }
+    assert.ok(
+      /\.cape, \.wardrobe > \* \{ display: none; \}/.test(css),
+      'the wardrobe is not hidden by default, so the pet wears everything at once'
+    );
+
+    // The cape has to be behind the body for the same reason the tail is.
+    assert.ok(
+      html.indexOf('class="cape"') < html.indexOf('class="body"'),
+      'the cape is drawn in front of the body, which makes it a bib'
+    );
+    // The mask is holes rather than lenses. Without this the eyes - and with
+    // them the gaze, the blink and most of the forty faces - go under it.
+    assert.ok(
+      /class="mask"[\s\S]{0,80}fill-rule="evenodd"/.test(html),
+      'the mask is a solid shape over both eyes'
+    );
+
+    // Wiring, both ways: main offers the list and pushes the choice, the
+    // renderer puts it where the stylesheet is looking.
+    const mjs = fs.readFileSync('./main.js', 'utf8');
+    assert.ok(mjs.includes('wear: config.WEAR'), 'the settings window is never told what there is to wear');
+    assert.ok(mjs.includes('wear: settings.wear'), 'main never tells the pet what it has on');
+    assert.ok(
+      fs.readFileSync('./renderer/renderer.js', 'utf8')
+        .includes("document.documentElement.dataset.wear = wear || 'none'"),
+      'the renderer never puts the outfit on the root element'
+    );
+  }
+
   console.log('all checks passed');
 })();

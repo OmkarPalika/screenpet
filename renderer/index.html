@@ -49,6 +49,8 @@
           <!-- Behind the body on purpose: a tail drawn in front looks stuck on. -->
           <path class="tail" d="" />
           <path class="crest" d="" />
+          <!-- Same reason, more so: a cape drawn in front of the body is a bib. -->
+          <path class="cape" d="M34 36q26-8 52 0l24 64q-50-13-100 0z" />
           <path
             class="body"
             d="M60 14c26 0 42 18 42 42 0 24-16 40-42 40S18 80 18 56c0-24 16-42 42-42z"
@@ -109,6 +111,36 @@
             <path class="bow-loop" d="M37 28c-8-6-15-2-14 4 1 5 8 5 14-4z" />
             <path class="bow-loop" d="M37 28c8-6 15-2 14 4-1 5-8 5-14-4z" />
             <circle class="bow-knot" cx="37" cy="28" r="3.1" />
+          </g>
+
+          <!-- The wardrobe. Same trick as the three above and drawn last, so it
+               sits over the face rather than under it. The bow, the shades and
+               the halo are outfits too - they were already here, so wearing one
+               costs a rule rather than a shape. -->
+          <g class="wardrobe">
+            <!-- Holes, not lenses: a mask that covers the eyes takes the gaze,
+                 the blink and most of the forty faces with it. -->
+            <path
+              class="mask"
+              fill-rule="evenodd"
+              d="M24 44q36-11 72 0v18q-36 11-72 0z
+                 M36 54a9 10 0 1 0 18 0a9 10 0 1 0-18 0
+                 M66 54a9 10 0 1 0 18 0a9 10 0 1 0-18 0"
+            />
+            <g class="hat-party">
+              <path class="cone" d="M60 2 47 26h26z" />
+              <circle class="pom" cx="60" cy="2" r="3.4" />
+            </g>
+            <g class="hat-wizard">
+              <ellipse class="brim" cx="60" cy="28" rx="25" ry="5" />
+              <path class="cone" d="M60 0 44 28h32z" />
+            </g>
+            <path class="crown" d="M38 28 44 12l8 9 8-13 8 13 8-9 6 16z" />
+            <g class="cans">
+              <path class="band" d="M26 50q0-36 34-36t34 36" />
+              <rect class="can" x="18" y="46" width="12" height="18" rx="4" />
+              <rect class="can" x="90" y="46" width="12" height="18" rx="4" />
+            </g>
           </g>
         </svg>
 

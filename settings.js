@@ -8,6 +8,11 @@ const SKINS = ['butter', 'mint', 'blossom', 'slate'];
 // because the difference is shape and the palette is three CSS variables.
 const PETS = ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon'];
 
+// What it has on, orthogonal to both of the above for the same reason. One name
+// rather than a set of them: an outfit is a decision, and a list of items would
+// need a second validator to stop a hand-edited file asking for four hats.
+const WEAR = ['none', 'bow', 'shades', 'halo', 'hero', 'party', 'wizard', 'crown', 'headphones'];
+
 const DEFAULTS = {
   // Reasoning, and slower than llama3.1:8b for it - 6-12s against 1-3s warm.
   // Bought with that: it is the only model of eight benchmarked that noticed
@@ -22,6 +27,7 @@ const DEFAULTS = {
   hotkey: 'CommandOrControl+Shift+Space',
   pet: 'blob',
   skin: 'butter',
+  wear: 'none',
   // Reads its replies aloud through Windows' own voices. On by default - a pet
   // you cannot hear is the feature not existing - and mutable from the tray,
   // because the moment you need it off is the moment a call starts.
@@ -142,6 +148,7 @@ function load(raw) {
     hotkey: validHotkey(s.hotkey) ? s.hotkey : DEFAULTS.hotkey,
     pet: PETS.includes(s.pet) ? s.pet : DEFAULTS.pet,
     skin: SKINS.includes(s.skin) ? s.skin : DEFAULTS.skin,
+    wear: WEAR.includes(s.wear) ? s.wear : DEFAULTS.wear,
     voice: typeof s.voice === 'boolean' ? s.voice : DEFAULTS.voice,
     sounds: typeof s.sounds === 'boolean' ? s.sounds : DEFAULTS.sounds,
     // Anything but a literal true leaves these shut. A hand-edited "mic": "yes"
@@ -223,5 +230,5 @@ function merge(current, patch) {
 }
 
 module.exports = {
-  DEFAULTS, SKINS, PETS, load, merge, validHotkey, validEndpoint, allowPermission,
+  DEFAULTS, SKINS, PETS, WEAR, load, merge, validHotkey, validEndpoint, allowPermission,
 };

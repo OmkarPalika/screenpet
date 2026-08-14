@@ -5,6 +5,7 @@ const modelSel = el('model');
 const visionSel = el('vision');
 const hotkeyInput = el('hotkey');
 const skinsBox = el('skins');
+const wearSel = el('wear');
 const autostart = el('autostart');
 const voice = el('voice');
 const sounds = el('sounds');
@@ -98,6 +99,31 @@ function fillSkins(skins) {
     });
     skinsBox.append(b);
   }
+}
+
+// The names are the list from settings.js; only the wording is here, and an
+// outfit with no wording falls back to its own name rather than to nothing.
+const WEAR_LABELS = {
+  none: 'Nothing',
+  bow: 'Bow',
+  shades: 'Shades',
+  halo: 'Halo',
+  hero: 'Masked hero — mask and cape',
+  party: 'Party hat',
+  wizard: 'Wizard hat',
+  crown: 'Crown',
+  headphones: 'Headphones',
+};
+
+function fillWear(list, selected) {
+  wearSel.replaceChildren();
+  for (const name of list) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = WEAR_LABELS[name] || name;
+    wearSel.append(opt);
+  }
+  wearSel.value = selected;
 }
 
 function showVision(visionModel) {
@@ -214,6 +240,7 @@ saveBtn.addEventListener('click', async () => {
     hotkey: hotkeyInput.value.trim(),
     pet: species,
     skin,
+    wear: wearSel.value,
     voice: voice.checked,
     sounds: sounds.checked,
     mic: mic.checked,
@@ -238,6 +265,7 @@ saveBtn.addEventListener('click', async () => {
   hotkeyInput.value = current.hotkey;
   voice.checked = current.voice;
   sounds.checked = current.sounds;
+  wearSel.value = current.wear;
   camera.checked = current.camera;
   mic.checked = current.mic;
   wakeBox.checked = current.wake;
@@ -269,6 +297,7 @@ el('close').addEventListener('click', () => window.config.close());
   fillModels(data.models, current.model);
   fillPets(data.pets);
   fillSkins(data.skins);
+  fillWear(data.wear || ['none'], current.wear);
   paintPreviews();
   showVision(data.visionModel);
 
@@ -285,6 +314,7 @@ el('close').addEventListener('click', () => window.config.close());
   hotkeyInput.value = current.hotkey;
   voice.checked = current.voice;
   sounds.checked = current.sounds;
+  wearSel.value = current.wear;
   camera.checked = current.camera;
   mic.checked = current.mic;
   wakeBox.checked = current.wake;

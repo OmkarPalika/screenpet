@@ -169,6 +169,40 @@ app.whenReady().then(async () => {
     }
   }
 
+  // --- the wardrobe --------------------------------------------------------
+  // Every outfit has to switch something on, switch it off again when another
+  // one is picked, and none of them may take the face with it.
+  const WEAR = require('./settings').WEAR;
+  const WORN = {
+    bow: '.bow', shades: '.shades', halo: '.halo', hero: '.cape',
+    party: '.hat-party', wizard: '.hat-wizard', crown: '.crown', headphones: '.cans',
+  };
+  for (const outfit of WEAR) {
+    if (outfit === 'none') continue;
+    win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', wear: outfit });
+    await settle();
+    const got = await js(
+      `(() => { const d = (sel) => getComputedStyle(document.querySelector(sel)).display;
+         return { on: d('${WORN[outfit]}'), mask: d('.mask'), eyes: d('.eyes'),
+                  worn: document.documentElement.dataset.wear }; })()`
+    );
+    check(got.worn === outfit, `wearing ${outfit} but the root says ${got.worn}`);
+    check(got.on !== 'none', `${outfit} is on and ${WORN[outfit]} is not drawn`);
+    // Only the hero wears the mask, and even then the eyes stay visible: it is
+    // cut with holes, and a solid one would take the gaze and the blink with it.
+    check(
+      (got.mask !== 'none') === (outfit === 'hero'),
+      `the mask is ${got.mask === 'none' ? 'off' : 'on'} while wearing ${outfit}`
+    );
+    check(got.eyes !== 'none', `${outfit} hides the eyes`);
+  }
+  win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', wear: 'none' });
+  await settle();
+  check(
+    await js(`getComputedStyle(document.querySelector('.cape')).display`) === 'none',
+    'taking the outfit off left the cape on'
+  );
+
   // --- idle quirks ---------------------------------------------------------
   // Each species must move differently while nothing is happening. Checking the
   // resolved animation-name catches the failure that matters: a rule that never
@@ -719,6 +753,24 @@ app.whenReady().then(async () => {
     }
   }`);
 
+  // One outfit per row, every species in it. Nothing in the wardrobe is
+  // species-aware, so this is the sheet that shows what that costs: a hat has to
+  // read as a hat on a bun's ears and over a bird's crest, or it needs redrawing.
+  await sheet('pet-wardrobe.png', [760, 1000], `(source, box, clone) => {
+    box.style.display = 'grid';
+    box.style.gridTemplateColumns = 'repeat(6, 124px)';
+    for (const outfit of ${JSON.stringify(WEAR.filter((w) => w !== 'none'))}) {
+      for (const s of ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon']) {
+        const cell = document.createElement('div');
+        cell.dataset.pet = s;
+        cell.dataset.wear = outfit;
+        cell.style.textAlign = 'center';
+        clone(source, cell);
+        box.append(cell);
+      }
+    }
+  }`);
+
   const allSpecies = ['blob', 'cat', 'pup', 'bun', 'bird', 'dragon'];
   await sheet('pet-species.png', [760, 500], `(source, box, clone) => {
     box.style.display = 'grid';
@@ -910,12 +962,12 @@ app.whenReady().then(async () => {
     return app.exit(1);
   }
   console.log(
-    'ok - speech, noises, moods, expressions, gaze, species, skins, bars, hover,\n'
-    + '     headpat, tickle, drag, chat, menu, settings and IPC all good.'
+    'ok - speech, noises, moods, expressions, gaze, species, skins, wardrobe, bars,\n'
+    + '     hover, headpat, tickle, drag, chat, menu, settings and IPC all good.'
   );
   console.log(
     'wrote pet-preview.png, pet-hungry.png, pet-menu.png, pet-love.png, pet-chat.png,\n'
-    + '      pet-faces.png, pet-species.png, pet-settings.png'
+    + '      pet-faces.png, pet-species.png, pet-wardrobe.png, pet-settings.png'
   );
   app.exit(0);
 });
