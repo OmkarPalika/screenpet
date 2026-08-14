@@ -19,6 +19,9 @@ const PETS = [
 // need a second validator to stop a hand-edited file asking for four hats.
 const WEAR = ['none', 'bow', 'shades', 'halo', 'hero', 'party', 'wizard', 'crown', 'headphones'];
 
+// Which recogniser hears you. See the note on `dictation` in DEFAULTS.
+const DICTATION = ['auto', 'sapi', 'whisper'];
+
 const DEFAULTS = {
   // Reasoning, and slower than llama3.1:8b for it - 6-12s against 1-3s warm.
   // Bought with that: it is the only model of eight benchmarked that noticed
@@ -46,6 +49,19 @@ const DEFAULTS = {
   // The microphone is opt-in and stays that way. A desktop pet that starts
   // listening because it shipped that way is not a pet, it is an incident.
   mic: false,
+  // Which recogniser hears you. Same three-value shape as `vision` above, and
+  // for the same reason: the good answer depends on what is installed, so the
+  // default is to look rather than to demand.
+  //
+  //   'auto'     whisper.cpp if it is installed, Windows otherwise. The default.
+  //   'sapi'     always Windows' own recogniser
+  //   'whisper'  always whisper.cpp, and say so plainly if it is missing
+  //
+  // Neither option reaches the network. Windows' recogniser is the desktop one,
+  // which runs on-device; whisper.cpp is a binary and a model file in your own
+  // app folder. See whisper.js for what the swap is worth - it is a large
+  // number, measured on a real microphone rather than assumed.
+  dictation: 'auto',
   // Same rule, more so. The camera only ever answers "did anything move", but
   // the permission it needs is the whole camera, so it ships off.
   camera: false,
@@ -161,6 +177,9 @@ function load(raw) {
     // or a 1 left over from some other config format must not be the thing that
     // opens a microphone or a camera.
     mic: s.mic === true,
+    // Anything unrecognised falls back to looking, which is the safe answer -
+    // an unknown value must not be able to turn dictation off entirely.
+    dictation: DICTATION.includes(s.dictation) ? s.dictation : DEFAULTS.dictation,
     camera: s.camera === true,
     // Same rule again, and for the same reason: these three each open something
     // that stays shut unless a literal true says otherwise. `wake` and `faces`
@@ -236,5 +255,6 @@ function merge(current, patch) {
 }
 
 module.exports = {
-  DEFAULTS, SKINS, PETS, WEAR, load, merge, validHotkey, validEndpoint, allowPermission,
+  DEFAULTS, SKINS, PETS, WEAR, DICTATION,
+  load, merge, validHotkey, validEndpoint, allowPermission,
 };

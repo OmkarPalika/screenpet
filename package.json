@@ -40,6 +40,7 @@
       "ocr.ps1",
       "speech.js",
       "listen.ps1",
+      "whisper.js",
       "media.js",
       "media.ps1",
       "dnd.js",

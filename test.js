@@ -1214,6 +1214,38 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(cfg.load({ city: 'Paris?lat=1&lon=2' }).city, 'Paris lat lon');
   assert.ok(!/[?&=/:]/.test(cfg.load({ city: 'a/b?c=d&e' }).city), 'URL punctuation survived');
 
+  // --- which recogniser hears you ---
+  // A preference, not a permission: it opens nothing on its own, so unlike the
+  // switches above it is allowed a default that is not simply "off". What it
+  // must never do is let a hand-edited file name an engine that does not exist.
+  assert.strictEqual(cfg.DEFAULTS.dictation, 'auto', 'dictation no longer defaults to looking');
+  for (const value of cfg.DICTATION) {
+    assert.strictEqual(cfg.load({ dictation: value }).dictation, value, `${value} was refused`);
+  }
+  for (const junk of ['whispers', 'sapi ', '', 'WHISPER', true, 1, null, {}]) {
+    assert.strictEqual(cfg.load({ dictation: junk }).dictation, 'auto',
+      `${JSON.stringify(junk)} was accepted as an engine`);
+  }
+  // It survives the microphone being switched off, because turning a device off
+  // is not a reason to forget which recogniser you preferred.
+  assert.strictEqual(cfg.merge(cfg.load({ mic: true, dictation: 'whisper' }), { mic: false }).dictation, 'whisper');
+
+  // A setting the window cannot reach is a setting nobody has. The first version
+  // of this control was marked up with `class="row"`, which in settings.css is
+  // the fixed bottom bar - it validated fine and sat on top of the save button.
+  {
+    const html = require('fs').readFileSync('./renderer/settings.html', 'utf8');
+    const js = require('fs').readFileSync('./renderer/settings-renderer.js', 'utf8');
+    assert.ok(html.includes('id="dictation"'), 'the settings window has no recogniser control');
+    assert.ok(html.includes('for="dictation"'), 'the recogniser control has no label');
+    assert.ok(!/class="row"[^>]*id="dictation"/.test(html), 'the recogniser control is in the fixed bottom bar');
+    for (const value of cfg.DICTATION) {
+      assert.ok(html.includes(`value="${value}"`), `the window cannot choose ${value}`);
+    }
+    assert.ok(/dictation:\s*dictationSel\.value/.test(js), 'the window never saves the recogniser');
+    assert.ok(/dictationSel\.value\s*=\s*current\.dictation/.test(js), 'the window never loads the recogniser');
+  }
+
   // --- audio through the permission gate ---
   // Audio became reachable when the pet learned to move to a beat. It is gated
   // on the microphone setting, exactly as video is gated on the camera.
@@ -1236,6 +1268,85 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(merged.skin, 'mint');
   assert.strictEqual(merged.model, 'x');
   assert.strictEqual(merged.hotkey, cfg.DEFAULTS.hotkey, 'merge let a bad hotkey through');
+}
+
+// ===== whisper: the other recogniser =======================================
+//
+// Nothing here spawns the binary - it is a file the user puts there and most
+// machines running these tests will not have it. What is worth pinning is
+// everything around the spawn: the install check, the cleanup, and the prompt,
+// which is the single largest measured improvement in the swap and looks like
+// dead weight to anyone who did not measure it.
+
+{
+  const whisper = require('./whisper');
+  const os = require('os');
+  const fs = require('fs');
+  const path = require('path');
+
+  // --- installed: both halves, or the feature is off ---
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'screenpet-whisper-'));
+  assert.strictEqual(whisper.installed(empty), false, 'an empty folder counted as installed');
+
+  const dir = path.join(empty, whisper.DIR);
+  fs.mkdirSync(dir);
+  assert.strictEqual(whisper.installed(empty), false, 'an empty whisper folder counted as installed');
+  fs.writeFileSync(path.join(dir, whisper.EXE), 'not really an exe');
+  assert.strictEqual(whisper.installed(empty), false, 'a binary with no model counted as installed');
+  fs.writeFileSync(path.join(dir, whisper.MODEL), 'not really a model');
+  assert.strictEqual(whisper.installed(empty), true, 'both files present and still not installed');
+  // A directory named like the binary is not the binary.
+  fs.rmSync(path.join(dir, whisper.EXE));
+  fs.mkdirSync(path.join(dir, whisper.EXE));
+  assert.strictEqual(whisper.installed(empty), false, 'a directory passed as the binary');
+  fs.rmSync(empty, { recursive: true, force: true });
+  assert.strictEqual(whisper.installed(empty), false, 'a missing folder threw instead of answering');
+
+  // --- clean: what came back is not always something a person said ---
+  assert.strictEqual(whisper.clean(' Set a timer for 10 minutes.\r\n'), 'Set a timer for 10 minutes.');
+  // Whisper narrates non-speech in brackets. A pet that reads a stage direction
+  // out loud looks broken.
+  assert.strictEqual(whisper.clean('[BLANK_AUDIO]'), '');
+  assert.strictEqual(whisper.clean('(upbeat music) hello'), 'hello');
+  assert.strictEqual(whisper.clean('*sighs* what time is it'), 'what time is it');
+  // Measured: two seconds of near-silence through base.en comes back as "you".
+  // Whisper has no confidence score to gate on, so this list is the gate.
+  for (const noise of ['you', 'You.', 'THANK YOU', 'Thanks for watching!', '.', '']) {
+    assert.strictEqual(whisper.clean(noise), '', `"${noise}" was treated as speech`);
+  }
+  // ...but a real sentence that merely contains one of them is not silence.
+  assert.strictEqual(whisper.clean('thank you for the reminder'), 'thank you for the reminder');
+  assert.strictEqual(whisper.clean('x'.repeat(900)).length, whisper.MAX_CHARS, 'dictation was not capped');
+
+  // --- the prompt, which is worth 28 points of word error rate ---
+  // Deleting it looks like removing a magic string. It took whisper base.en from
+  // 49% to 21% overall and 87% to 29% on technical phrases, so if it ever goes,
+  // it should go on purpose and with a new measurement behind it.
+  for (const word of ['npm', 'JSON', 'rebase', 'Postgres', 'JavaScript', '401']) {
+    assert.ok(whisper.VOCAB.includes(word), `the dictation prompt no longer mentions ${word}`);
+  }
+  assert.ok(whisper.VOCAB.length < 400, 'the prompt is long enough to start leaking into transcripts');
+
+  // --- transcribe refuses what it should never pipe to a binary ---
+  // Parked rather than asserted here: this block is synchronous, and an
+  // assert.rejects nobody waits for surfaces after "all checks passed" has
+  // already been printed. The async section at the end of this file drains them.
+  const nowhere = { userData: 'C:\\nowhere' };
+  globalThis.pendingRejections = [
+    ...[null, undefined, '', 'a wav, honest', Buffer.alloc(0)].map((bad) =>
+      assert.rejects(() => whisper.transcribe(bad, nowhere), /no audio/,
+        `${JSON.stringify(bad)} was accepted as audio`)),
+    assert.rejects(() => whisper.transcribe(Buffer.alloc(whisper.MAX_WAV_BYTES + 1), nowhere),
+      /too much audio/, 'an absurd buffer was piped to the binary'),
+  ];
+
+  // The install location is fixed, and nothing user-supplied contributes to it.
+  // A path to an executable in settings.json would be arbitrary code execution
+  // with a nice label on it, which is why there is no such setting to test.
+  const p = whisper.paths('C:\\users\\someone\\AppData\\Roaming\\screenpet');
+  assert.ok(p.exe.endsWith(path.join(whisper.DIR, whisper.EXE)), 'the binary moved');
+  assert.ok(p.model.endsWith(path.join(whisper.DIR, whisper.MODEL)), 'the model moved');
+  assert.ok(!/\.\./.test(p.exe + p.model), 'the install path can be climbed out of');
 }
 
 // ===== quiet hours =========================================================
@@ -2281,6 +2392,10 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       'the renderer never puts the outfit on the root element'
     );
   }
+
+  // The rejections parked by the synchronous sections above. Awaited before the
+  // success line, so a failure cannot arrive after it.
+  await Promise.all(globalThis.pendingRejections || []);
 
   console.log('all checks passed');
 })();

@@ -644,6 +644,149 @@ async function listenForBeat(on, forMs = 0) {
 // again. With "bop along" on it is already open, and this changes nothing.
 window.pet.onDance((ms) => listenForBeat(true, ms));
 
+// ---- dictation, for the whisper path ---------------------------------------
+//
+// Windows' own recogniser opens the microphone inside PowerShell and hears you
+// there; whisper is handed audio, and only this side of the app can open a
+// microphone at all. So: main asks, this records exactly one phrase, and one WAV
+// goes back. It is never written to disk on either side.
+//
+// The microphone is open from the moment main asks until the phrase ends, and
+// the same green dot that means "the camera is on" means this too.
+
+const REC_RATE = 16000;        // what whisper wants; anything else it resamples
+const REC_MAX_MS = 10000;      // a stuck recording is worse than a cut sentence
+const REC_HUSH_MS = 900;       // silence this long after speech ends the phrase
+const REC_GIVEUP_MS = 4000;    // nothing said at all by now, and there will not be
+const REC_SPEECH = 0.035;      // RMS above this is a voice, not a room
+
+// Measured on this microphone at -25 dBFS peak with no automatic gain: quiet, and
+// still comfortably above the floor. The recorder asks for the raw capture -
+// echo cancellation, noise suppression and automatic gain all off - because that
+// is the audio the swap was measured on, and turning a processor on afterwards
+// would make the shipped behaviour something nobody has benchmarked.
+const RAW = { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+
+/** 16-bit PCM in a WAV wrapper, which is the one format both engines read. */
+function toWav(samples) {
+  const buf = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buf);
+  const str = (off, s) => [...s].forEach((c, n) => view.setUint8(off + n, c.charCodeAt(0)));
+  str(0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true);
+  str(8, 'WAVEfmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);            // PCM
+  view.setUint16(22, 1, true);            // mono
+  view.setUint32(24, REC_RATE, true);
+  view.setUint32(28, REC_RATE * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  str(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+  for (let n = 0; n < samples.length; n++) {
+    const s = Math.max(-1, Math.min(1, samples[n]));
+    view.setInt16(44 + n * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+  return buf;
+}
+
+let recording = false;
+
+/**
+ * One phrase. Stops on silence the way System.Speech does, so the two paths feel
+ * the same to talk to, and answers with nothing at all if nobody spoke - whisper
+ * has no confidence score, and handed a quiet room it invents a word.
+ */
+async function recordPhrase() {
+  if (recording) return window.pet.audio(null);
+  recording = true;
+
+  let stream = null;
+  let ctx = null;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: RAW });
+  } catch {
+    recording = false;
+    return window.pet.audio(null); // no microphone, or refused
+  }
+
+  camEl.hidden = false; // the same dot: something is listening
+
+  try {
+    const chunks = [];
+    const rec = new MediaRecorder(stream);
+    rec.ondataavailable = (e) => chunks.push(e.data);
+
+    // The stop decision is energy, measured on a live analyser rather than after
+    // the fact, because a recorder that only stops on a timer makes every phrase
+    // as long as the longest one.
+    ctx = new AudioContext();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 1024;
+    ctx.createMediaStreamSource(stream).connect(analyser);
+    const frame = new Float32Array(analyser.fftSize);
+
+    let spoke = false;
+    let loudest = 0;
+    let quietSince = 0;
+    const startedAt = Date.now();
+
+    const done = new Promise((resolve) => {
+      rec.onstop = resolve;
+      const watch = () => {
+        if (rec.state !== 'recording') return;
+        analyser.getFloatTimeDomainData(frame);
+        let sum = 0;
+        for (let i = 0; i < frame.length; i++) sum += frame[i] * frame[i];
+        const rms = Math.sqrt(sum / frame.length);
+        loudest = Math.max(loudest, rms);
+
+        const now = Date.now();
+        if (rms > REC_SPEECH) {
+          spoke = true;
+          quietSince = 0;
+        } else if (spoke && !quietSince) {
+          quietSince = now;
+        }
+
+        const ended = spoke && quietSince && now - quietSince > REC_HUSH_MS;
+        const gaveUp = !spoke && now - startedAt > REC_GIVEUP_MS;
+        if (ended || gaveUp || now - startedAt > REC_MAX_MS) return rec.stop();
+        requestAnimationFrame(watch);
+      };
+      requestAnimationFrame(watch);
+    });
+
+    rec.start();
+    await done;
+
+    // Nobody spoke. Sending the audio anyway would get a confident sentence back
+    // from a model that had nothing to work with.
+    if (!spoke || loudest < REC_SPEECH) return window.pet.audio(null);
+
+    const decoded = await ctx.decodeAudioData(await new Blob(chunks).arrayBuffer());
+    // The browser's own resampler rather than a hand-rolled one: a bad downsample
+    // is aliasing, and aliasing is indistinguishable from a bad recogniser.
+    const off = new OfflineAudioContext(1, Math.ceil(decoded.duration * REC_RATE), REC_RATE);
+    const src = off.createBufferSource();
+    src.buffer = decoded;
+    src.connect(off.destination);
+    src.start();
+    const wav = toWav((await off.startRendering()).getChannelData(0));
+    window.pet.audio(wav);
+  } catch {
+    window.pet.audio(null); // main says "I did not catch that" and life goes on
+  } finally {
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    if (ctx) ctx.close();
+    if (!camStream && !audioStream) camEl.hidden = true;
+    recording = false;
+  }
+}
+
+window.pet.onRecord(recordPhrase);
+
 // ---- wandering -----------------------------------------------------------
 // The window never moves. Moving a transparent always-on-top window at 60fps is
 // janky and burns CPU on an app that is idle 99% of the time; translating one
