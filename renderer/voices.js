@@ -286,7 +286,10 @@ const CALLS = {
     happy: (a) => a.pulses(3, 0.09, (at, i) =>
       a.tone({ from: 230 + i * 70, to: 560 + i * 90, at, dur: 0.08, peak: 0.45, low: 900 })),
     sad: (a) => a.tone({ from: 420, to: 150, dur: 0.42, peak: 0.4, low: 700 }),
-    cross: (a) => a.noise({ dur: 0.19, peak: 0.5, low: 2600, high: 700 }),
+    // Widened and lengthened after it measured 39ms against a 40ms floor: a
+    // narrow band takes most of the energy out of a noise burst, so a squirt
+    // needs to be visibly longer than it sounds.
+    cross: (a) => a.noise({ dur: 0.26, peak: 0.62, low: 3400, high: 500 }),
   },
 
   ghost: {

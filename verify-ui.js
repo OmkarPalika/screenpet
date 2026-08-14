@@ -854,7 +854,7 @@ app.whenReady().then(async () => {
       model: 'llama3.1:8b', vision: 'auto', hotkey: 'CommandOrControl+Shift+Space',
       pet: 'cat', skin: 'butter', wear: 'none',
       autostart: false, ollama: 'http://127.0.0.1:11434',
-      mic: true, dictation: 'whisper',
+      mic: true, dictation: 'local',
       memory: true, cheek: true,
       network: false, web: false, weather: false, city: '',
       provider: 'ollama', providerModel: '',
@@ -961,7 +961,7 @@ app.whenReady().then(async () => {
     `the recogniser choices are ${engines} but settings.js accepts ${require('./settings').DICTATION}`
   );
   check(
-    (await sjs(`document.getElementById('dictation').value`)) === 'whisper',
+    (await sjs(`document.getElementById('dictation').value`)) === 'local',
     'the settings window did not preselect the saved recogniser'
   );
   // It is laid out in the flow, not in the fixed bottom bar. The first version
@@ -980,7 +980,7 @@ app.whenReady().then(async () => {
     'the recogniser stayed live with the microphone switched off'
   );
   check(
-    (await sjs(`document.getElementById('dictation').value`)) === 'whisper',
+    (await sjs(`document.getElementById('dictation').value`)) === 'local',
     'switching the microphone off forgot which recogniser was chosen'
   );
   await sjs(`document.getElementById('mic').checked = true;

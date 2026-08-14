@@ -8,7 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const { recognise } = require('./ocr');
 const { listen } = require('./speech');
-const whisper = require('./whisper');
+const dictate = require('./dictate');
 const media = require('./media');
 const dnd = require('./dnd');
 const reminders = require('./reminders');
@@ -809,9 +809,9 @@ async function replyTo(message) {
  */
 function recogniser() {
   if (settings.dictation === 'sapi') return 'sapi';
-  const have = whisper.installed(app.getPath('userData'));
-  if (settings.dictation === 'whisper') return have ? 'whisper' : 'missing';
-  return have ? 'whisper' : 'sapi';
+  const have = dictate.installed(app.getPath('userData'));
+  if (settings.dictation === 'local') return have ? 'local' : 'missing';
+  return have ? 'local' : 'sapi';
 }
 
 // Only the renderer can open a microphone, so main asks it for one phrase and
@@ -853,7 +853,7 @@ async function listenAndReply() {
   const engine = recogniser();
   if (engine === 'missing') {
     return send('pet:say', {
-      text: `I cannot find whisper. Put whisper-cli.exe and model.bin in\n${path.join(app.getPath('userData'), whisper.DIR)}`,
+      text: `I have no dictation engine. Put ${dictate.ENGINES.map((e) => `${e.exe} + ${e.model}`).join('\nor ')}\nin ${path.join(app.getPath('userData'), dictate.DIR)}`,
       kind: 'error',
       expr: pets.expressionFor('error'),
     });
@@ -872,9 +872,9 @@ async function listenAndReply() {
     // Silence is answered the same way on both paths - the recorder declines to
     // send audio it measured as silent, because whisper has no confidence score
     // to gate on and will cheerfully transcribe a quiet room as "you".
-    const wav = engine === 'whisper' ? await recordPhrase() : null;
-    const heard = engine === 'whisper'
-      ? (wav ? await whisper.transcribe(wav, { userData: app.getPath('userData') }) : '')
+    const wav = engine === 'local' ? await recordPhrase() : null;
+    const heard = engine === 'local'
+      ? (wav ? await dictate.transcribe(wav, { userData: app.getPath('userData') }) : '')
       : await listen();
     if (!heard) {
       return send('pet:say', {
