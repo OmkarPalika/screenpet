@@ -361,6 +361,201 @@ html, body {
 .pet[data-expr="oops"] .sweat { display: block; }
 .pet[data-expr="oops"] { animation: wiggle 0.14s ease-in-out 4; }
 
+/* ---- the rest of the keyboard --------------------------------------------
+
+   Everything above is a face the pet arrives at on its own. These are the ones
+   you can ask it for by name or by emoji - see FACES in pet-state.js, which is
+   the list a test walks to check each one has a rule down here.
+
+   Same rules as above: no new SVG unless there is genuinely nothing to reuse
+   (the shades and the halo are the only two), and the mood underneath is
+   overridden by source order, not specificity. */
+
+/* 😏 Half-lidded and pleased with itself. The lids sit low over the eyes
+   rather than replacing them, which is the difference between smug and asleep. */
+.pet[data-expr="smug"] .eye   { ry: 4; }
+.pet[data-expr="smug"] .lids  { display: block; }
+.pet[data-expr="smug"] .lid-l { d: path("M38 50h13"); }
+.pet[data-expr="smug"] .lid-r { d: path("M69 50h13"); }
+.pet[data-expr="smug"] .mouth { d: path("M52 71q9 5 17 -4"); }
+.pet[data-expr="smug"] .cheek { opacity: 0.6; }
+
+/* 😎 The only face that needs a prop, because there is no way to draw shades
+   out of two ellipses and a mouth. */
+.pet[data-expr="cool"] .eyes   { display: none; }
+.pet[data-expr="cool"] .lids   { display: none; }
+.pet[data-expr="cool"] .shades { display: block; animation: shades-on 380ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.pet[data-expr="cool"] .mouth  { d: path("M52 71q9 5 17 -3"); }
+.pet[data-expr="cool"] .cheek  { opacity: 0.5; }
+
+@keyframes shades-on { from { transform: translateY(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* 🙄 Eyes up, lower lids in, and a small lean. The lean is what stops it
+   reading as "looking at the ceiling". */
+.pet[data-expr="eyeroll"] .gaze  { transform: translate(0, -4px); }
+.pet[data-expr="eyeroll"] .eye   { ry: 5.5; }
+.pet[data-expr="eyeroll"] .lids  { display: block; }
+.pet[data-expr="eyeroll"] .lid-l { d: path("M38 57h13"); }
+.pet[data-expr="eyeroll"] .lid-r { d: path("M69 57h13"); }
+.pet[data-expr="eyeroll"] .mouth { d: path("M54 72h12"); }
+.pet[data-expr="eyeroll"] .cheek { opacity: 0.2; }
+.pet[data-expr="eyeroll"] { animation: tilt 1.1s ease-in-out; }
+
+/* 🥺 The big one. Oversized eyes, oversized glints, inner brows up, and a
+   mouth that cannot quite hold still. */
+.pet[data-expr="pleading"] .eye    { rx: 8; ry: 9.5; }
+.pet[data-expr="pleading"] .glint  { r: 3.2; }
+.pet[data-expr="pleading"] .brows  { display: block; }
+.pet[data-expr="pleading"] .brow-l { transform: translateY(-4px) rotate(-12deg); transform-origin: 45px 41px; }
+.pet[data-expr="pleading"] .brow-r { transform: translateY(-4px) rotate(12deg); transform-origin: 75px 41px; }
+.pet[data-expr="pleading"] .mouth  { d: path("M55 73q5 -4 10 0"); }
+.pet[data-expr="pleading"] .cheek  { opacity: 0.7; }
+.pet[data-expr="pleading"] { animation: fidget 1.1s ease-in-out infinite; }
+
+/* 😤 Cross, but holding it in - which is what the puff is for. Distinct from
+   'annoyed' on purpose: annoyed is aimed at you, this is aimed at the floor. */
+.pet[data-expr="huff"] .brows  { display: block; }
+.pet[data-expr="huff"] .brow-l { transform: translateY(3px) rotate(15deg); transform-origin: 45px 41px; }
+.pet[data-expr="huff"] .brow-r { transform: translateY(3px) rotate(-15deg); transform-origin: 75px 41px; }
+.pet[data-expr="huff"] .eye    { ry: 5; }
+.pet[data-expr="huff"] .mouth  { d: path("M53 74q7 -6 14 0"); }
+.pet[data-expr="huff"] .cheek  { opacity: 0.45; }
+.pet[data-expr="huff"] .anger  { display: block; }
+.pet[data-expr="huff"] { animation: puff 900ms ease-in-out 2; }
+
+/* 😳 Wide, pink, and unable to form a sentence. Bigger blush than 'shy',
+   because shy looks away and this one is caught looking. */
+.pet[data-expr="flushed"] .eye   { rx: 7.5; ry: 9; }
+.pet[data-expr="flushed"] .cheek { opacity: 1; rx: 10; ry: 7; }
+.pet[data-expr="flushed"] .mouth { d: path("M57 72h6"); }
+.pet[data-expr="flushed"] .brows { display: block; }
+.pet[data-expr="flushed"] .brow  { transform: translateY(-5px); }
+.pet[data-expr="flushed"] { animation: wiggle 0.18s ease-in-out 6; }
+
+/* 😬 The only mouth in the set with teeth in it: one path, four subpaths, no
+   fill. */
+.pet[data-expr="grimace"] .mouth  { d: path("M46 67h28v9h-28zM46 71.5h28M55 67v9M65 67v9"); }
+.pet[data-expr="grimace"] .eye    { ry: 5.5; }
+.pet[data-expr="grimace"] .brows  { display: block; }
+.pet[data-expr="grimace"] .brow-l { transform: translateY(-3px) rotate(-8deg); transform-origin: 45px 41px; }
+.pet[data-expr="grimace"] .sweat  { display: block; }
+.pet[data-expr="grimace"] .cheek  { opacity: 0.3; }
+
+/* 😱 Everything at once, and the colour drains out. */
+.pet[data-expr="shock"] .eye   { rx: 8.5; ry: 10; }
+.pet[data-expr="shock"] .glint { r: 1.2; }
+.pet[data-expr="shock"] .brows { display: block; }
+.pet[data-expr="shock"] .brow  { transform: translateY(-7px); }
+.pet[data-expr="shock"] .mouth { d: path("M52 68a8 11 0 1 0 16 0a8 11 0 1 0 -16 0"); fill: #8a4340; }
+.pet[data-expr="shock"] .sweat { display: block; }
+.pet[data-expr="shock"] .cheek { opacity: 0.1; }
+.pet[data-expr="shock"] svg    { filter: saturate(0.75) brightness(1.04); }
+.pet[data-expr="shock"] { animation: wiggle 0.09s ease-in-out infinite; }
+
+/* 😐 The joke is the missing bob. A pet that stops moving entirely is funnier
+   than any mouth shape. */
+.pet[data-expr="deadpan"] .eye   { ry: 6; }
+.pet[data-expr="deadpan"] .brows { display: block; }
+.pet[data-expr="deadpan"] .brow  { transform: translateY(1px); }
+.pet[data-expr="deadpan"] .mouth { d: path("M52 72h16"); }
+.pet[data-expr="deadpan"] .cheek { opacity: 0; }
+.pet[data-expr="deadpan"] { animation: none; }
+
+/* 🫠 Slides gently downwards and stays there for as long as the face lasts. */
+.pet[data-expr="melt"] .eyes  { display: none; }
+.pet[data-expr="melt"] .lids  { display: block; }
+.pet[data-expr="melt"] .lid-l { d: path("M38 56q6 5 13 0"); }
+.pet[data-expr="melt"] .lid-r { d: path("M69 56q6 5 13 0"); }
+.pet[data-expr="melt"] .mouth { d: path("M50 71q5 5 10 0t10 0"); }
+.pet[data-expr="melt"] .cheek { opacity: 0.75; }
+/* The end state is on the element as well as in the animation: an animation is
+   the only thing holding the shape, and anything that stops animations - the
+   contact sheet, prefers-reduced-motion - would otherwise show a pet that is
+   not melting at all. Same reason the flip below carries its own transform. */
+.pet[data-expr="melt"] svg    { transform: scale(1.1, 0.86) translateY(4px); transform-origin: 60px 96px; animation: melting 2.2s ease-in-out forwards; }
+.pet[data-expr="melt"] { animation: bob 5s ease-in-out infinite; }
+
+@keyframes melting { from { transform: none; } to { transform: scale(1.1, 0.86) translateY(4px); } }
+
+/* 🤩 The glints do the work - blown up and throbbing, they read as stars
+   without a third pair of eyes to keep in alignment. */
+.pet[data-expr="starstruck"] .eye   { rx: 7.5; ry: 9; }
+.pet[data-expr="starstruck"] .glint { r: 3.4; animation: throb 500ms ease-in-out infinite; }
+.pet[data-expr="starstruck"] .mouth { d: path("M50 67q10 4 20 0q-3 15 -10 15t-10 -15z"); fill: #8a4340; }
+.pet[data-expr="starstruck"] .cheek { opacity: 0.9; }
+.pet[data-expr="starstruck"] .spark { display: block; animation: twinkle 600ms ease-in-out infinite; }
+.pet[data-expr="starstruck"] { animation: hop 0.5s ease-in-out 3; }
+
+/* 😈 Brows down over a wide grin. The hue shift is what separates it from a
+   pet that is merely pleased. */
+.pet[data-expr="mischief"] .brows  { display: block; }
+.pet[data-expr="mischief"] .brow-l { transform: translateY(4px) rotate(16deg); transform-origin: 45px 41px; }
+.pet[data-expr="mischief"] .brow-r { transform: translateY(4px) rotate(-16deg); transform-origin: 75px 41px; }
+.pet[data-expr="mischief"] .eye    { ry: 5; }
+.pet[data-expr="mischief"] .mouth  { d: path("M48 68q12 3 24 0q-5 12 -12 12t-12 -12z"); fill: #8a4340; }
+.pet[data-expr="mischief"] .cheek  { opacity: 0.7; }
+.pet[data-expr="mischief"] svg     { filter: saturate(1.25) hue-rotate(-8deg); }
+
+/* 🤢 Green, drooping, and slow. */
+.pet[data-expr="queasy"] .eyes  { display: none; }
+.pet[data-expr="queasy"] .lids  { display: block; }
+.pet[data-expr="queasy"] .lid-l { d: path("M38 55q6 6 13 0"); }
+.pet[data-expr="queasy"] .lid-r { d: path("M69 55q6 6 13 0"); }
+.pet[data-expr="queasy"] .mouth { d: path("M51 73q4 -5 8 0t9 0"); }
+.pet[data-expr="queasy"] .cheek { opacity: 0.15; }
+.pet[data-expr="queasy"] .sweat { display: block; }
+.pet[data-expr="queasy"] svg    { filter: hue-rotate(65deg) saturate(1.1); }
+.pet[data-expr="queasy"] { animation: fidget 1.9s ease-in-out infinite; }
+
+/* 🤯 Shock with the sparks going off above it. */
+.pet[data-expr="mindblown"] .eye   { rx: 8; ry: 9.5; }
+.pet[data-expr="mindblown"] .brows { display: block; }
+.pet[data-expr="mindblown"] .brow  { transform: translateY(-7px); }
+.pet[data-expr="mindblown"] .mouth { d: path("M53 68a7 9 0 1 0 14 0a7 9 0 1 0 -14 0"); fill: #8a4340; }
+.pet[data-expr="mindblown"] .spark { display: block; animation: twinkle 320ms ease-in-out 8; }
+.pet[data-expr="mindblown"] { animation: wiggle 0.11s ease-in-out 10; }
+
+/* 🤫 One brow up, small round mouth. There is no finger to put in front of it,
+   so the face has to carry the whole thing. */
+.pet[data-expr="shush"] .mouth  { d: path("M56 71a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"); fill: #8a4340; }
+.pet[data-expr="shush"] .brows  { display: block; }
+.pet[data-expr="shush"] .brow-l { transform: translateY(-6px); }
+.pet[data-expr="shush"] .brow-r { transform: translateY(-1px) rotate(-6deg); transform-origin: 75px 41px; }
+.pet[data-expr="shush"] .eye    { ry: 6; }
+.pet[data-expr="shush"] .cheek  { opacity: 0.5; }
+
+/* 😇 The halo is the other prop, and it bobs on its own so it reads as hovering
+   rather than welded on. */
+.pet[data-expr="innocent"] .eyes  { display: none; }
+.pet[data-expr="innocent"] .lids  { display: block; }
+.pet[data-expr="innocent"] .lid-l { d: path("M39 57q6 -8 12 0"); }
+.pet[data-expr="innocent"] .lid-r { d: path("M69 57q6 -8 12 0"); }
+.pet[data-expr="innocent"] .mouth { d: path("M53 69q7 6 14 0"); }
+.pet[data-expr="innocent"] .cheek { opacity: 0.8; }
+.pet[data-expr="innocent"] .halo  { display: block; animation: halo-bob 2.4s ease-in-out infinite; }
+
+@keyframes halo-bob { 0%, 100% { transform: translateY(0); opacity: 0.85; } 50% { transform: translateY(-3px); opacity: 1; } }
+
+/* 🙃 The whole pet goes over. The shadow is hidden rather than counter-rotated
+   the way the topple does it - a shadow above an upside down pet is worse than
+   no shadow at all. */
+.pet[data-expr="wry"] svg     { transform: rotate(180deg); transform-origin: 60px 58px; animation: flip 700ms ease-in-out forwards; }
+.pet[data-expr="wry"] .shadow { display: none; }
+
+@keyframes flip { from { transform: rotate(0deg); } to { transform: rotate(180deg); } }
+
+/* 🤗 No arms to hug you with, so it does the squeeze itself. */
+.pet[data-expr="hug"] .eyes  { display: none; }
+.pet[data-expr="hug"] .lids  { display: block; }
+.pet[data-expr="hug"] .lid-l { d: path("M39 57q6 -7 12 0"); }
+.pet[data-expr="hug"] .lid-r { d: path("M69 57q6 -7 12 0"); }
+.pet[data-expr="hug"] .mouth { d: path("M49 67q11 6 22 0q-4 13 -11 13t-11 -13z"); fill: #8a4340; }
+.pet[data-expr="hug"] .cheek { opacity: 1; rx: 8; ry: 5; }
+.pet[data-expr="hug"] .spark { display: block; animation: twinkle 800ms ease-in-out 3; }
+.pet[data-expr="hug"] svg    { animation: squeeze 900ms ease-in-out 2; transform-origin: 60px 96px; }
+
+@keyframes squeeze { 0%, 100% { transform: none; } 45% { transform: scale(1.1, 0.92); } }
+
 /* The bow is for the cute half of the range only. It is an accessory the pet
    puts on when it is pleased with you, not part of its body. */
 .pet[data-expr="love"] .bow,
@@ -368,6 +563,11 @@ html, body {
 .pet[data-expr="giggle"] .bow,
 .pet[data-expr="proud"] .bow,
 .pet[data-expr="wink"] .bow,
+.pet[data-expr="hug"] .bow,
+.pet[data-expr="innocent"] .bow,
+.pet[data-expr="starstruck"] .bow,
+.pet[data-expr="flushed"] .bow,
+.pet[data-expr="pleading"] .bow,
 .pet[data-expr="joy"] .bow { display: block; animation: bow-on 340ms cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: 30px 22px; }
 
 @keyframes bow-on { from { transform: scale(0) rotate(-40deg); } to { transform: none; } }

@@ -33,8 +33,13 @@
 .zzz    { display: none; fill: #6c7a8c; font: 600 15px "Segoe UI", system-ui, sans-serif; }
 .anger  { display: none; fill: none; stroke: #e2483f; stroke-width: 2.6; stroke-linecap: round; }
 
-/* Worn rather than drawn into any body, so all six species can put it on and
-   nobody has to redraw it six times. */
+/* Worn rather than drawn into any body, so all six species can put them on and
+   nobody has to redraw them six times. */
+.shades { display: none; }
+.lens   { fill: #2b2622; }
+.bridge { fill: none; stroke: #2b2622; stroke-width: 2.6; stroke-linecap: round; }
+.halo   { display: none; fill: none; stroke: #ffd45e; stroke-width: 3; }
+
 .bow      { display: none; }
 .bow-loop { fill: #f4849c; }
 .bow-knot { fill: #e0637f; }

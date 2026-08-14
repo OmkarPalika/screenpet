@@ -63,6 +63,24 @@ const EMOJI = {
   // 'listen' and 'oops' deliberately rain nothing. The microphone is open for
   // several seconds and confetti the whole time would be a strobe; an error is
   // not something to decorate.
+
+  // The rest of the keyboard. Four of them rain nothing on purpose: eyeroll,
+  // deadpan, grimace and shush are all faces whose whole joke is that nothing
+  // is happening, and decorating them takes the joke away.
+  smug:       [['😏'], ['💅'], ['✨', '😏']],
+  cool:       [['😎'], ['🕶️', '✨'], ['🔥', '😎']],
+  pleading:   [['🥺'], ['🥺', '💧'], ['🙏', '🥺']],
+  huff:       [['💢'], ['💨', '💢']],
+  flushed:    [['🌸', '💗'], ['💗', '💦'], ['🫣', '🌸']],
+  shock:      [['❗', '😱'], ['⚡', '❗'], ['💥', '😱']],
+  melt:       [['🫠'], ['💗', '🫠'], ['💫']],
+  starstruck: [['🤩', '⭐'], ['✨', '🌟'], ['💫', '🤩']],
+  mischief:   [['😈'], ['😈', '🔥'], ['💣', '😈']],
+  queasy:     [['🤢'], ['🤢', '💚']],
+  mindblown:  [['🤯', '💥'], ['💥', '⚡'], ['🎆', '🤯']],
+  innocent:   [['😇', '✨'], ['🕊️', '✨'], ['⭐', '😇']],
+  wry:        [['🙃'], ['🙃', '💫']],
+  hug:        [['🤗', '💞'], ['💕', '🤗'], ['🧸', '💞']],
 };
 
 const rand = (lo, hi) => lo + Math.random() * (hi - lo);
