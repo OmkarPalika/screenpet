@@ -95,7 +95,11 @@ Notes that matter:
 - The app never asks Windows, or anyone else, where you are. The weather is
   based on a town name you typed and can lie about.
 - The weather and lookup services need no account and no key, so nothing ties
-  either request to you. No cookies, no device identifier, no login.
+  either request to you. No cookies, no device identifier, no login. One thing
+  is added to a lookup that you did not type: `t=screenpet` on the DuckDuckGo
+  request, their convention for an application naming itself. It says which app
+  is asking, never who is asking — it is the same fixed string for every user
+  and every request, and there is nothing in it to tell two people apart.
 - The destination hosts are hardcoded. Nothing in a settings file, and nothing a
   model or a skill produces, can point them somewhere else.
 - **Choosing a hosted model is a different order of decision from the other

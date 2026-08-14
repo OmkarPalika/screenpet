@@ -1302,7 +1302,9 @@ at each of the call sites that would otherwise have to remember.
 | A hosted model | **The text read off your screen**, redacted | whichever company you picked |
 
 The first two need no account and no key, so nothing ties either request to you.
-The third is a different order of thing and has its own section below.
+The lookup carries one thing you did not type — `t=screenpet`, DuckDuckGo's
+convention for an application naming itself — which says which app is asking and
+not who. The third is a different order of thing and has its own section below.
 
 ### Looking things up
 
