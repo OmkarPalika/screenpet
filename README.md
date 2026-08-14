@@ -217,20 +217,30 @@ with animations paused.
 
 ## How it talks
 
-The pet answers like a pet, not like a search result:
+The pet answers the way a person answers out loud — not like a search result, and
+not like a greetings card either:
 
-> Oh, sweetie! 17 times 23 is… *pounces* …391!
+> Three hundred ninety-one. That's seventeen times twenty-three.
 >
-> It would return 13.50 for that item! 💸
+> A 401 means Unauthorized — you asked for something without valid credentials,
+> like a login token.
 
 **The answer itself is not negotiable.** The prompt says to give it plainly and
-completely, never to hide it or hint at it, and caps the affection at one
-flourish. Both clauses are load-bearing: this same file used to open with "you
-are a desktop pet" and produced 79–240 character replies that narrated the screen
-and talked about themselves, which is why the wording was stripped back to
-something that answered but sounded like a lookup. The current version measured
-**9/9 correct across three screens**, three runs each, with the voice back.
-Re-measure before editing it.
+completely, never to hide it or hint at it. That clause is load-bearing: this same
+file used to open with "you are a desktop pet" and produced 79–240 character
+replies that narrated the screen and talked about themselves, which is why the
+wording was stripped back to something that answered but sounded like a lookup.
+The version with the answer pinned down measured **9/9 correct across three
+screens**, three runs each, with the voice back. Re-measure before editing it.
+
+**Warmth was asked for as an "affectionate flourish", and that phrasing is what
+produced the tildes, the emoji and the third-person cooing.** It now asks for how
+a person actually speaks — contractions, plain words, nothing stiff — and caps the
+humour at one dry aside *after* the answer, with an explicit way out: if nothing
+about it is funny, leave it out. The escape hatch matters. Without it a small
+model strains for a joke on questions that do not have one in them, and a strained
+joke is worse than a straight answer. Emoji, asterisks and narrated actions are
+now forbidden outright rather than rationed.
 
 **A screen with no question is not a failure.** It used to say `I could not read
 any text on screen` or `I cannot find a clear question`, which is technically
@@ -703,9 +713,14 @@ restaged       {"x":0,"y":564,"width":1536,"height":300}   on a real display: tr
 
 Right-click → **Talk…** and type. No screenshot, no OCR: the model is told
 plainly that it cannot see your screen, because otherwise a small model will
-cheerfully invent what is on it. Same rule as above — fond and playful, but a
-factual question still gets a real answer (`Tokyo is the capital! Got any other
-questions for your favourite desk buddy?`).
+cheerfully invent what is on it — and if you ask it what you are looking at, it
+says it cannot see rather than guessing. Same voice as above, plus two rules the
+typed path needs on its own: lead with the answer rather than a sentence built
+around it, and never open with a greeting or its own name. Both were what made
+short replies sound like a form letter.
+
+> **you:** I've been staring at this bug for three hours
+> **pet:** Three hours? It should have given up and quit gracefully by now.
 
 The last three exchanges are kept for context **in memory only, never written to
 disk**. A desktop pet that keeps a transcript of your evening in `userData` is a
