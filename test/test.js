@@ -1906,6 +1906,34 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.ok(!cbody.prompt.includes('x'.repeat(501)), 'chat did not cap the message');
   assert.ok(cbody.prompt.length < 2000, `chat prompt not capped: ${cbody.prompt.length} chars`);
 
+  // --- small talk does not wait for the monologue ---
+  {
+    // Measured, not assumed: on one already-loaded deepseek-r1:8b, 8613ms to
+    // the first word with the reasoning on and 394ms with it off. Same model,
+    // same memory - the wait was the thinking and nothing else.
+    await chat('hey', { fetch: cgrab, model: 'm' });
+    assert.strictEqual(cbody.think, false, 'small talk still waits for the reasoner');
+
+    // A question about the screen keeps it. That is the job the careful model
+    // was chosen for, and the pet has a thinking face for exactly this.
+    await chat('what about the second one?', {
+      fetch: cgrab, model: 'm', screen: { text: 'one two three', at: 0 },
+    });
+    assert.ok(!('think' in cbody), 'a question about the screen lost the reasoning');
+
+    // Whitespace is not a screen. Judged the same way the prompt judges it, or
+    // the pet reasons over a screen it is simultaneously telling you it cannot
+    // see.
+    await chat('hey', { fetch: cgrab, model: 'm', screen: { text: '   ', at: 0 } });
+    assert.strictEqual(cbody.think, false, 'a blank screen read counted as a screen');
+
+    // Never switched on, only off. A model that cannot think refuses the whole
+    // request - '"llama3.1:8b" does not support thinking' - so asking for it
+    // breaks every model that was never the problem.
+    const brainSrc = require('fs').readFileSync('./src/core/brain.js', 'utf8');
+    assert.ok(!/think:\s*true/.test(brainSrc), 'thinking is asked for, which non-reasoning models refuse');
+  }
+
   // ===== memory ==============================================================
 
   // Built from local Date parts on purpose: every hour and day rule in memory.js
