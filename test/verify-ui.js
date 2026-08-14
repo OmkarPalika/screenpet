@@ -12,6 +12,11 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
+// This file lives in test/, the UI it loads lives in src/, and the PNGs it
+// writes belong at the top of the repository, which is where the README looks.
+const SRC = path.join(__dirname, '..', 'src');
+const ROOT = path.join(__dirname, '..');
+
 const problems = [];
 const check = (cond, msg) => { if (!cond) problems.push(msg); };
 
@@ -45,7 +50,7 @@ app.whenReady().then(async () => {
     show: true,
     backgroundColor: '#1b1b1f', // opaque so capturePage has something to composite
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(SRC, 'preload.js'),
       backgroundThrottling: false,
     },
   });
@@ -63,11 +68,11 @@ app.whenReady().then(async () => {
   });
   win.webContents.on('preload-error', (_e, p, err) => errors.push(`preload ${p}: ${err.message}`));
 
-  await win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  await win.loadFile(path.join(SRC, 'renderer', 'index.html'));
   const js = (src) => win.webContents.executeJavaScript(src);
   const shot = async (name) => {
     try {
-      fs.writeFileSync(path.join(__dirname, name), (await win.webContents.capturePage()).toPNG());
+      fs.writeFileSync(path.join(ROOT, name), (await win.webContents.capturePage()).toPNG());
     } catch (err) {
       // capturePage reports GPU failures with no clue which capture it was.
       throw new Error(`capturePage failed writing ${name}: ${err.message}`);
@@ -174,7 +179,7 @@ app.whenReady().then(async () => {
   // --- the wardrobe --------------------------------------------------------
   // Every outfit has to switch something on, switch it off again when another
   // one is picked, and none of them may take the face with it.
-  const WEAR = require('./settings').WEAR;
+  const WEAR = require('../src/core/settings').WEAR;
   const WORN = {
     bow: '.bow', shades: '.shades', halo: '.halo', hero: '.cape',
     party: '.hat-party', wizard: '.hat-wizard', crown: '.crown', headphones: '.cans',
@@ -210,7 +215,7 @@ app.whenReady().then(async () => {
   // resolved animation-name catches the failure that matters: a rule that never
   // matches leaves the pet on the default squish and looks unfinished.
   const quirks = new Set();
-  for (const s of require('./settings').PETS) {
+  for (const s of require('../src/core/settings').PETS) {
     win.webContents.send('pet:look', { pet: s, skin: 'butter' });
     await settle();
     const got = await js(
@@ -226,7 +231,7 @@ app.whenReady().then(async () => {
     quirks.add(`${got.body}/${got.tail}`);
   }
   check(
-    quirks.size >= require('./settings').PETS.length - 1,
+    quirks.size >= require('../src/core/settings').PETS.length - 1,
     `the species share too few idle quirks: ${[...quirks].join(', ')}`
   );
 
@@ -716,14 +721,14 @@ app.whenReady().then(async () => {
     const sw = new BrowserWindow({
       width: w, height: h, show: true, backgroundColor: '#fffdf7',
       webPreferences: {
-        preload: path.join(__dirname, 'preload.js'),
+        preload: path.join(SRC, 'preload.js'),
         backgroundThrottling: false,
       },
     });
     sw.webContents.on('console-message', (e) => {
       if (e.level === 'error') errors.push(`${name}: ${e.message}`);
     });
-    await sw.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+    await sw.loadFile(path.join(SRC, 'renderer', 'index.html'));
     sw.setContentSize(w, h);
     await sw.webContents.executeJavaScript(
       `(() => { const clone = ${CLONE};
@@ -736,7 +741,7 @@ app.whenReady().then(async () => {
     );
     await settle();
     try {
-      fs.writeFileSync(path.join(__dirname, name), (await sw.webContents.capturePage()).toPNG());
+      fs.writeFileSync(path.join(ROOT, name), (await sw.webContents.capturePage()).toPNG());
     } catch (err) {
       throw new Error(`capturePage failed writing ${name}: ${err.message}`);
     }
@@ -820,7 +825,7 @@ app.whenReady().then(async () => {
     box.style.display = 'grid';
     box.style.gridTemplateColumns = 'repeat(10, 124px)';
     for (const outfit of ${JSON.stringify(WEAR.filter((w) => w !== 'none'))}) {
-      for (const s of ${JSON.stringify(require('./settings').PETS)}) {
+      for (const s of ${JSON.stringify(require('../src/core/settings').PETS)}) {
         const cell = document.createElement('div');
         cell.dataset.pet = s;
         cell.dataset.wear = outfit;
@@ -831,11 +836,11 @@ app.whenReady().then(async () => {
     }
   }`);
 
-  const allSpecies = require('./settings').PETS;
+  const allSpecies = require('../src/core/settings').PETS;
   await sheet('pet-species.png', [1260, 1190], `(source, box, clone) => {
     box.style.display = 'grid';
     box.style.gridTemplateColumns = 'repeat(10, 124px)';
-    for (const skin of ${JSON.stringify(require('./settings').SKINS)}) {
+    for (const skin of ${JSON.stringify(require('../src/core/settings').SKINS)}) {
       for (const s of ${JSON.stringify(allSpecies)}) {
         const cell = document.createElement('div');
         cell.dataset.pet = s;
@@ -861,13 +866,13 @@ app.whenReady().then(async () => {
     },
     // The real lists, not a copy of them: a settings window offering four skins
     // while the app has ten is a bug this file exists to catch.
-    skins: require('./settings').SKINS,
-    pets: require('./settings').PETS,
-    wear: require('./settings').WEAR,
+    skins: require('../src/core/settings').SKINS,
+    pets: require('../src/core/settings').PETS,
+    wear: require('../src/core/settings').WEAR,
     models: ['llama3.1:8b', 'mistral:7b'],
     visionModel: null,
     packaged: false,
-    providers: Object.entries(require('./providers').PROVIDERS).map(([name, spec]) => ({
+    providers: Object.entries(require('../src/core/providers').PROVIDERS).map(([name, spec]) => ({
       name, label: spec.label, local: spec.local === true,
       model: spec.model || '', keys: spec.keys || '',
     })),
@@ -881,14 +886,14 @@ app.whenReady().then(async () => {
   const sw = new BrowserWindow({
     width: 460, height: 940, show: true, // must match openSettings() in main.js
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(SRC, 'preload.js'),
       backgroundThrottling: false,
     },
   });
   sw.webContents.on('console-message', (e) => {
     if (e.level === 'error') errors.push(`settings: ${e.message}`);
   });
-  await sw.loadFile(path.join(__dirname, 'renderer', 'settings.html'));
+  await sw.loadFile(path.join(SRC, 'renderer', 'settings.html'));
   await settle();
   const sjs = (src) => sw.webContents.executeJavaScript(src);
 
@@ -898,12 +903,12 @@ app.whenReady().then(async () => {
   );
   check(
     (await sjs(`document.querySelectorAll('#skins .swatch').length`))
-      === require('./settings').SKINS.length,
+      === require('../src/core/settings').SKINS.length,
     'settings did not render the skin swatches'
   );
   check(
     (await sjs(`document.querySelectorAll('#pets .pet-pick svg').length`))
-      === require('./settings').PETS.length,
+      === require('../src/core/settings').PETS.length,
     'settings did not draw a preview for every pet'
   );
   check(
@@ -931,8 +936,8 @@ app.whenReady().then(async () => {
   const swatches = await sjs(`(() => [...document.querySelectorAll('.swatch')]
     .map((s) => getComputedStyle(s).backgroundColor))()`);
   check(
-    swatches.length === require('./settings').SKINS.length,
-    `${swatches.length} swatches for ${require('./settings').SKINS.length} skins`
+    swatches.length === require('../src/core/settings').SKINS.length,
+    `${swatches.length} swatches for ${require('../src/core/settings').SKINS.length} skins`
   );
   check(new Set(swatches).size === swatches.length, `two skins share a swatch colour: ${swatches}`);
   for (const c of swatches) {
@@ -942,8 +947,8 @@ app.whenReady().then(async () => {
   const wear = await sjs(`(() => [...document.getElementById('wear').options]
     .map((o) => [o.value, o.textContent]))()`);
   check(
-    wear.length === require('./settings').WEAR.length,
-    `${wear.length} outfits offered, ${require('./settings').WEAR.length} exist`
+    wear.length === require('../src/core/settings').WEAR.length,
+    `${wear.length} outfits offered, ${require('../src/core/settings').WEAR.length} exist`
   );
   check(wear.every(([, label]) => label && label.trim()), 'an outfit has no label');
 
@@ -957,8 +962,8 @@ app.whenReady().then(async () => {
   const engines = await sjs(`(() => [...document.getElementById('dictation').options]
     .map((o) => o.value))()`);
   check(
-    engines.join() === require('./settings').DICTATION.join(),
-    `the recogniser choices are ${engines} but settings.js accepts ${require('./settings').DICTATION}`
+    engines.join() === require('../src/core/settings').DICTATION.join(),
+    `the recogniser choices are ${engines} but settings.js accepts ${require('../src/core/settings').DICTATION}`
   );
   check(
     (await sjs(`document.getElementById('dictation').value`)) === 'local',
@@ -1056,7 +1061,7 @@ app.whenReady().then(async () => {
     ),
     'Save button falls outside the settings window - it is not resizable, so it cannot be reached'
   );
-  fs.writeFileSync(path.join(__dirname, 'pet-settings.png'), (await sw.webContents.capturePage()).toPNG());
+  fs.writeFileSync(path.join(ROOT, 'pet-settings.png'), (await sw.webContents.capturePage()).toPNG());
 
   // A malformed accelerator must not be savable - registering one throws.
   await sjs(

@@ -10,8 +10,8 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { recognise } = require('../ocr');
-const { ask } = require('../brain');
+const { recognise } = require('../src/system/ocr');
+const { ask } = require('../src/core/brain');
 
 const W = 720;
 const H = 480;
