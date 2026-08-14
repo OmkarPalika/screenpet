@@ -66,6 +66,15 @@ vulnerabilities — but a way to *widen* one is:
 - **Builds are unsigned** until there is a code-signing certificate, so
   SmartScreen will warn. Verify what you downloaded against the hash published
   with the release.
+- **whisper dictation runs a binary you supplied.** If `whisper-cli.exe` and
+  `model.bin` are present in `%APPDATA%\screenpet\whisper\`, the app executes
+  that binary. The location is fixed and there is no setting that can point it
+  elsewhere — deliberately, because a path to an executable in `settings.json`
+  would be arbitrary code execution with a nice label on it. Anyone who can write
+  to your `%APPDATA%` can already run code as you, so this adds no privilege they
+  did not have; verify what you download from the whisper.cpp releases page all
+  the same. A way to make the app run a binary from anywhere *else* is a
+  vulnerability.
 
 ## Out of scope
 

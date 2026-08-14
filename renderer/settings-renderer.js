@@ -10,6 +10,7 @@ const autostart = el('autostart');
 const voice = el('voice');
 const sounds = el('sounds');
 const mic = el('mic');
+const dictationSel = el('dictation');
 const camera = el('camera');
 const wakeBox = el('wake');
 const bop = el('bop');
@@ -185,6 +186,10 @@ function gateDevices() {
     if (!need.checked) box.checked = false;
   }
   city.disabled = !weather.checked;
+  // Which recogniser is a choice about a microphone that is switched off, so it
+  // greys out with the rest of them - but it keeps its value rather than being
+  // reset, because it is a preference and not a permission.
+  dictationSel.disabled = !mic.checked;
   // A hosted provider is one of the things the master switch gates, so turning
   // the network off has to put the choice back to the local model here too -
   // otherwise the select shows something the main process has already refused.
@@ -244,6 +249,7 @@ saveBtn.addEventListener('click', async () => {
     voice: voice.checked,
     sounds: sounds.checked,
     mic: mic.checked,
+    dictation: dictationSel.value,
     camera: camera.checked,
     wake: wakeBox.checked,
     bop: bop.checked,
@@ -268,6 +274,7 @@ saveBtn.addEventListener('click', async () => {
   wearSel.value = current.wear;
   camera.checked = current.camera;
   mic.checked = current.mic;
+  dictationSel.value = current.dictation;
   wakeBox.checked = current.wake;
   bop.checked = current.bop;
   faces.checked = current.faces;
@@ -317,6 +324,7 @@ el('close').addEventListener('click', () => window.config.close());
   wearSel.value = current.wear;
   camera.checked = current.camera;
   mic.checked = current.mic;
+  dictationSel.value = current.dictation;
   wakeBox.checked = current.wake;
   bop.checked = current.bop;
   faces.checked = current.faces;

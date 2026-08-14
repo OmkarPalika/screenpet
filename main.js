@@ -8,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const { recognise } = require('./ocr');
 const { listen } = require('./speech');
+const whisper = require('./whisper');
 const media = require('./media');
 const dnd = require('./dnd');
 const reminders = require('./reminders');
@@ -40,6 +41,10 @@ const QUIET_SHOW_MS = 30000;
 // How long the microphone stays open for a dance you asked for. Long enough for
 // a chorus, short enough that forgetting about it costs nothing.
 const DANCE_MS = 20000;
+// Whisper needs the audio itself, and only the renderer can open a microphone.
+// This is the ceiling on that round trip: the recorder stops on silence long
+// before it, so reaching it means the renderer never answered.
+const RECORD_TIMEOUT_MS = 15000;
 // setTimeout wraps past this and fires immediately, which for a reminder means
 // shouting the moment you set it. Long timers are re-armed instead.
 const MAX_DELAY_MS = 2147483647;
@@ -795,12 +800,64 @@ async function replyTo(message) {
 }
 
 /**
+ * Which recogniser hears you. 'auto' looks rather than demands, because whisper
+ * is a file the user puts there and not something this app installs.
+ *
+ * @returns {'sapi'|'whisper'|'missing'} 'missing' is whisper asked for by name
+ *   and not present, which is worth saying out loud rather than silently
+ *   falling back to the recogniser they chose to move away from.
+ */
+function recogniser() {
+  if (settings.dictation === 'sapi') return 'sapi';
+  const have = whisper.installed(app.getPath('userData'));
+  if (settings.dictation === 'whisper') return have ? 'whisper' : 'missing';
+  return have ? 'whisper' : 'sapi';
+}
+
+// Only the renderer can open a microphone, so main asks it for one phrase and
+// waits. One at a time, which `listening` already guarantees - this holds the
+// resolver for the request in flight and nothing else.
+let pendingAudio = null;
+
+function recordPhrase() {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      pendingAudio = null;
+      resolve(null);
+    }, RECORD_TIMEOUT_MS);
+    pendingAudio = (buf) => {
+      clearTimeout(timer);
+      pendingAudio = null;
+      resolve(buf);
+    };
+    send('pet:record');
+  });
+}
+
+// Audio only ever crosses this bridge in answer to a request main just made.
+// Unasked-for audio is dropped rather than transcribed - the renderer has no
+// business starting a recording on its own, and if it ever does, this is where
+// that stops being true quietly.
+ipcMain.on('pet:audio', (_e, buf) => {
+  if (!pendingAudio) return;
+  pendingAudio(buf && buf.byteLength ? Buffer.from(buf) : null);
+});
+
+/**
  * Push to talk. The microphone opens when you ask it to and shuts as soon as
  * you stop speaking - there is no wake word and no listening loop, because a
  * pet that is always listening is a microphone with a face on it.
  */
 async function listenAndReply() {
   if (busy || listening || !settings.mic) return;
+  const engine = recogniser();
+  if (engine === 'missing') {
+    return send('pet:say', {
+      text: `I cannot find whisper. Put whisper-cli.exe and model.bin in\n${path.join(app.getPath('userData'), whisper.DIR)}`,
+      kind: 'error',
+      expr: pets.expressionFor('error'),
+    });
+  }
   listening = true;
   // Said directly rather than through talk(): the user needs to see that the
   // microphone is open, and the smoke check silences talk().
@@ -810,7 +867,15 @@ async function listenAndReply() {
     expr: pets.expressionFor('listen'),
   });
   try {
-    const heard = await listen();
+    // Two engines, one contract: a string, empty if nothing was said. Whisper
+    // needs the audio handed to it; System.Speech opens the microphone itself.
+    // Silence is answered the same way on both paths - the recorder declines to
+    // send audio it measured as silent, because whisper has no confidence score
+    // to gate on and will cheerfully transcribe a quiet room as "you".
+    const wav = engine === 'whisper' ? await recordPhrase() : null;
+    const heard = engine === 'whisper'
+      ? (wav ? await whisper.transcribe(wav, { userData: app.getPath('userData') }) : '')
+      : await listen();
     if (!heard) {
       return send('pet:say', {
         text: pets.line('deaf', lineIndex++, settings.pet),

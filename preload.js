@@ -30,6 +30,13 @@ contextBridge.exposeInMainWorld('pet', {
   // move to whatever is playing. Nothing comes back the other way - the beat
   // never crosses this bridge, because nothing on the far side needs it.
   onDance: (fn) => ipcRenderer.on('pet:dance', (_e, ms) => fn(ms)),
+  // Dictation, when the recogniser is whisper rather than Windows' own. Windows
+  // opens the microphone itself inside PowerShell and nothing crosses here;
+  // whisper needs the audio, so main asks for one phrase and the renderer
+  // answers with one WAV. It is never sent unasked, main drops it if it was, and
+  // it is not written anywhere on either side of this line.
+  onRecord: (fn) => ipcRenderer.on('pet:record', () => fn()),
+  audio: (buf) => ipcRenderer.send('pet:audio', buf),
   battery: (level) => ipcRenderer.send('pet:battery', level),
   chatOpen: (open) => ipcRenderer.send('pet:chat-open', !!open),
   ask: () => ipcRenderer.send('pet:ask'),

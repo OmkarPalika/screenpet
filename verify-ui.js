@@ -804,6 +804,7 @@ app.whenReady().then(async () => {
       model: 'llama3.1:8b', vision: 'auto', hotkey: 'CommandOrControl+Shift+Space',
       pet: 'cat', skin: 'butter', wear: 'none',
       autostart: false, ollama: 'http://127.0.0.1:11434',
+      mic: true, dictation: 'whisper',
       memory: true, cheek: true,
       network: false, web: false, weather: false, city: '',
       provider: 'ollama', providerModel: '',
@@ -900,6 +901,41 @@ app.whenReady().then(async () => {
     (await sjs(`document.getElementById('vision-hint').classList.contains('warn')`)),
     'settings did not warn that no vision model is installed'
   );
+  // Which recogniser hears you. Every engine settings.js accepts has to be
+  // offerable, and the saved one has to come back selected - a control that
+  // renders blank looks like the feature is off.
+  const engines = await sjs(`(() => [...document.getElementById('dictation').options]
+    .map((o) => o.value))()`);
+  check(
+    engines.join() === require('./settings').DICTATION.join(),
+    `the recogniser choices are ${engines} but settings.js accepts ${require('./settings').DICTATION}`
+  );
+  check(
+    (await sjs(`document.getElementById('dictation').value`)) === 'whisper',
+    'the settings window did not preselect the saved recogniser'
+  );
+  // It is laid out in the flow, not in the fixed bottom bar. The first version
+  // of this control used class="row" and landed on top of the save button.
+  check(
+    (await sjs(`getComputedStyle(document.getElementById('dictation')).position`)) === 'static',
+    'the recogniser control is positioned out of the form flow'
+  );
+  // Greyed out with the microphone off, but it keeps its value - it is a
+  // preference, not a permission.
+  await sjs(`document.getElementById('mic').checked = false;
+             document.getElementById('mic').dispatchEvent(new Event('change'))`);
+  await settle();
+  check(
+    await sjs(`document.getElementById('dictation').disabled`),
+    'the recogniser stayed live with the microphone switched off'
+  );
+  check(
+    (await sjs(`document.getElementById('dictation').value`)) === 'whisper',
+    'switching the microphone off forgot which recogniser was chosen'
+  );
+  await sjs(`document.getElementById('mic').checked = true;
+             document.getElementById('mic').dispatchEvent(new Event('change'))`);
+  await settle();
   check(
     await sjs(`document.getElementById('autostart').disabled`),
     'autostart was offered in an unpackaged build, where it would register electron.exe'

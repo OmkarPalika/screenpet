@@ -42,7 +42,7 @@ anything to us, and there is no server to send it to.
 | --- | --- | --- |
 | Your screen | Only when you press the hotkey or ask the pet to look | Windows OCR on this machine, then the local model |
 | A screenshot image | Only on the vision tier, when OCR finds too little text to work with | The local model only. **Never sent to a hosted provider** — an image cannot be redacted the way text can |
-| Microphone | Only with `Let me talk to it` on, and only while a phrase is being spoken | Windows' own speech recognition, on this machine |
+| Microphone | Only with `Let me talk to it` on, and only while a phrase is being spoken | One of two recognisers, both on this machine: Windows' own, or whisper.cpp if you installed it. Neither reaches the network. With whisper the audio is piped to it and is never written to disk |
 | Camera | Only with the camera setting on | Answers "did anything move" and "is there a face" — never *whose* face. The Windows API used has no identify, no compare and no face embedding |
 
 Screen captures and camera frames are held in memory for the length of one

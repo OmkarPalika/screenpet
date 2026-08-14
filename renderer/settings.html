@@ -88,8 +88,24 @@
       <span>Let me talk to it</span>
     </label>
     <p class="hint">
-      Adds <code>Listen…</code> to the pet's menu. Windows recognises the speech on this
-      machine; no audio is recorded, saved or sent anywhere.
+      Adds <code>Listen…</code> to the pet's menu. The speech is recognised on this
+      machine; no audio is saved or sent anywhere.
+    </p>
+
+    <label for="dictation">Recognised by</label>
+    <select id="dictation">
+      <option value="auto">Auto — whisper if installed, Windows otherwise</option>
+      <option value="sapi">Windows</option>
+      <option value="whisper">whisper.cpp</option>
+    </select>
+    <p class="hint" id="dictation-hint">
+      Both run on this machine and neither reaches the network. Windows' own recogniser
+      needs no setup and is what the pet has always used — measured on real speech it got
+      <strong>88% of words wrong</strong>, and scored every result below its own confidence
+      floor, which is why it so often says it did not catch that. whisper.cpp scored
+      <strong>21%</strong> on the same recordings. It is not bundled: put
+      <code>whisper-cli.exe</code> and <code>model.bin</code> in the app's
+      <code>whisper</code> folder and this picks them up.
     </p>
 
     <label class="check">

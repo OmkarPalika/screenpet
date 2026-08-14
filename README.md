@@ -300,8 +300,11 @@ you cannot hear — and were lengthened until they passed.
 voice: muting a pet that reads your screen aloud and muting a pet that goes
 "woof" are two different wants, and the second outstays its welcome first.
 
-**It listens** through `System.Speech`, driven from `listen.ps1` exactly the way
-OCR is driven from `ocr.ps1`. Push to talk: `Listen…` opens the microphone, one
+**It listens** through one of two recognisers, both on this machine: Windows'
+`System.Speech`, driven from `listen.ps1` exactly the way OCR is driven from
+`ocr.ps1`, or whisper.cpp if you have installed it — see
+[the measurement below](#that-threshold-was-hiding-a-much-worse-problem), which is
+not a close call. Push to talk either way: `Listen…` opens the microphone, one
 phrase is recognised, and it shuts. No wake word and no listening loop — a pet
 that is always listening is a microphone with a face on it.
 
@@ -329,9 +332,90 @@ catch that", lower it:
 set SCREENPET_MIC_CONFIDENCE=0.15
 ```
 
-Accuracy is SAPI's, which is fair for plain sentences and poor for technical
-words. Swapping in whisper.cpp would fix that at the cost of a binary and a model
-download; the trade is noted in `listen.ps1` rather than taken.
+### That threshold was hiding a much worse problem
+
+The paragraph above used to end by saying SAPI is "fair for plain sentences and
+poor for technical words", and that swapping in whisper.cpp was a trade worth
+noting rather than taking. Then it was measured: fourteen phrases spoken into the
+actual microphone, the same WAV file fed to both engines — `SetInputToWaveFile`
+for System.Speech, so neither gets an advantage from the recording.
+
+| | System.Speech | whisper tiny.en | whisper base.en |
+| --- | --- | --- | --- |
+| Word error rate | **88%** | 51% | 49% |
+| ...with the vocabulary prompt | — | 27% | **21%** |
+| Discarded by the `0.30` floor | **14 of 14** | — | — |
+| Median latency | 1218ms (544ms engine, rest is the PowerShell spawn) | 831ms | 1647ms |
+
+**88% is not "poor at technical words", it is not working.** `git rebase onto
+main` came back as "The leaders of the way". `run npm install then npm test` as
+"And humans who didn't have this". And the confidence floor this page defends so
+carefully discarded *every single result* — median confidence 0.107, a third of
+the threshold. On this voice, dictation never answered at all; it always said it
+did not catch that.
+
+Two things were ruled out rather than assumed. The recordings average −25 dBFS,
+so they were peak-normalised to −3 and re-run: whisper moved 49% → 46% and SAPI
+got **worse**, so level is not the story. Two of the fourteen files are clipped
+mid-phrase; excluding them moves base.en to 18% and leaves SAPI at 88%.
+
+**The largest single win is a string, not a model.** whisper takes an initial
+prompt that biases decoding, and the app knows its own vocabulary — npm, JSON,
+rebase, Postgres, async. That one constant took base.en from 49% to 21%, and the
+technical phrases from 87% to 29%. Eight of fourteen improved and none regressed.
+It lives in [whisper.js](whisper.js) and it looks exactly like a magic string
+somebody should tidy away, which is why there is a test pinning it.
+
+### Turning it on
+
+`Recognised by` in settings, three values, matching the shape `vision` already
+uses: **whisper if installed, Windows otherwise** (the default), or either engine
+by name. Both run on this machine; neither reaches the network.
+
+whisper is **not bundled** — it is a 7.9MB binary and a model file, and shipping
+someone else's build inside this installer is a licensing and signing question
+this project has not answered yet. To use it, put two files in the app's own
+folder:
+
+```
+%APPDATA%\screenpet\whisper\whisper-cli.exe   (plus its .dll files)
+%APPDATA%\screenpet\whisper\model.bin
+```
+
+Binaries are on the [whisper.cpp releases page](https://github.com/ggml-org/whisper.cpp/releases)
+(`whisper-bin-x64.zip`) and models on
+[Hugging Face](https://huggingface.co/ggerganov/whisper.cpp) — `ggml-tiny.en.bin`
+is 75MB, `ggml-base.en.bin` 142MB. Rename whichever you choose to `model.bin`.
+`tiny.en` is the better default than its size suggests: with the prompt it beats
+bare `base.en` and it is *faster than the PowerShell spawn SAPI needs*.
+
+The location is fixed and there is no setting for it. A path to an executable in
+`settings.json` is arbitrary code execution with a nice label on it, and this app
+hardcodes its OCR script, its weather host and its provider URLs for that reason.
+
+**The audio still never touches disk.** whisper-cli reads the WAV from stdin,
+which costs one piece of arcana: with `-f -` it derives its output name from the
+input name, ends up with `-`, decides that means stdout and silently prints
+nothing. `-of` gives it a name to be quiet about. Removing that flag looks like
+tidying and turns dictation off.
+
+**Whisper has no confidence score**, so the noise problem the `0.30` floor exists
+for comes back in a different shape: handed two seconds of a quiet room, base.en
+answers "you". The gate is therefore in two places — the recorder does not send
+audio it measured as silence, and a short list of known hallucinations is dropped
+in [whisper.js](whisper.js). Both are measured, not guessed.
+
+**Known limits.** One speaker, one room, fourteen phrases: this sizes an effect,
+it does not measure a population. 21% is better, not solved — one word in five is
+still wrong. `small.en` would likely close more of that at 465MB. Latency is the
+CPU build; CUDA would cut it. And SAPI was measured through a WAV file rather
+than live, so "the floor rejects everything" is strongly indicated rather than
+proven — if a clear sentence still comes back as "I did not catch that", that is
+the confirmation.
+
+The harness that produced all of this is a recording booth, a WER scorer with its
+own self-check, and a runner; it lives outside the repo because it needs a
+microphone and 215MB of models to say anything.
 
 ## Skills
 
