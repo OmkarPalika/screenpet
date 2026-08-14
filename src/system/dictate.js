@@ -89,16 +89,21 @@ const VOCAB =
  * writes no file because no --output-* format is asked for. Removing that flag
  * looks like tidying and turns dictation off.
  */
+// whisper.cpp ships the same binaries with no extension outside Windows, and
+// the model files are named identically everywhere. Keeping this in one place
+// means the engine table below stays about the engines.
+const EXE = process.platform === 'win32' ? '.exe' : '';
+
 const ENGINES = [
   {
     name: 'parakeet',
-    exe: 'parakeet-cli.exe',
+    exe: `parakeet-cli${EXE}`,
     model: 'parakeet.bin',
     args: (model) => ['-m', model, '-f', '-', '-np'],
   },
   {
     name: 'whisper',
-    exe: 'whisper-cli.exe',
+    exe: `whisper-cli${EXE}`,
     model: 'model.bin',
     args: (model) => [
       '-m', model,

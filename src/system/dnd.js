@@ -1,19 +1,13 @@
 'use strict';
 
-const { spawn } = require('child_process');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const host = require('./host');
 
-// Same arrangement as ocr.js, speech.js and media.js: PowerShell cannot read a
-// script from inside an asar archive.
-const SCRIPT = path.join(__dirname, 'dnd.ps1').replace('app.asar', 'app.asar.unpacked');
-
-const PWSH = path.join(
-  process.env.SystemRoot || 'C:\\Windows',
-  'System32',
-  'WindowsPowerShell',
-  'v1.0',
-  'powershell.exe'
-);
+// Windows answers this through a P/Invoke in dnd.ps1; macOS keeps it in a file
+// and is read in-process below. Two different shapes for one question, which is
+// why this module branches rather than host.js hiding it.
 
 // QUERY_USER_NOTIFICATION_STATE. The two talkative ones are listed rather than
 // the five quiet ones, so a value Windows adds in a future version is treated as
@@ -27,7 +21,9 @@ const PWSH = path.join(
 // 5 QUNS_QUIET_TIME              Focus Assist / Do Not Disturb
 // 6 QUNS_APP                     a full screen app that is not D3D
 // 7 QUNS_ACCEPTS_NOTIFICATIONS   nothing in the way
-const TALKATIVE = new Set([7]);
+const QUNS_QUIET = 5;
+const QUNS_ACCEPTS = 7;
+const TALKATIVE = new Set([QUNS_ACCEPTS]);
 
 /** Pure half, so the mapping can be tested without spawning anything. */
 function isQuiet(state) {
@@ -49,14 +45,41 @@ function isQuiet(state) {
 // demand.
 const FORCED = Number(process.env.SCREENPET_QUNS);
 
+/**
+ * macOS keeps the current Focus in a JSON file rather than behind an API, so
+ * this is a file read and not a process. It answers in the same vocabulary as
+ * Windows so isQuiet above stays the only place the mapping lives.
+ *
+ * Narrower than the Windows answer, and deliberately: QUNS also covers a game,
+ * a full screen app and presenting, and macOS exposes none of those cheaply.
+ * Focus is the part people actually set on purpose.
+ *
+ * A missing file is a real answer - no assertion is active - so it is 7 rather
+ * than an error. A file that will not parse is not an answer, and rejecting
+ * lets quiet() fall back the same way it does for a failed Windows check.
+ */
+function macState() {
+  const file = path.join(os.homedir(), 'Library', 'DoNotDisturb', 'DB', 'Assertions.json');
+  let raw;
+  try {
+    raw = fs.readFileSync(file, 'utf8');
+  } catch {
+    return Promise.resolve(QUNS_ACCEPTS);
+  }
+  try {
+    const data = JSON.parse(raw);
+    const records = ((data.data || [])[0] || {}).storeAssertionRecords;
+    return Promise.resolve(Array.isArray(records) && records.length ? QUNS_QUIET : QUNS_ACCEPTS);
+  } catch (err) {
+    return Promise.reject(new Error(`I could not read the Focus setting: ${err.message}`));
+  }
+}
+
 function state() {
   if (Number.isInteger(FORCED)) return Promise.resolve(FORCED);
+  if (host.PLATFORM === 'darwin') return macState();
   return new Promise((resolve, reject) => {
-    const ps = spawn(
-      PWSH,
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT],
-      { windowsHide: true }
-    );
+    const ps = host.spawn('dnd');
 
     let out = '';
     let err = '';

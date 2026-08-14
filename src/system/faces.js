@@ -1,19 +1,10 @@
 'use strict';
 
-const { spawn } = require('child_process');
-const path = require('path');
+const host = require('./host');
 
-// Same arrangement as ocr.js, and the same PowerShell 5.1 requirement: the WinRT
-// projections faces.ps1 relies on are not present in PowerShell 7+.
-const SCRIPT = path.join(__dirname, 'faces.ps1').replace('app.asar', 'app.asar.unpacked');
+// Windows.Media.FaceAnalysis, or Vision through the macOS helper. Both count
+// faces and neither can identify one.
 
-const PWSH = path.join(
-  process.env.SystemRoot || 'C:\\Windows',
-  'System32',
-  'WindowsPowerShell',
-  'v1.0',
-  'powershell.exe'
-);
 
 // A 320x240 JPEG is tens of kilobytes. This is the ceiling before anything is
 // decoded, so a renderer sending something absurd is refused rather than piped
@@ -43,11 +34,8 @@ function count(dataUrl) {
   }
 
   return new Promise((resolve, reject) => {
-    const ps = spawn(
-      PWSH,
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT],
-      { windowsHide: true }
-    );
+    const ps = host.spawn('faces');
+
 
     const timer = setTimeout(() => ps.kill(), TIMEOUT_MS);
     let out = '';

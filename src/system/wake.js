@@ -1,18 +1,10 @@
 'use strict';
 
-const { spawn } = require('child_process');
-const path = require('path');
+const host = require('./host');
 
-// Same arrangement as ocr.js, speech.js, media.js and dnd.js.
-const SCRIPT = path.join(__dirname, 'wake.ps1').replace('app.asar', 'app.asar.unpacked');
+// Windows only, like listen: see the note in host.js for why a wake word is not
+// something whisper can stand in for.
 
-const PWSH = path.join(
-  process.env.SystemRoot || 'C:\\Windows',
-  'System32',
-  'WindowsPowerShell',
-  'v1.0',
-  'powershell.exe'
-);
 
 let child = null;
 
@@ -32,11 +24,16 @@ const WOKE = 'WAKE';
 function start(onEvent) {
   if (child) return;
 
-  child = spawn(
-    PWSH,
-    ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', SCRIPT],
-    { windowsHide: true }
-  );
+  // Unlike every other bridge here this is not inside a Promise, so on a host
+  // without a wake word the throw would go straight through the caller. There is
+  // an error channel already and this is exactly what it is for.
+  try {
+    child = host.spawn('wake');
+  } catch (err) {
+    child = null;
+    onEvent(`error: ${err.message}`);
+    return;
+  }
 
   let buffer = '';
   child.stdout.on('data', (d) => {

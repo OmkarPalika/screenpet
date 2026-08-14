@@ -13,7 +13,9 @@
     "demo": "electron demo/record.js",
     "license": "node build/license.js",
     "dist": "npm run license && electron-builder",
-    "pack": "npm run license && electron-builder --dir"
+    "pack": "npm run license && electron-builder --dir",
+    "doctor": "node test/doctor.js",
+    "build:helper": "swiftc -O -o src/system/mac/screenpet-helper src/system/mac/screenpet-helper.swift -framework Vision -framework CryptoKit -framework Security"
   },
   "devDependencies": {
     "electron": "^43.4.0",
@@ -24,7 +26,8 @@
     "appId": "dev.screenpet.app",
     "productName": "screenpet",
     "asarUnpack": [
-      "src/system/*.ps1"
+      "src/system/*.ps1",
+      "src/system/mac/*"
     ],
     "files": [
       "src/**",
@@ -53,6 +56,14 @@
     },
     "portable": {
       "artifactName": "${productName}-${version}-portable.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.utilities",
+      "icon": "build/icon.png"
     }
   }
 }

@@ -146,3 +146,8 @@ button {
 button:hover { border-color: var(--accent); }
 .primary { background: var(--accent); border-color: var(--accent); color: #2b2622; font-weight: 600; }
 .primary:disabled { opacity: 0.5; cursor: default; }
+
+/* A capability this machine does not have. Left visible rather than removed:
+   knowing the pet could do this elsewhere is worth more than a shorter list,
+   and the title attribute carries the reason. */
+label.unavailable { opacity: 0.45; cursor: help; }

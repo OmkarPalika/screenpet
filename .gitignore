@@ -7,3 +7,6 @@ out/
 
 # generated from TERMS.md by build/license.js at package time
 build/license.txt
+
+# built by npm run build:helper; a compiled binary is not reviewable in a diff
+src/system/mac/screenpet-helper

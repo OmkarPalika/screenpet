@@ -1091,7 +1091,9 @@ src/
   core/         logic with no Windows in it - runs under plain node, so the
                 tests drive the real thing rather than a mock
   system/       everything that shells out: each .js next to the .ps1 or the
-                binary it drives
+                binary it drives, and host.js deciding which one this machine
+                gets
+  system/mac/   the macOS half - one Swift helper and one AppleScript
   renderer/     the pet itself - one HTML file, one settings window, the SVG
                 bodies in pets.css and the voices in voices.js
 test/           test.js is node-only and fast; verify-ui.js boots real windows
@@ -1111,9 +1113,45 @@ half the story.
 `src/system/*.ps1` is in `asarUnpack` and must stay there. See
 [Shipping](#shipping) for why.
 
+## Which machines it runs on
+
+Windows is the platform this was built on and the one everything is measured
+against. macOS is implemented and **has not been run** — see
+[BUILDING.md](BUILDING.md), which lists what differs and what is missing there.
+
+The whole of what is platform-specific is one table in
+[host.js](src/system/host.js). A capability a machine does not have is not
+hidden and does not throw: the switch for it in Settings is disabled with the
+reason on hover, and asking for it out loud gets a sentence back. Find out
+before you start:
+
+```bash
+npm run doctor
+```
+
+```
+capability      host  ready  note
+--------------  ----  -----  ----
+ocr             yes   yes
+listen          yes   yes
+wake            yes   yes
+```
+
+Two things macOS does not get, both for the same reason: `Answer to "hey pet"`
+and Windows' own dictation are a recogniser holding the microphone open, and
+the macOS equivalent goes to Apple's servers unless asked very specifically not
+to. Dictation still works there through whisper.cpp or Parakeet, which were
+already local and already cross-platform. A wake word has no such stand-in —
+running whisper forever to catch one word is a different bargain from the one
+that setting describes.
+
+Linux, Android and iOS: see the end of [BUILDING.md](BUILDING.md). The first is
+unimplemented, the second is a different application, and the third cannot do
+the central feature at all.
+
 ## Requirements
 
-- Windows 10/11
+- Windows 10/11, or macOS (see [BUILDING.md](BUILDING.md))
 - [Ollama](https://ollama.com) running locally
 - Node 18+
 - A microphone and a Windows speech recogniser, **only** if you switch on
