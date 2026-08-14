@@ -229,6 +229,31 @@ distinction is load-bearing: an expression would replace whatever face the pet
 was already making, and a raging pet that goes blank the moment it opens its
 mouth is not raging. There is a test pinning it.
 
+**It makes a noise first.** A woof, a meow, a chirp, a rumble — whichever it is —
+in the moment before the words. There are no audio files: nothing is recorded,
+licensed or unpacked out of the asar, because each voice is six lines of
+oscillators and filtered noise in [renderer/voices.js](renderer/voices.js). A
+bark is a low thump with a burst of noise on it; a meow is a sawtooth whose pitch
+goes up before it comes down, through a lowpass filter standing in for a mouth; a
+chirp is over before you can place it.
+
+The **face** decides how it comes out. Five feelings — neutral, happy, sad,
+cross, sleepy — each a pitch, a speed and a volume, so six species need six
+recipes rather than thirty: the cat has one meow and five ways of meaning it. A
+crying pet is slower and lower than a delighted one without a second recipe
+existing.
+
+Assertions can measure a sound but cannot tell you it is *wrong*, so
+`verify:ui` renders every voice into an `OfflineAudioContext` and checks the
+three things a broken one fails: it is audible at all, it does not clip, and it
+lasts between 40 and 700ms. The bun and the bird both failed that last check on
+the first pass — a squeak at the top of the range is most of the way to a sound
+you cannot hear — and were lengthened until they passed.
+
+`Little noises` in settings, and `Mute noises` in the tray, separate from the
+voice: muting a pet that reads your screen aloud and muting a pet that goes
+"woof" are two different wants, and the second outstays its welcome first.
+
 **It listens** through `System.Speech`, driven from `listen.ps1` exactly the way
 OCR is driven from `ocr.ps1`. Push to talk: `Listen…` opens the microphone, one
 phrase is recognised, and it shuts. No wake word and no listening loop — a pet
@@ -734,6 +759,7 @@ and quit it — the pet has no taskbar button by design.
 | Pet | Blob, cat, pup, bun, bird or dragon. Previews are the real thing. |
 | Skin | Butter, mint, blossom or slate. Applies to whichever pet you picked. |
 | Speak replies out loud | On by default. Mute from the tray without opening this window. |
+| Little noises | On by default. A woof, a meow, a chirp — synthesised, not played from a file. Muted separately from the voice. |
 | Let me talk to it | Off by default. Adds `Listen…` to the pet's menu. |
 | Answer to “hey pet” | Off by default, needs the above. **Holds the microphone open.** See "The wake word". |
 | Bop along to music | Off by default, needs the microphone. **Holds it open.** See "Dancing". |

@@ -2074,5 +2074,66 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.strictEqual(config.load({ memory: 'no' }).memory, true);
   }
 
+  // --- the noise it makes -----------------------------------------------------
+  // Whether it is audible is a question only an audio context can answer, and
+  // verify-ui renders every one of these offline and measures it. What is
+  // checkable here is that the tables agree with the rest of the app: a species
+  // with no recipe is a silent pet, and a face routed to a feeling that does not
+  // exist would quietly fall back to neutral forever.
+  {
+    const voices = require('./renderer/voices');
+    const config = require('./settings');
+
+    for (const species of config.PETS) {
+      assert.ok(voices.VOICES[species], `${species} has no voice`);
+    }
+    assert.strictEqual(
+      Object.keys(voices.VOICES).length, config.PETS.length,
+      'there is a voice for a species that does not exist'
+    );
+    // An unknown species makes no noise rather than a default woof: a typo you
+    // cannot hear is a typo nobody finds.
+    const silent = { currentTime: 0, createGain: () => { throw new Error('made a noise'); } };
+    assert.strictEqual(voices.sound(silent, 'ferret', 'smile'), 0);
+
+    for (const [face, feeling] of Object.entries(voices.FEELING_OF)) {
+      assert.ok(voices.FEELINGS[feeling], `${face} sounds ${feeling}, which is not a feeling`);
+    }
+    assert.strictEqual(voices.feelingOf('rage'), 'cross');
+    assert.strictEqual(voices.feelingOf('doze'), 'sleepy');
+    assert.strictEqual(voices.feelingOf(pets.expressionFor('refuse')), 'sad');
+    // Anything unlisted, including nothing at all, is neutral rather than a throw.
+    assert.strictEqual(voices.feelingOf('hmm'), 'neutral');
+    assert.strictEqual(voices.feelingOf(undefined), 'neutral');
+    // The four the pet wears most often must not all come out the same.
+    const often = ['love', 'cry', 'rage', 'doze'].map(voices.feelingOf);
+    assert.strictEqual(new Set(often).size, 4, 'the pet sounds identical happy and sad');
+
+    // A face given a sound but never drawn is a typo in the table above.
+    const drawn = new Set(
+      require('fs').readFileSync('./renderer/style.css', 'utf8')
+        .match(/data-expr="[a-z]+"/g)
+        .map((s) => s.slice(11, -1))
+    );
+    for (const face of Object.keys(voices.FEELING_OF)) {
+      assert.ok(drawn.has(face), `${face} is given a sound but is never drawn`);
+    }
+
+    // On by default, off only when asked, and not turned on by a leftover string.
+    assert.strictEqual(config.load({}).sounds, true);
+    assert.strictEqual(config.load({ sounds: false }).sounds, false);
+    assert.strictEqual(config.load({ sounds: 'off' }).sounds, true);
+
+    // Wiring: the renderer only barks with the setting on, and never over its
+    // own thinking face.
+    const rjs = require('fs').readFileSync('./renderer/renderer.js', 'utf8');
+    assert.ok(/if \(!soundsOn\) return;/.test(rjs), 'the noise ignores the setting');
+    assert.ok(/if \(!busy\) bark\(expr\);/.test(rjs), 'the pet barks while thinking');
+    assert.ok(
+      require('fs').readFileSync('./main.js', 'utf8').includes('sounds: settings.sounds'),
+      'main never tells the renderer whether noises are on'
+    );
+  }
+
   console.log('all checks passed');
 })();

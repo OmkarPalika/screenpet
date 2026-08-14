@@ -26,6 +26,11 @@ const DEFAULTS = {
   // you cannot hear is the feature not existing - and mutable from the tray,
   // because the moment you need it off is the moment a call starts.
   voice: true,
+  // The small noise it makes when it says something - a woof, a meow, a chirp,
+  // depending on what it is. Synthesised, not recorded, so it costs no files and
+  // opens no device; on by default for the same reason the voice is, and muted
+  // from the same tray menu.
+  sounds: true,
   // The microphone is opt-in and stays that way. A desktop pet that starts
   // listening because it shipped that way is not a pet, it is an incident.
   mic: false,
@@ -138,6 +143,7 @@ function load(raw) {
     pet: PETS.includes(s.pet) ? s.pet : DEFAULTS.pet,
     skin: SKINS.includes(s.skin) ? s.skin : DEFAULTS.skin,
     voice: typeof s.voice === 'boolean' ? s.voice : DEFAULTS.voice,
+    sounds: typeof s.sounds === 'boolean' ? s.sounds : DEFAULTS.sounds,
     // Anything but a literal true leaves these shut. A hand-edited "mic": "yes"
     // or a 1 left over from some other config format must not be the thing that
     // opens a microphone or a camera.

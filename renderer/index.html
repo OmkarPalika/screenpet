@@ -129,6 +129,9 @@
     <video id="cam-video" width="640" height="480" muted playsinline hidden></video>
     <canvas id="cam-canvas" width="32" height="24" hidden></canvas>
 
+    <!-- Before renderer.js, which calls into it. Both are classic scripts, so
+         what this declares at the top level is what the other one can see. -->
+    <script src="voices.js"></script>
     <script src="renderer.js"></script>
   </body>
 </html>

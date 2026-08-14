@@ -7,6 +7,7 @@ const hotkeyInput = el('hotkey');
 const skinsBox = el('skins');
 const autostart = el('autostart');
 const voice = el('voice');
+const sounds = el('sounds');
 const mic = el('mic');
 const camera = el('camera');
 const wakeBox = el('wake');
@@ -214,6 +215,7 @@ saveBtn.addEventListener('click', async () => {
     pet: species,
     skin,
     voice: voice.checked,
+    sounds: sounds.checked,
     mic: mic.checked,
     camera: camera.checked,
     wake: wakeBox.checked,
@@ -235,6 +237,7 @@ saveBtn.addEventListener('click', async () => {
   // would be worse than showing the user it did not stick.
   hotkeyInput.value = current.hotkey;
   voice.checked = current.voice;
+  sounds.checked = current.sounds;
   camera.checked = current.camera;
   mic.checked = current.mic;
   wakeBox.checked = current.wake;
@@ -281,6 +284,7 @@ el('close').addEventListener('click', () => window.config.close());
 
   hotkeyInput.value = current.hotkey;
   voice.checked = current.voice;
+  sounds.checked = current.sounds;
   camera.checked = current.camera;
   mic.checked = current.mic;
   wakeBox.checked = current.wake;
