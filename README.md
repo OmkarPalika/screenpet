@@ -1548,3 +1548,16 @@ GPU. It was allocating a 128k-token cache for a 400-character prompt.
 
 This is a study companion. Using it in a proctored exam is academic misconduct,
 and that is not the market this is built for.
+
+## The paperwork
+
+- [PRIVACY.md](PRIVACY.md) — what is read, what is stored and where, and what can
+  leave only if you switch it on. No account, no telemetry, no server.
+- [TERMS.md](TERMS.md) — the licence agreement, and the three things it asks of
+  you: do not point it at material you have no right to, do not use it in an
+  exam, and check an answer before you act on it.
+- [LICENSE](LICENSE) — copyright, and the short form of the above.
+- [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) — Electron, the Windows APIs,
+  Ollama and the models, and the attribution the two free web services want.
+- [SECURITY.md](SECURITY.md) — how to report a hole, and the invariants worth
+  attacking.
