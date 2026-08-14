@@ -332,18 +332,34 @@ function pushState(extra = {}) {
 /**
  * One door for everything the pet says off its own bat, so the line bank and the
  * face that goes with it can never drift apart.
+ *
+ * @returns {boolean} whether the line actually reached the screen. The caller
+ *   needs to know: a line dropped by do not disturb was never said, and counting
+ *   it as one you ignored would hold a setting against you.
  */
 function talk(kind, { event = null, text = null, tone = 'chat', move = null } = {}) {
   // The smoke check exits on the first thing the pet says, and it is checking
   // the answer, not the small talk.
-  if (process.env.SCREENPET_SMOKE) return;
+  if (process.env.SCREENPET_SMOKE) return false;
   // The whole point of the quiet check: this is the door everything the pet says
   // off its own bat goes through, and none of it is worth interrupting a game or
   // a presentation for.
-  if (quiet && !quietOverride) return;
+  if (quiet && !quietOverride) return false;
   const said = text || pets.line(kind, lineIndex++, settings.pet);
-  if (!said) return;
+  if (!said) return false;
   send('pet:say', { text: said, kind: tone, expr: pets.expressionFor(event), move });
+  return true;
+}
+
+/**
+ * You did something. Clears the ignored count wherever it is called from, and
+ * says whether the pet had noticed being ignored - which is the one thing worth
+ * reacting to, and only ever once.
+ */
+function attention() {
+  const { state: next, back } = pets.heard(state);
+  state = next;
+  return back;
 }
 
 function tick() {
@@ -369,10 +385,27 @@ function tick() {
   }
 
   if (!busy && !napping) {
-    if (pets.shouldNag(state, now, { asleep: napping })) {
+    // Everything in here is the pet speaking first, and every line that reaches
+    // the screen counts as one you have not answered yet. `said` is what makes
+    // that honest: do not disturb drops lines, and a line nobody saw is not one
+    // anybody ignored.
+    let said = false;
+    const nagging = pets.shouldNag(state, now, { asleep: napping });
+    const chatting = !nagging && pets.shouldChatter(state, now, { asleep: napping });
+
+    // Being ignored takes whichever slot came up rather than adding one of its
+    // own. A pet that talks MORE because you are not answering is the exact
+    // failure mode this is supposed to avoid.
+    const snub = nagging || chatting ? pets.ignoreStep(state.ignored) : null;
+
+    if (snub) {
+      if (nagging) state.lastNagAt = now;
+      else state.lastChatAt = now;
+      said = talk(snub.kind, { event: snub.event, tone: 'nag' });
+    } else if (nagging) {
       state.lastNagAt = now;
-      talk(pets.mood(state, { asleep: napping }), { tone: 'nag' });
-    } else if (pets.shouldChatter(state, now, { asleep: napping })) {
+      said = talk(pets.mood(state, { asleep: napping }), { tone: 'nag' });
+    } else if (chatting) {
       state.lastChatAt = now;
       // Sulking outranks all of it: a pet waiting for an apology and making
       // small talk about the weather is not waiting for an apology.
@@ -382,25 +415,28 @@ function tick() {
       // chatter slot rather than adding a second one, and memory.js throttles
       // its half far harder than chatter is throttled.
       const sulk = pets.sulking(state, now);
-      const said = !sulk && settings.memory
+      const remark = !sulk && settings.memory
         && memory.remark(mem, now, { cheek: settings.cheek, index: lineIndex });
       if (sulk) {
-        talk('sulky', { event: 'sulk' });
-      } else if (said) {
-        mem = said.mem;
+        said = talk('sulky', { event: 'sulk' });
+      } else if (remark) {
+        mem = remark.mem;
         saveMem();
         lineIndex++;
-        talk(null, { text: said.text, event: said.event });
+        said = talk(null, { text: remark.text, event: remark.event });
       // Every other one is a compliment rather than small talk - and then the
       // pet is immediately embarrassed about having said it, which is the whole
       // joke. Praise on every chatter would be flattery and stop landing.
       } else if (chats++ % 2) {
-        talk('praised', { event: 'praise' });
+        said = talk('praised', { event: 'praise' });
         setTimeout(() => talk('bashful', { event: 'bashful' }), 3200);
       } else {
-        talk('idle');
+        said = talk('idle');
       }
     }
+
+    // One line, one count, however it was chosen.
+    if (said) state = pets.spoke(state);
   }
 
   pushState();
@@ -447,6 +483,7 @@ async function answerScreen() {
   busy = true;
   // The hour, and nothing else. Not what was on the screen, not what was asked.
   noteEvent('ask');
+  attention();
   send('pet:say', { text: 'thinking', kind: 'thinking' });
   try {
     const png = await grabScreen();
@@ -721,6 +758,10 @@ async function replyTo(message) {
   // habit built only from the messages a small model happened to answer would be
   // a habit about the model rather than about you.
   noteEvent('chat');
+  // You spoke to it, so it is not being ignored. No line for it here: the answer
+  // you are waiting for is the reaction, and a "you are back!" in front of it
+  // would just be the pet talking over itself.
+  attention();
   if (runSkill(text)) return;
   busy = true;
   send('pet:say', { text: 'thinking', kind: 'thinking' });
@@ -933,6 +974,9 @@ let lastPokeAt = 0;
 ipcMain.on('pet:act', (_e, name) => {
   const now = Date.now();
   const before = state.bond;
+  // Touching it counts as answering it, even if you say nothing. Read before
+  // the action, because act() returns a fresh object and would drop the clear.
+  const missed = attention();
   const result = pets.act(state, name, now);
   state = result.state;
   pushState({ acted: result.ok ? name : null });
@@ -963,7 +1007,10 @@ ipcMain.on('pet:act', (_e, name) => {
     noteEvent('care');
     // A bond milestone outranks the usual line - it only happens four times.
     const reached = pets.milestone(before, state.bond);
-    talk(SAID[name], { event: reached ? 'milestone' : name, text: reached });
+    // ...and coming back after it had given up outranks the everyday reaction.
+    // Said once, because the count is cleared: the pet is pleased, not owed.
+    if (missed && !reached) talk('relieved', { event: 'relieved' });
+    else talk(SAID[name], { event: reached ? 'milestone' : name, text: reached });
   } else if (REFUSED[name] && result.reason !== 'not yet') {
     talk(REFUSED[name], { event: 'refuse', tone: 'nag' });
   }

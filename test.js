@@ -588,6 +588,9 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       // The sulk banks ship to strangers too, and they are the ones with the
       // most obvious way to go wrong: a pet that guilt-trips is not the joke.
       'jealous', 'sulky', 'demand', 'rushed', 'forgiven',
+      // Being ignored is the easiest of the lot to get wrong: a pet that guilts
+      // you for not answering it is unusable, so these get the same check.
+      'wistful', 'snubbed', 'quietly', 'relieved',
     ];
     const nope = /\b(?:sex\w*|nude|naked|kiss me|bed|hot(?:ties)?|body|kill|hate you|die|idiot|shut up)\b/i;
     for (const bank of banter) {
@@ -676,6 +679,96 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // The sulking line is said unprompted, so it has to come from the line bank
   // like everything else the pet says on its own.
   assert.ok(main.includes("talk('sulky'"), 'the pet never mentions that it is sulking');
+}
+
+// --- being ignored: sad, then cross, then quiet, then pleased ---
+{
+  const t0 = 1700000000000;
+  const later = t0 + 9 * 3600000;
+  const opts = { asleep: false };
+
+  let s = pets.fresh(t0);
+  assert.strictEqual(s.ignored, 0);
+  assert.strictEqual(pets.gaveUp(s), false, 'a fresh pet has already given up on you');
+  assert.strictEqual(pets.ignoreStep(0), null, 'it took the first unanswered line personally');
+  assert.strictEqual(pets.ignoreStep(1), null, 'one unanswered line is not being ignored');
+
+  // The ladder, one line at a time.
+  const steps = [];
+  for (let i = 0; i < pets.MAX_IGNORED + 2; i++) {
+    const step = pets.ignoreStep(s.ignored);
+    steps.push(step && step.kind);
+    s = pets.spoke(s);
+  }
+  assert.deepStrictEqual(steps, [
+    null, null, 'wistful', 'wistful', 'snubbed', 'snubbed', 'quietly', null, null,
+  ], 'the ignored ladder does not go sad, cross, quiet, silent');
+
+  // ...and then it stops. Not a threat: the whole point is that it cannot turn
+  // into a nag loop, so BOTH unprompted channels close.
+  assert.strictEqual(s.ignored, pets.MAX_IGNORED, 'the count has no ceiling');
+  assert.ok(pets.gaveUp(s));
+  assert.strictEqual(pets.shouldChatter(s, later, opts), false, 'it gave up and kept chatting');
+  assert.strictEqual(pets.shouldNag({ ...s, fullness: 5 }, later, opts), false,
+    'it gave up and kept nagging');
+  // The same pet, with the count cleared, does still talk - so the assertions
+  // above are about being ignored and not about some other thing being wrong.
+  assert.strictEqual(pets.shouldChatter({ ...s, ignored: 0 }, later, opts), true);
+
+  // Every step has words and a face, or it is a silent no-op on screen.
+  for (const kind of ['wistful', 'snubbed', 'quietly', 'relieved']) {
+    assert.ok(pets.line(kind, 0), `"${kind}" has no lines`);
+  }
+  for (const event of ['wistful', 'snubbed', 'quiet', 'relieved']) {
+    assert.ok(pets.expressionFor(event), `"${event}" resolves to no expression`);
+  }
+  for (const step of [2, 4, 6].map(pets.ignoreStep)) {
+    assert.ok(pets.line(step.kind, 0), `step "${step.kind}" says nothing`);
+    assert.ok(pets.expressionFor(step.event), `step "${step.event}" has no face`);
+  }
+
+  // Being ignored costs something, but the first couple are free - you were
+  // reading, or thinking, or busy.
+  const fresh = pets.fresh(t0);
+  assert.strictEqual(pets.spoke(fresh).happiness, fresh.happiness, 'the first line cost happiness');
+  assert.ok(s.happiness < fresh.happiness, 'being ignored seven times cost nothing');
+
+  // Anything at all clears it, and it is only pleased if it had noticed.
+  const one = pets.spoke(fresh);
+  assert.strictEqual(pets.heard(one).back, false, 'it made a scene over one unanswered line');
+  assert.strictEqual(pets.heard(one).state.ignored, 0);
+  const back = pets.heard(s);
+  assert.strictEqual(back.back, true, 'it was ignored seven times and said nothing about it');
+  assert.strictEqual(back.state.ignored, 0);
+  assert.ok(back.state.happiness > s.happiness, 'coming back cheered it up not at all');
+  assert.strictEqual(pets.gaveUp(back.state), false, 'it stayed silent after you came back');
+  // Nothing to clear: the same object back, so a mouse move cannot churn state.
+  assert.strictEqual(pets.heard(fresh).state, fresh);
+
+  // A hand-edited file cannot make it permanently silent either.
+  assert.strictEqual(pets.load({ ignored: 999 }, t0).ignored, pets.MAX_IGNORED);
+  assert.strictEqual(pets.load({ ignored: -4 }, t0).ignored, 0);
+  assert.strictEqual(pets.load({ ignored: 'lots' }, t0).ignored, 0);
+
+  // --- the wiring, which the unit tests cannot reach ---
+  const main = require('fs').readFileSync('./main.js', 'utf8');
+  // A line dropped by do not disturb was never said, so talk() has to report
+  // back rather than being assumed to have spoken.
+  assert.ok(/return false;/.test(main.slice(main.indexOf('function talk('), main.indexOf('function attention('))),
+    'talk() no longer says whether the line reached the screen');
+  assert.ok(main.includes('if (said) state = pets.spoke(state)'),
+    'nothing counts the lines you did not answer');
+  // Every way of paying attention has to clear it, or the pet sulks at somebody
+  // who is talking to it.
+  for (const [where, near] of [
+    ['replyTo', "noteEvent('chat');"], ['answerScreen', "noteEvent('ask');"],
+  ]) {
+    const at = main.indexOf(near);
+    assert.ok(at > 0 && main.slice(at, at + 400).includes('attention()'),
+      `${where} does not clear the ignored count`);
+  }
+  assert.ok(main.includes('const missed = attention();'), 'touching the pet does not clear it');
+  assert.ok(main.includes("talk('relieved'"), 'the pet never reacts to you coming back');
 }
 
 // --- the face keyboard ---
