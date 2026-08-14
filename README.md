@@ -91,7 +91,7 @@ every palette, so it is 24 combinations, not six.
 
 Every species keeps the **same face rig**: same classes, same coordinates. Only
 ears, body outline and extras (tail, crest, whiskers) change. That is the whole
-trick — all thirty-eight expressions work on all six pets without a single extra rule,
+trick — all thirty-nine expressions work on all six pets without a single extra rule,
 and a seventh pet is one CSS block, not a new sprite sheet.
 
 Shapes live in `renderer/pets.css`, which the pet window, the settings previews
@@ -388,9 +388,42 @@ Models you might genuinely have configured — Gemini, Mistral — are deliberat
 *not* on it, because `what is mistral` is a question, and answering it with a
 jealous quip would be the pet eating a real message.
 
+## Being ignored
+
+The pet counts the lines it says to you that you do not answer, and only ever
+while you are actually at the machine — five minutes of system idle and it naps
+instead, because talking to an empty room is not being ignored. A line dropped by
+do not disturb is not counted either: it was never said, and holding a setting
+you switched on against you would be inventing a grievance.
+
+```
+2 unanswered  -> you are busy. I know                       [😞]
+4 unanswered  -> I am RIGHT HERE                            [😤]
+6 unanswered  -> right. I will stop                         [😐]
+then          -> (nothing at all)
+you pat it    -> there you are. I had gone quiet            [🥳]
+```
+
+**The ladder ends in silence rather than in more nagging.** Past the last rung
+both unprompted channels close — small talk *and* the hunger nag — and it says
+nothing at all until you speak first. That is the honest reaction and it is also
+the only version that cannot become a notification loop: a pet that escalates
+forever gets uninstalled. Anything clears it — a message, a headpat, asking it to
+read the screen — and coming back after it had noticed gets its own line.
+
+**It never gets a channel of its own.** The ignored line takes whichever slot was
+already coming due, so a pet being ignored talks exactly as often as one that is
+not: 45 minutes between lines, as always. Being upset does not buy it more of
+your attention.
+
+Each unanswered line past the second costs a little happiness, so this is not
+only a set of lines. Ignore it long enough and it genuinely drifts into the sad
+mood, with the face and the slower bob that already go with it. Coming back gives
+some of that straight back.
+
 ## Faces, by name or by emoji
 
-Thirty-eight faces are drawn, and thirty-five of them can be asked for by name
+Thirty-nine faces are drawn, and thirty-six of them can be asked for by name
 or by emoji (the other three - the resting smile, the surprised `oh`, the
 listening face - only ever arrive on their own):
 
@@ -459,7 +492,7 @@ disk with your notes in it, and this app does not keep one.
 
 ## A body
 
-Six whole-body movements, separate from the thirty-eight faces:
+Six whole-body movements, separate from the thirty-nine faces:
 
 `walk` `dance` `spin` `jump` `topple` `peek`
 

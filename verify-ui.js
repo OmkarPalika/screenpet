@@ -609,7 +609,7 @@ app.whenReady().then(async () => {
     // added to the keyboard and never drawn shows up here as a blank cell.
     'smug', 'cool', 'eyeroll', 'pleading', 'huff', 'flushed', 'grimace', 'shock',
     'deadpan', 'melt', 'starstruck', 'mischief', 'queasy', 'mindblown', 'shush',
-    'innocent', 'wry', 'hug',
+    'innocent', 'wry', 'hug', 'wistful',
   ];
   await sheet('pet-faces.png', [660, 1160], `(source, box, clone) => {
     box.style.display = 'flex';

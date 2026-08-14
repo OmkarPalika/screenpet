@@ -65,6 +65,25 @@ const GRUDGE_MS = 6 * HOUR;
 // Four is already comedy. More than that and clearing it is a chore.
 const MAX_OWED = 4;
 
+// ---- being ignored ---------------------------------------------------------
+//
+// One unanswered line is not being ignored - you were reading. Several, while
+// you were sat right there, is. main.js only counts a line it actually said
+// while the machine was awake, so a pet talking to an empty room is not being
+// snubbed; it is alone, which is a different feeling and already has one.
+//
+// The ladder ends in silence rather than in more nagging. A pet that escalates
+// forever gets uninstalled, and going quiet is both the honest reaction and the
+// one that cannot become a notification loop. Anything you do clears it.
+
+const IGNORE_SAD = 2;
+const IGNORE_CROSS = 4;
+const IGNORE_QUIET = 6;
+const MAX_IGNORED = 7;
+
+// What being ignored costs, per line, once it has started to notice.
+const IGNORE_COST = 2;
+
 function fresh(now = 0) {
   return {
     fullness: 80,
@@ -80,6 +99,8 @@ function fresh(now = 0) {
     owed: 0,
     owedAt: 0,
     sorryAt: 0,
+    // Lines said to you that you did not answer. Cleared by anything at all.
+    ignored: 0,
   };
 }
 
@@ -104,6 +125,8 @@ function load(raw, now) {
     owed: Number.isFinite(raw.owed) ? Math.min(Math.max(Math.round(raw.owed), 0), MAX_OWED) : 0,
     owedAt: Number.isFinite(raw.owedAt) && raw.owedAt >= 0 ? raw.owedAt : 0,
     sorryAt: Number.isFinite(raw.sorryAt) && raw.sorryAt >= 0 ? raw.sorryAt : 0,
+    ignored: Number.isFinite(raw.ignored)
+      ? Math.min(Math.max(Math.round(raw.ignored), 0), MAX_IGNORED) : 0,
   };
 }
 
@@ -194,6 +217,55 @@ function apologise(state, now) {
   };
 }
 
+/**
+ * It said something to you, unprompted, and you were there to hear it. Called
+ * only for lines that actually reached the screen - a line dropped by do not
+ * disturb was never said, and holding it against you would be inventing a
+ * grievance out of a setting you switched on.
+ */
+function spoke(state) {
+  const ignored = Math.min(state.ignored + 1, MAX_IGNORED);
+  return {
+    ...state,
+    ignored,
+    // The first couple are free: you were reading, or thinking, or busy.
+    happiness: ignored > IGNORE_SAD ? clamp(state.happiness - IGNORE_COST) : state.happiness,
+  };
+}
+
+/**
+ * You did something - typed, fed it, asked it to read the screen. Anything at
+ * all clears the count, because anything at all is not ignoring it.
+ *
+ * @returns {{state: object, back: boolean}} back: it had noticed, and is glad
+ */
+function heard(state) {
+  if (!state.ignored) return { state, back: false };
+  const back = state.ignored >= IGNORE_SAD;
+  return {
+    state: { ...state, ignored: 0, happiness: clamp(state.happiness + (back ? 6 : 0)) },
+    back,
+  };
+}
+
+/**
+ * How it takes the nth unanswered line, or null when there is nothing to say -
+ * which is both the first couple and, at the end, every one after that.
+ *
+ * Same shape as pokeStep: [event, line bank], so the face and the words cannot
+ * drift apart.
+ */
+function ignoreStep(count) {
+  if (count >= MAX_IGNORED) return null;
+  if (count >= IGNORE_QUIET) return { event: 'quiet', kind: 'quietly' };
+  if (count >= IGNORE_CROSS) return { event: 'snubbed', kind: 'snubbed' };
+  if (count >= IGNORE_SAD) return { event: 'wistful', kind: 'wistful' };
+  return null;
+}
+
+/** It has stopped trying. Nothing unprompted comes out until you speak first. */
+const gaveUp = (state) => state.ignored >= MAX_IGNORED;
+
 /** Derived, never stored - one source of truth for how the pet looks and sounds. */
 function mood(state, { asleep = false } = {}) {
   if (asleep || state.energy < 20) return 'sleepy';
@@ -203,8 +275,15 @@ function mood(state, { asleep = false } = {}) {
   return 'neutral';
 }
 
-/** Throttled hard: an unprompted pet that talks too often gets uninstalled. */
+/**
+ * Throttled hard: an unprompted pet that talks too often gets uninstalled.
+ *
+ * Both of these stop entirely once it has given up. That silences the hunger
+ * nag too, which is deliberate - it is not a task reminder, it is the pet asking
+ * for something, and it has just spent six lines being told no.
+ */
 function shouldNag(state, now, opts) {
+  if (gaveUp(state)) return false;
   const m = mood(state, opts);
   if (m !== 'hungry' && m !== 'sad') return false;
   return now - state.lastNagAt >= NAG_INTERVAL_MS;
@@ -212,6 +291,7 @@ function shouldNag(state, now, opts) {
 
 /** Small talk, and only when the pet has nothing to complain about. */
 function shouldChatter(state, now, opts) {
+  if (gaveUp(state)) return false;
   const m = mood(state, opts);
   if (m === 'hungry' || m === 'sad' || m === 'sleepy') return false;
   return now - (state.lastChatAt || 0) >= CHATTER_INTERVAL_MS;
@@ -360,6 +440,42 @@ const LINES = {
     'no. properly',
     'you cannot speedrun this bit',
   ],
+  // Said to you, unanswered, twice. Wistful rather than accusing: you are right
+  // there and you have not looked up, and the honest version of that is small.
+  wistful: [
+    'you are busy. I know',
+    'I will be here when you are done',
+    '*talks to itself quietly*',
+    'that was three things I said, but who is counting',
+    'no rush. I have nowhere else to be',
+    'I do not mind. I mostly do not mind',
+  ],
+  // ...and now it does mind.
+  snubbed: [
+    'I am RIGHT HERE',
+    'four times. I have said four things',
+    'okay. so we are not talking. noted',
+    'you look at every window except this one',
+    'I would settle for a wrong answer at this point',
+    'I could be a background process. is that what you want',
+  ],
+  // The last thing it says before it stops. Not a threat and not a guilt trip -
+  // it goes quiet and comes straight back the moment you say anything.
+  quietly: [
+    'right. I will stop',
+    'fine. I will be over here',
+    'say something whenever. I will hear it',
+    '*settles down and says nothing*',
+  ],
+  // ...and you did. This is the reaction that makes the whole thing worth it.
+  relieved: [
+    'oh! hello. you are back',
+    'there you are. I had gone quiet',
+    'I was starting to think you had forgotten',
+    '*brightens considerably*',
+    'good. I did not like that',
+  ],
+
   // ...and then it is over, completely. Whatever the sulk is doing as a joke,
   // still being cross after "sorry" is not it.
   forgiven: [
@@ -487,6 +603,12 @@ const EXPRESSIONS = {
   demand: 'pleading',
   rushed: 'eyeroll',
   forgiven: 'melt',
+  // Being ignored, in four beats: quietly sad, then cross, then nothing, then
+  // very pleased with you the moment you say anything.
+  wistful: 'wistful',
+  snubbed: 'huff',
+  quiet: 'deadpan',
+  relieved: 'joy',
   nothing: 'giggle',
   milestone: 'joy',
   doze: 'doze',
@@ -556,6 +678,7 @@ const FACES = {
   // the soft end
   pleading:   { expr: 'pleading',   emoji: '🥺', also: ['beg', 'puppy eyes'], say: 'please?' },
   sad:        { expr: 'cry',        emoji: '😭', also: ['cry', 'sob', 'weep'], say: '*sniff*' },
+  wistful:    { expr: 'wistful',    emoji: '😞', also: ['downcast', 'forlorn', 'left out'], say: 'I am fine' },
   melt:       { expr: 'melt',       emoji: '🫠', also: ['melting', 'goo'], say: 'I am melting slightly' },
   sleepy:     { expr: 'doze',       emoji: '😴', also: ['sleep', 'nap', 'tired'], say: '*yawn*' },
 
@@ -633,7 +756,9 @@ module.exports = {
   fresh, load, tick, act, mood, shouldNag, shouldChatter,
   line, greetKind, expressionFor, milestone, pokeStep, samePokeBout,
   sulking, offend, apologise, faceFor,
+  spoke, heard, ignoreStep, gaveUp,
   ACTIONS, DECAY, SLEEP_ENERGY_GAIN, MAX_DECAY_HOURS, NAG_INTERVAL_MS, CHATTER_INTERVAL_MS,
   LINES, SPECIES_LINES, EXPRESSIONS, FACES, BOND_TIERS, POKE_LADDER, POKE_WINDOW_MS,
   SORRY_GAP_MS, GRUDGE_MS, MAX_OWED,
+  IGNORE_SAD, IGNORE_CROSS, IGNORE_QUIET, MAX_IGNORED, IGNORE_COST,
 };

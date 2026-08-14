@@ -67,6 +67,7 @@ const EMOJI = {
   // The rest of the keyboard. Four of them rain nothing on purpose: eyeroll,
   // deadpan, grimace and shush are all faces whose whole joke is that nothing
   // is happening, and decorating them takes the joke away.
+  wistful:    [['💭'], ['🌧️'], ['💧', '💭']],
   smug:       [['😏'], ['💅'], ['✨', '😏']],
   cool:       [['😎'], ['🕶️', '✨'], ['🔥', '😎']],
   pleading:   [['🥺'], ['🥺', '💧'], ['🙏', '🥺']],
