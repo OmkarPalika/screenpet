@@ -411,15 +411,33 @@ function saccade() {
 // sometimes in pairs.
 const eyesEl = document.querySelector('.eyes');
 
+// One chain, however many callers. A blink asked for from outside - the pet
+// noticing something - has to join the rhythm rather than start a second one:
+// without this every glance leaves another timer running and the pet ends up
+// fluttering.
+let blinkTimer = null;
+
 function blink(again = Math.random() < 0.28) {
+  clearTimeout(blinkTimer);
   eyesEl.classList.remove('is-blink');
   void eyesEl.offsetWidth;
   eyesEl.classList.add('is-blink');
   setTimeout(() => eyesEl.classList.remove('is-blink'), 200);
   // A double blink lands close enough to read as one gesture rather than two.
-  if (again) return setTimeout(() => blink(false), 320);
-  setTimeout(() => blink(), rand(2600, 7400));
+  if (again) blinkTimer = setTimeout(() => blink(false), 320);
+  else blinkTimer = setTimeout(() => blink(), rand(2600, 7400));
 }
+
+// You changed windows. The pet looks over at whatever lit up, and now and then
+// leans across to see it properly. It stays looking there until the cursor
+// moves, which is the same rule the cursor already had - the last thing that
+// happened is the thing worth watching.
+window.pet.onGlance(({ x, y, peek }) => {
+  if (held) return; // being carried is more interesting than a window
+  gaze(x, y);
+  blink();
+  if (peek) move('peek');
+});
 
 document.addEventListener('mousemove', (e) => {
   gaze(e.clientX, e.clientY);

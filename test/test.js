@@ -2780,6 +2780,71 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       'without this Windows lies about every coordinate on a scaled display');
   }
 
+  // --- noticing you move between windows ---
+  {
+    const win = require('../src/system/window');
+
+    // The one place that process is believed. Half a line arrives constantly -
+    // stdout does not respect message boundaries - and every unbelievable shape
+    // has to come back as "nothing happened" rather than as a glance at 0,0.
+    assert.deepStrictEqual(
+      win.parse('{"x":100,"y":50,"w":800,"h":600}\r'),
+      { x: 100, y: 50, w: 800, h: 600 }
+    );
+    for (const bad of [
+      '', '{"x":100,"y":50,"w":800', 'WARNING: something', '{}',
+      '{"x":null,"y":0,"w":8,"h":6}', '{"x":0,"y":0,"w":0,"h":600}',
+    ]) {
+      assert.strictEqual(win.parse(bad), null, `believed ${JSON.stringify(bad)}`);
+    }
+
+    // Only ever a rectangle crosses this boundary. The moment the watcher hands
+    // over a title or a process name, the pet knows which applications you use
+    // all day and this stops being a glance.
+    const src = require('fs').readFileSync('./src/system/window.js', 'utf8');
+    assert.ok(/onSwitch\(r\)/.test(src), 'the watcher passes on something other than the rectangle');
+
+    // It has to be one process for the session. Spawning PowerShell per check is
+    // ~400ms of process startup on a timer, which is the reason the pet did not
+    // notice window switches before this existed.
+    const ps1watch = require('fs').readFileSync('./src/system/window.ps1', 'utf8');
+    assert.ok(/\[switch\]\$Watch/.test(ps1watch) && /while \(\$true\)/.test(ps1watch),
+      'the watcher is not one long-lived process');
+    // Compared by handle, not by rectangle: typing moves nothing and dragging a
+    // window around is not you looking somewhere else.
+    assert.ok(/\$hwnd -ne \$last/.test(ps1watch), 'the watcher fires on something other than a switch');
+    // A window that vanished mid-poll must not take the watcher with it.
+    assert.ok(/try \{[\s\S]*catch \{ \}/.test(ps1watch), 'a vanishing window kills the watcher');
+    // And it must not outlive the app. unwatch() covers a normal quit; a crash
+    // or a kill would otherwise leave it polling until the machine reboots.
+    assert.ok(/\$parent\.HasExited/.test(ps1watch), 'the watcher survives the app that started it');
+
+    // On a host that cannot answer, nothing is started and nothing throws: a
+    // machine that never reports a switch and a machine with no switches look
+    // the same from here.
+    if (process.platform !== 'win32') {
+      win.watch(() => { throw new Error('a switch was reported on a host that cannot see one'); });
+      assert.strictEqual(win.watching(), false, 'watching a host that cannot be watched');
+    }
+    win.unwatch(); // safe with nothing running
+
+    // Noticing you is the pet acting off its own bat, so it stops in the same
+    // three places everything else the pet starts stops: mid-answer, asleep, and
+    // while Windows says keep quiet.
+    const mjs = require('fs').readFileSync('./src/main.js', 'utf8');
+    const noticed = mjs.slice(mjs.indexOf('function noticed('), mjs.indexOf('---- renderer messaging'));
+    assert.ok(/busy \|\| asleep\(\) \|\| \(quiet && !quietOverride\)/.test(noticed),
+      'the pet gawps at windows during a game, a presentation, or its own answer');
+    // Physical pixels in, points out. Doing this by hand is right on one machine
+    // and wrong on every scaled display, so Electron does it.
+    assert.ok(/screenToDipPoint/.test(noticed), 'the glance lands somewhere else on a scaled display');
+
+    // The blink schedule is one chain however many callers there are. Without
+    // this, every glance leaves another timer running and the pet flutters.
+    const rjs = require('fs').readFileSync('./src/renderer/renderer.js', 'utf8');
+    assert.ok(/clearTimeout\(blinkTimer\)/.test(rjs), 'a glance starts a second blink chain');
+  }
+
   // --- eyes that are not a servo ---
   {
     const fs = require('fs');
