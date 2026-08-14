@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('pet', {
   onSay: (fn) => ipcRenderer.on('pet:say', (_e, payload) => fn(payload)),
   onStats: (fn) => ipcRenderer.on('pet:stats', (_e, payload) => fn(payload)),
   onLook: (fn) => ipcRenderer.on('pet:look', (_e, look) => fn(look)),
+  onGlance: (fn) => ipcRenderer.on('pet:glance', (_e, at) => fn(at)),
   act: (name) => ipcRenderer.send('pet:act', name),
   react: (event) => ipcRenderer.send('pet:react', String(event)),
   // Where you put it, as two fractions. Validated again in the main process:

@@ -396,6 +396,34 @@ noise is the thing that gives away that neither is real.
 voice: muting a pet that reads your screen aloud and muting a pet that goes
 "woof" are two different wants, and the second outstays its welcome first.
 
+**It notices you moving between windows.** Switch to your browser and the pet
+looks over at it; every so often it leans across to see what turned up. It says
+nothing — a pet that pipes up every time you alt-tab is the single most annoying
+thing this app could do — and it goes still in the same three places everything
+else the pet starts goes still: mid-answer, asleep, and while Windows says keep
+quiet.
+
+What crosses that boundary is a rectangle. Not the title, not the process, not
+the class: the pet cannot tell a bank from a browser game, and nothing about it
+is written down, remembered between switches, or shown to a model. It is the
+same `window.ps1` that crops a screen read, left running with `-Watch` — which
+is the whole reason this works at all. The reaction has to land inside about a
+second to read as noticing, and starting PowerShell is ~400ms, so a check on the
+pet's twenty second tick was never going to be one. One process for the session
+polls `GetForegroundWindow` every 400ms and prints only when the handle changes
+— the handle rather than the rectangle, because typing moves nothing and
+dragging a window around is not you looking somewhere else.
+
+It also has to die when the app does. `unwatch()` covers quitting; the loop
+holds a handle to its parent and breaks when that exits, which covers the crash
+and the kill. Without it, force-quitting the app leaves something polling the
+foreground window until you reboot.
+
+There is no keyboard hook here and there is not going to be one. The other half
+of "react to what I am doing" is reacting to typing, and the only way to know
+you are typing is to watch every key you press — which is a keylogger whatever
+the settings window calls it.
+
 **It listens** through one of two recognisers, both on this machine: Windows'
 `System.Speech`, driven from `listen.ps1` exactly the way OCR is driven from
 `ocr.ps1`, or whisper.cpp if you have installed it — see

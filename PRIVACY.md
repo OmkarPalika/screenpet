@@ -45,6 +45,13 @@ anything to us, and there is no server to send it to.
 | A screenshot image | Only on the vision tier, when OCR finds too little text to work with | The local model only. **Never sent to a hosted provider** — an image cannot be redacted the way text can |
 | Microphone | Only with `Let me talk to it` on, and only while a phrase is being spoken | A recogniser on this machine: Windows' own, or whisper.cpp / Parakeet if you installed one. None of them reach the network, and with a local engine the audio is piped to it and never written to disk |
 | Camera | Only with the camera setting on | Answers "did anything move" and "is there a face" — never *whose* face. The detector used on each system — Windows.Media.FaceAnalysis, or Vision on macOS — is asked only to count. Neither is asked for landmarks or a face print, and no identify or compare call is made |
+| Which window is in front | Windows only, while the app is running | Nowhere. A rectangle arrives when you switch windows and the pet looks over at it. Never the title, the process, or the name of the application — the pet cannot tell a bank from a browser game, and nothing about it is written down, remembered between switches, or sent to a model. Nothing is read from that window unless you ask a question |
+
+**There is no keyboard hook anywhere in this app.** The pet notices you moving
+between windows, and that is a rectangle changing — it cannot see what you type,
+in its own window or anyone else's. The one keyboard thing it registers is the
+single global hotkey you chose, which Windows and macOS hand over as "that
+combination was pressed" and nothing else.
 
 Screen captures and camera frames are held in memory for the length of one
 request and are never written to disk — with one exception you trigger by hand:

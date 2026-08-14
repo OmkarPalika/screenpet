@@ -360,6 +360,41 @@ function pollQuiet() {
   });
 }
 
+// ---- noticing you move between windows --------------------------------------
+
+// A rectangle arrives whenever you change windows. The pet looks over at it, and
+// occasionally leans across to see what turned up. That is the whole reaction:
+// it does not know which application it is looking at, cannot read anything from
+// over there, and says nothing, because a pet that pipes up every time you
+// alt-tab is the single most annoying thing this app could do.
+
+// How often the leaning-over is allowed. The glance is free and can happen on
+// every switch; a body movement on every switch would have the pet convulsing
+// through a normal morning of flicking between two windows.
+const PEEK_MS = 45000;
+let lastPeekAt = 0;
+
+function noticed(r) {
+  if (!win || win.isDestroyed() || !win.isVisible()) return;
+  // Thinking, asleep, or told to keep quiet - the same three things that stop
+  // the pet speaking up, for the same reason. This is it noticing you rather
+  // than answering you.
+  if (busy || asleep() || (quiet && !quietOverride)) return;
+
+  // Windows counts in physical pixels, Electron in points, and the pet's window
+  // is one display's work area. Electron owns that conversion, including the
+  // case where the window that lit up is on your other monitor: the point lands
+  // outside the pet's window, aim() clamps it, and the pet looks that way.
+  const p = screen.screenToDipPoint({ x: r.x + r.w / 2, y: r.y + r.h / 2 });
+  const at = win.getBounds();
+
+  const now = Date.now();
+  const peek = now - lastPeekAt > PEEK_MS;
+  if (peek) lastPeekAt = now;
+
+  send('pet:glance', { x: p.x - at.x, y: p.y - at.y, peek });
+}
+
 // ---- renderer messaging -----------------------------------------------------
 
 function send(channel, payload) {
@@ -1115,6 +1150,15 @@ app.whenReady().then(async () => {
   createWindow();
   createTray();
 
+  // One process for the whole session, started with the pet and killed with it.
+  // Not during the smoke check, which leaves through app.exit and would leave it
+  // running behind. The first thing it prints is the window you were already in:
+  // worth a glance, not worth leaning over for on top of the greeting.
+  if (!process.env.SCREENPET_SMOKE) {
+    lastPeekAt = Date.now();
+    windows.watch(noticed);
+  }
+
   // A monitor unplugged with the pet standing on it leaves the window running
   // somewhere that no longer exists. getDisplayMatching returns the nearest
   // survivor, which also covers a display simply changing resolution.
@@ -1369,6 +1413,7 @@ ipcMain.on('config:close', () => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   wake.stop(); // the microphone closes before anything else happens
+  windows.unwatch();
   // The timeouts go; the file stays. That is the whole point of the file.
   for (const id of timers.keys()) clearTimeout(id);
   clearTimeout(saveTimer);

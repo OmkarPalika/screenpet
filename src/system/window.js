@@ -13,6 +13,23 @@ const host = require('./host');
 const TIMEOUT_MS = 3000;
 
 /**
+ * A line of that script's output as a rectangle, or null for anything else.
+ *
+ * The one place its output is believed, so "it threw", "it printed a warning"
+ * and "it printed half a line" are one answer here rather than two guesses in
+ * two callers.
+ */
+function parse(text) {
+  try {
+    const r = JSON.parse(String(text).trim());
+    const ok = ['x', 'y', 'w', 'h'].every((k) => Number.isFinite(r[k]));
+    return ok && r.w > 0 && r.h > 0 ? { x: r.x, y: r.y, w: r.w, h: r.h } : null;
+  } catch {
+    return null; // it threw, or printed something that is not a rectangle
+  }
+}
+
+/**
  * The foreground window's rectangle.
  *
  * @returns {Promise<{x: number, y: number, w: number, h: number}|null>} null
@@ -30,19 +47,73 @@ function rect() {
 
     ps.stdout.on('data', (d) => (out += d));
     ps.on('error', () => { clearTimeout(stop); resolve(null); });
-    ps.on('close', () => {
-      clearTimeout(stop);
-      try {
-        const r = JSON.parse(out.trim());
-        const ok = ['x', 'y', 'w', 'h'].every((k) => Number.isFinite(r[k]));
-        resolve(ok && r.w > 0 && r.h > 0 ? { x: r.x, y: r.y, w: r.w, h: r.h } : null);
-      } catch {
-        resolve(null); // it threw, or printed something that is not a rectangle
-      }
-    });
+    ps.on('close', () => { clearTimeout(stop); resolve(parse(out)); });
     ps.stdin.end();
   });
 }
+
+// ---- noticing you move between windows --------------------------------------
+
+// The same script, left running. It prints a rectangle when the foreground
+// window changes and says nothing the rest of the time, so what crosses this
+// boundary is "you are looking somewhere else now, and it is over there" - not
+// which application, not for how long, and nothing at all while you work.
+
+let watcher = null;
+
+// A rectangle is about fifty characters. Anything that has come this far without
+// a newline is not one, and holding on to it forever is how a child process that
+// starts spewing turns into a memory leak.
+const MAX_BUFFER = 4096;
+
+/**
+ * Watch for the foreground window changing. Idempotent, and silent on a host
+ * that cannot answer the question at all - a machine that never reports a switch
+ * and a machine with no switches look the same from here, which is the right
+ * shape for something whose entire output is a glance.
+ *
+ * @param {(rect: {x: number, y: number, w: number, h: number}) => void} onSwitch
+ */
+function watch(onSwitch) {
+  if (watcher || !host.supports('window')) return;
+
+  // Not inside a Promise, unlike rect() above, so a host that cannot spawn this
+  // would throw straight through the caller. There is nothing to report: the pet
+  // simply never notices, which is what it did before this existed.
+  try {
+    watcher = host.spawn('window', ['-Watch']);
+  } catch {
+    watcher = null;
+    return;
+  }
+
+  let buffer = '';
+  watcher.stdout.on('data', (d) => {
+    buffer += d;
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop();
+    if (buffer.length > MAX_BUFFER) buffer = '';
+    for (const line of lines) {
+      const r = parse(line);
+      if (r) onSwitch(r);
+    }
+  });
+
+  const gone = () => { watcher = null; };
+  watcher.on('error', gone);
+  watcher.on('close', gone);
+  watcher.stdin.end();
+}
+
+/** Stop watching. Safe to call when nothing is running. */
+function unwatch() {
+  if (!watcher) return;
+  const dying = watcher;
+  watcher = null;
+  dying.kill();
+}
+
+const watching = () => watcher !== null;
 
 /**
  * The part of a captured display that window covers, in the image's own pixels.
@@ -90,4 +161,4 @@ function cropFor(r, display, image) {
   return { x, y, width, height };
 }
 
-module.exports = { rect, cropFor, TIMEOUT_MS };
+module.exports = { rect, cropFor, parse, watch, unwatch, watching, TIMEOUT_MS };
