@@ -85,6 +85,28 @@
     </p>
 
     <label class="check">
+      <input id="watch" type="checkbox" />
+      <span>Read the screen without being asked</span>
+    </label>
+    <p class="hint" id="watch-hint">
+      Normally the pet reads your screen when you press the hotkey and at no
+      other time. With this on it reads it on the timer below as well, and
+      answers when it finds a question — otherwise it says nothing at all, which
+      is most of the time. It skips a screen it has already read, stays quiet
+      while Windows is set to do not disturb, and stops entirely while you are
+      away from the machine. An amber dot on the pet is lit for as long as it is
+      on. <strong>Only with a model on this machine</strong> — choosing a hosted
+      provider switches this off, because reading your screen every minute and
+      sending each read to a company is not the same decision as doing it when
+      you press a key.
+    </p>
+
+    <div class="pair">
+      <label for="watch-every">Read every (seconds)</label>
+      <input id="watch-every" type="number" min="20" max="600" step="10" />
+    </div>
+
+    <label class="check">
       <input id="sounds" type="checkbox" />
       <span>Little noises</span>
     </label>

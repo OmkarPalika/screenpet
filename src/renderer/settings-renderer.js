@@ -10,6 +10,8 @@ const autostart = el('autostart');
 const voice = el('voice');
 const sounds = el('sounds');
 const focus = el('focus');
+const watchBox = el('watch');
+const watchEvery = el('watch-every');
 const breaksBox = el('breaks');
 const breakEvery = el('break-every');
 const breakFor = el('break-for');
@@ -173,6 +175,15 @@ function showProvider() {
       + ` is. Diagrams stop working — a screenshot cannot be redacted, so it is never`
       + ` uploaded.${p.keys ? ` Keys come from ${p.keys}.` : ''}`;
 
+  // Reading the screen on a timer is local-only. The main process enforces it;
+  // this is so the reason is visible before you save rather than after the
+  // checkbox quietly fails to stick.
+  watchBox.disabled = !local;
+  watchEvery.disabled = !local;
+  if (!local) watchBox.checked = false;
+  const watchLabel = watchBox.closest('label');
+  if (watchLabel) watchLabel.classList.toggle('unavailable', !local);
+
   providerModel.placeholder = p && p.model ? p.model : '';
   providerModel.disabled = local;
   apiKey.disabled = local;
@@ -254,6 +265,8 @@ saveBtn.addEventListener('click', async () => {
     voice: voice.checked,
     sounds: sounds.checked,
     focus: focus.checked,
+    watch: watchBox.checked,
+    watchEvery: Number(watchEvery.value),
     breaks: breaksBox.checked,
     breakEvery: Number(breakEvery.value),
     breakFor: Number(breakFor.value),
@@ -282,6 +295,10 @@ saveBtn.addEventListener('click', async () => {
   voice.checked = current.voice;
   sounds.checked = current.sounds;
   focus.checked = current.focus;
+  // Refused rather than clamped when a hosted provider is chosen, so what comes
+  // back is what the app is actually going to do.
+  watchBox.checked = current.watch;
+  watchEvery.value = current.watchEvery;
   breaksBox.checked = current.breaks;
   // Clamped rather than rejected in settings.js, so what comes back is what the
   // app is actually going to do - typing 2 minutes and being shown 5 is the
@@ -367,6 +384,10 @@ el('close').addEventListener('click', () => window.config.close());
   voice.checked = current.voice;
   sounds.checked = current.sounds;
   focus.checked = current.focus;
+  // Refused rather than clamped when a hosted provider is chosen, so what comes
+  // back is what the app is actually going to do.
+  watchBox.checked = current.watch;
+  watchEvery.value = current.watchEvery;
   breaksBox.checked = current.breaks;
   // Clamped rather than rejected in settings.js, so what comes back is what the
   // app is actually going to do - typing 2 minutes and being shown 5 is the

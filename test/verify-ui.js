@@ -802,6 +802,43 @@ app.whenReady().then(async () => {
     'chat box kept the last message in it'
   );
 
+  // --- the amber dot --------------------------------------------------------
+  // Reading the screen on a timer is the one thing the app does that nobody
+  // asked for at the moment it happens, so it is lit on the pet's own face for
+  // as long as the setting is on - and it is dark whenever it is not.
+  const readingLit = () =>
+    js(`!document.getElementById('reading').hidden
+        && getComputedStyle(document.getElementById('reading')).display !== 'none'`);
+
+  win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', watching: true });
+  await settle();
+  check(await readingLit(), 'the pet reads the screen on a timer with nothing on screen to say so');
+
+  // ...and it is not the camera's dot. Both are lit here on purpose: they mean
+  // different things, they can be true at the same time, and one drawn on top of
+  // the other would read as a single light flickering.
+  const dots = await js(`(() => {
+    const cam = document.getElementById('cam');
+    const read = document.getElementById('reading');
+    cam.hidden = false;
+    const a = cam.getBoundingClientRect();
+    const b = read.getBoundingClientRect();
+    cam.hidden = true;
+    return {
+      apart: Math.abs(a.left - b.left),
+      lit: b.width > 0 && b.height > 0,
+      colour: getComputedStyle(read).backgroundColor,
+      camColour: getComputedStyle(cam).backgroundColor,
+    };
+  })()`);
+  check(dots.lit, 'the reading dot has no size to see');
+  check(dots.apart > 8, `the two dots are ${dots.apart}px apart - they overlap`);
+  check(dots.colour !== dots.camColour, 'the reading dot is the same colour as the camera dot');
+
+  win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', watching: false });
+  await settle();
+  check(!(await readingLit()), 'the dot stays lit after the setting was switched off');
+
   // --- voice ---------------------------------------------------------------
   // The Listen entry only exists once the microphone is switched on. A menu item
   // that is present but only tells you the feature is off is worse than no item.

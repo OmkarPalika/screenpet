@@ -14,6 +14,7 @@ const media = require('./system/media');
 const dnd = require('./system/dnd');
 const reminders = require('./core/reminders');
 const breaks = require('./core/breaks');
+const watch = require('./core/watch');
 const weather = require('./core/weather');
 const wake = require('./system/wake');
 const windows = require('./system/window');
@@ -108,6 +109,15 @@ let lastScreen = null;
 
 const screenContext = () =>
   lastScreen && Date.now() - lastScreen.at < SCREEN_MEMORY_MS ? lastScreen : null;
+
+// Reading the screen on a timer, while that setting is on. All three of these
+// are in memory only and none of them survive a restart: what the pet read last
+// is exactly the kind of thing that has no business being written down, and the
+// clock starting fresh on launch is what stops a machine that has been off all
+// weekend reading the screen the moment it comes back.
+let lastWatchAt = 0;
+let lastWatched = ''; // the OCR text of the last screen it read
+let lastWatchSaid = ''; // ...and the last thing it said about one
 
 const filePath = (name) => path.join(app.getPath('userData'), name);
 
@@ -579,6 +589,20 @@ function tick() {
     offerBreak();
   }
 
+  // Reading the screen without being asked. Same three reasons not to as the
+  // break above, and one more of its own: away from the machine, the screen is
+  // whatever was left there, and answering it is answering nobody. The clock is
+  // pushed along while nobody is there so sitting back down is not met with an
+  // immediate read of a screen that has not changed since you left it.
+  if (napping) lastWatchAt = now;
+  else if (settings.watch && watch.due(lastWatchAt, now, settings.watchEvery * 1000, {
+    quiet: quiet && !quietOverride,
+    busy,
+  })) {
+    lastWatchAt = now;
+    readScreen({ unprompted: true });
+  }
+
   if (wasAsleep && !napping) talk('woke', { event: 'wake' });
   // Going under used to be silent, so the pet just turned grey and stopped
   // answering - which reads as a crash rather than a nap.
@@ -723,13 +747,29 @@ function streamer() {
   return onToken;
 }
 
-async function answerScreen() {
+/**
+ * Read the screen and say something about it.
+ *
+ * Two callers, and the difference between them is who asked. The hotkey, the
+ * tray and the pet's own menu all mean "read it now, and tell me something
+ * either way". The timer below means nobody asked, and that changes three
+ * things: the vision tier is off, the same screen is never answered twice, and
+ * a screen with no question on it gets silence rather than a line about there
+ * being no question.
+ */
+async function readScreen({ unprompted = false } = {}) {
   if (busy) return;
+  // A read nobody asked for never leaves this machine. settings.js already
+  // refuses the combination; this is the second lock on the same door, and the
+  // one that holds if a settings file is edited by hand.
+  if (unprompted && !providers.isLocal(settings.provider)) return;
   busy = true;
-  // The hour, and nothing else. Not what was on the screen, not what was asked.
-  noteEvent('ask');
-  attention();
-  send('pet:say', { text: 'thinking', kind: 'thinking' });
+  if (!unprompted) {
+    // The hour, and nothing else. Not what was on the screen, not what was asked.
+    noteEvent('ask');
+    attention();
+    send('pet:say', { text: 'thinking', kind: 'thinking' });
+  }
   try {
     const png = await grabScreen();
     // Mood is passed for tone only. Nothing here can refuse to answer.
@@ -738,23 +778,40 @@ async function answerScreen() {
     // OCR first. On 'auto' the vision model is a fallback for screens with no
     // text to read, not the preferred path - a small vision model is far worse
     // than OCR at dense text. Naming a model explicitly opts into always using it.
-    const alwaysVision = settings.vision !== 'auto' && settings.vision !== 'off';
+    //
+    // Never on the watch path. A screenshot cannot be redacted, vision on CPU
+    // takes minutes rather than seconds, and "there is no text to read" is the
+    // most common screen there is - so watching would spend most of its life in
+    // the expensive tier, for the screens least likely to have a question on them.
+    const alwaysVision = !unprompted && settings.vision !== 'auto' && settings.vision !== 'off';
     const ocrText = alwaysVision ? '' : await recognise(png);
-    const useVision = visionModel && (alwaysVision || !hasEnoughText(ocrText));
+    const useVision = !unprompted && visionModel && (alwaysVision || !hasEnoughText(ocrText));
     lastPath = `${useVision ? `vision:${visionModel}` : 'ocr'} of the ${lastCrop} (ocr read ${ocrText.trim().length} chars)`;
+
+    // The same screen, still there. Reading it again is what a timer does;
+    // answering it again is what makes one unbearable.
+    if (unprompted) {
+      const worth = watch.changed(lastWatched, ocrText);
+      lastWatched = ocrText;
+      if (!worth) return;
+    }
 
     const where = await llm();
     // Streamed on the local path only. A hosted provider answers through
     // providers.js, which asks for the whole thing at once - and the smoke
     // check exits on the first answer it sees, so a half-written one would cut
     // it short.
-    const onToken = providers.isLocal(settings.provider) && !process.env.SCREENPET_SMOKE
+    //
+    // Never while watching either: most of those answers are the sentinel that
+    // means "say nothing", and streaming would type it into the bubble and then
+    // take it away again.
+    const onToken = providers.isLocal(settings.provider) && !process.env.SCREENPET_SMOKE && !unprompted
       ? streamer() : undefined;
     const answer = useVision
       ? await askVision(png.toString('base64'), {
           ...where, mood, model: visionModel, timeoutMs: VISION_TIMEOUT_MS, onToken,
         })
-      : await ask(ocrText, { ...where, mood, onToken });
+      : await ask(ocrText, { ...where, mood, onToken, watching: unprompted });
     if (onToken) onToken.stop();
 
     // Kept for a follow-up question, redacted the same way the model's copy was.
@@ -763,6 +820,16 @@ async function answerScreen() {
     lastScreen = answer && !useVision
       ? { text: redact(ocrText), answer, at: Date.now() }
       : null;
+
+    if (unprompted) {
+      // Nothing worth saying is the usual outcome, and it is said by not saying
+      // anything. The second half is for the answer that is the same every time
+      // - most often "Ollama is not running", which is worth hearing once and
+      // not once a minute.
+      if (!answer || answer === lastWatchSaid) return;
+      lastWatchSaid = answer;
+      return send('pet:say', { text: answer, kind: 'answer', expr: pets.expressionFor('answer') });
+    }
 
     // Nothing to answer is not a failure. Said through the line bank rather than
     // reported as one, and not through talk(), which the smoke check silences.
@@ -776,11 +843,19 @@ async function answerScreen() {
       chatter: !answer,
     });
   } catch (err) {
-    send('pet:say', { text: err.message, kind: 'error', expr: pets.expressionFor('error') });
+    // A read nobody asked for fails quietly. A red bubble every minute about a
+    // recogniser that is not there tells you the same thing sixty times an hour.
+    if (unprompted) console.error('watch:', err.message);
+    else send('pet:say', { text: err.message, kind: 'error', expr: pets.expressionFor('error') });
   } finally {
     busy = false;
   }
 }
+
+// Wrapped rather than passed straight to the tray, the hotkey and the IPC
+// handler: all three call their handler with arguments, and none of those
+// arguments mean anything here.
+const answerScreen = () => readScreen();
 
 // ---- talking ----------------------------------------------------------------
 
@@ -1212,6 +1287,10 @@ function sendLook() {
     faces: settings.faces,
     bop: settings.bop,
     mischief: settings.mischief,
+    // Lights a dot on the pet for as long as this is on. The camera has one for
+    // the same reason: something is being read, and the app that is doing the
+    // reading is the one that should say so.
+    watching: settings.watch,
   });
 }
 
@@ -1227,7 +1306,16 @@ async function applySettings() {
 /** The one way settings change, wherever the change came from. */
 async function saveSettings(patch) {
   const remembered = settings.memory;
+  const watched = settings.watch;
   settings = config.merge(settings, patch);
+  // Switching it off drops what it read. Nothing here was ever written down, but
+  // "off" has to mean the process is not still holding the last screen it took
+  // on its own - and it means the first read after switching it back on is
+  // treated as a new screen, which it is.
+  if (watched && !settings.watch) {
+    lastWatched = '';
+    lastWatchSaid = '';
+  }
   // Off means gone. A memory you can only pause is one that quietly keeps the
   // file, and the file is the whole thing anyone would object to.
   if (remembered && !settings.memory) {
@@ -1294,6 +1382,7 @@ app.whenReady().then(async () => {
     // tick is overdue by fifty-five years and covers the screen on launch.
     state.lastChatAt = Date.now();
     lastBreakAt = Date.now();
+    lastWatchAt = Date.now();
     tick();
     setInterval(tick, TICK_MS);
     talk(pets.greetKind(new Date().getHours()), { event: 'greet' });

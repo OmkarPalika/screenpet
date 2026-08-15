@@ -41,7 +41,7 @@ anything to us, and there is no server to send it to.
 
 | Source | When | Where it goes |
 | --- | --- | --- |
-| Your screen | Only when you press the hotkey or ask the pet to look | The text recogniser built into this machine - Windows OCR, or Vision on macOS - and then the local model. On Windows the frame is cropped to the window you are working in first, using a rectangle and nothing else - never its title or the name of the application |
+| Your screen | Only when you press the hotkey or ask the pet to look — **unless** you switch on `Read the screen without being asked`, which adds a timer: every 20 seconds to 10 minutes, whichever you set. Off until you turn it on, refused outright with a hosted model, and an amber dot on the pet is lit for as long as it is on | The text recogniser built into this machine - Windows OCR, or Vision on macOS - and then the local model. On Windows the frame is cropped to the window you are working in first, using a rectangle and nothing else - never its title or the name of the application |
 | A screenshot image | Only on the vision tier, when OCR finds too little text to work with | The local model only. **Never sent to a hosted provider** — an image cannot be redacted the way text can |
 | Microphone | Only with `Let me talk to it` on, and only while a phrase is being spoken | A recogniser on this machine: Windows' own, or whisper.cpp / Parakeet if you installed one. None of them reach the network, and with a local engine the audio is piped to it and never written to disk |
 | Camera | Only with the camera setting on | Answers "did anything move" and "is there a face" — never *whose* face. The detector used on each system — Windows.Media.FaceAnalysis, or Vision on macOS — is asked only to count. Neither is asked for landmarks or a face print, and no identify or compare call is made |
@@ -52,6 +52,19 @@ move itself. It cannot close, minimise, resize or move anything, and it does not
 ask the operating system for the ability — which also means "close the ones I am
 not using" is not a feature it can be talked into. Its own window ignores the
 mouse, so anything it sits on stays clickable.
+
+**Reading the screen on a timer is the one setting that reads it at a moment you
+did not pick**, which is why it ships off and why it is the only one with a light
+of its own. What it does is the same as the hotkey and no more: one frame of the
+display your cursor is on, cropped to the window you are working in, read by the
+recogniser on this machine, and handed to the model on `127.0.0.1`. It is
+**refused entirely while a hosted provider is selected** — settings.js will not
+store the combination and main.js refuses it again, so a hand-edited file cannot
+turn it into a screen feed. It never uses the screenshot tier, because a
+screenshot cannot be redacted. Nothing is written down: the text of the last read
+and the last thing said about it are in memory, dropped when you switch the
+setting off, and gone when the app closes. It stops while Windows is set to do
+not disturb, and stops entirely once the machine has been idle five minutes.
 
 The break reminders write nothing. There is no streak, no history and no record
 of how many you ignored — the two numbers in `settings.json` are how often and

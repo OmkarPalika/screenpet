@@ -913,6 +913,27 @@ html, body {
 
 @keyframes cam-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
 
+/* The same dot in amber, on the other side of the pet's head, for reading the
+   screen on a timer. A different colour rather than a second green one: they
+   are different senses, and two identical lights would read as one thing
+   flickering. Lit for as long as the setting is on rather than only during a
+   read, because what you want to know is that it is armed. */
+
+.reading {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  margin-left: -36px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e0a23c;
+  box-shadow: 0 0 6px #e0a23c;
+  animation: cam-pulse 2.4s ease-in-out infinite;
+}
+
+.reading[hidden] { display: none; }
+
 /* ---- stat bars, only while hovered ---- */
 
 .bars {

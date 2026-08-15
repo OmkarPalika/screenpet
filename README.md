@@ -1241,6 +1241,8 @@ and quit it — the pet has no taskbar button by design.
 | Skin | Ten palettes — butter, mint, blossom, slate, coal, cream, moss, plum, sky, coral. Applies to whichever pet you picked. |
 | Wearing | Nothing, bow, shades, halo, masked hero, party hat, wizard hat, crown or headphones. See "The wardrobe". |
 | Read the window I am in | On by default. Crops the screenshot to the window you are working in, and falls back to the whole screen by itself where that would not help. |
+| Read the screen without being asked | **Off** by default. Turns the hotkey into a timer — see "Without being asked". Local models only; a hosted provider switches it off. |
+| Read every (seconds) | 20 to 600, default 60. Clamped rather than rejected. |
 | Speak replies out loud | On by default. Mute from the tray without opening this window. |
 | Little noises | On by default. A woof, a meow, a chirp — synthesised, not played from a file. Muted separately from the voice. |
 | Let me talk to it | Off by default. Adds `Listen…` to the pet's menu. |
@@ -1390,6 +1392,52 @@ and decoded from an in-memory stream. Nothing is stored — no history, no cache
 OCR is the OS's, not a bundled model, so there is no download and it runs fine on
 a laptop with no GPU. That matters more than it sounds: a vision model would gate
 the whole app behind 8GB of VRAM.
+
+### Without being asked
+
+**Read the screen without being asked** in Settings turns the hotkey into a
+timer. Every minute — 20 seconds to 10 minutes, your choice — the pet reads the
+screen on its own, and answers if it finds a question on it.
+
+Off by default, and it stays off unless you go and switch it on. It is the only
+thing in the app that reads your screen at a moment you did not pick, so
+everything about it is built to be quiet:
+
+- **It usually says nothing.** The prompt it gets is not the one the hotkey
+  uses. It is told that nobody asked, that it may only speak if there is a
+  question it can answer, and that the right answer most of the time is the
+  single word `NOTHING`. That word never reaches the bubble — `ask()` turns it
+  back into no answer at all, which is why this path is also the one that never
+  streams.
+- **It never answers the same screen twice.** Each read is compared with the
+  last one by word set: if fewer than 35% of the words on screen are new, it
+  does not go near the model. A clock ticking over, or a page scrolling a little,
+  is the same screen. Switching windows is not. Comparing sets rather than
+  characters is deliberate — OCR of one unchanged screen differs by a few glyphs
+  every time, and re-flowed text is not new text.
+- **It never uses the vision tier.** A screenshot cannot be redacted, vision on
+  a CPU takes minutes rather than seconds, and "no text to read" is the most
+  common screen there is — so watching would spend its life in the expensive
+  tier on the screens least likely to hold a question.
+- **A hosted model turns it off.** Reading your screen every minute and sending
+  each read to a company is a different decision from doing it when you press a
+  key, and nobody made that one. Choosing a provider switches this off in the
+  same pass; a hand-edited settings file is refused a second time in `main.js`.
+- **It stops when you are not there.** The same rules as the break reminders:
+  nothing while Windows is set to do not disturb, nothing while an answer is
+  already being written, and nothing at all once the machine has been idle for
+  five minutes — with the clock pushed along while you are away, so sitting back
+  down is not met with a read of the screen you left.
+- **A failure is quiet.** Ollama not running would otherwise be a red bubble
+  every minute; it goes to the console instead, and an answer identical to the
+  last one is dropped rather than repeated.
+- **An amber dot** sits on the pet for as long as the setting is on — the same
+  idea as the green one for the camera, on the other side of its head and in
+  another colour, because they mean different things and can be lit at once.
+
+Nothing is written down. What it last read and what it last said about it live
+in memory, are dropped the moment you switch the setting off, and never survive
+a restart.
 
 ## Layout
 
