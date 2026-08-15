@@ -22,6 +22,10 @@ const WEAR = ['none', 'bow', 'shades', 'halo', 'hero', 'party', 'wizard', 'crown
 // Which recogniser hears you. See the note on `dictation` in DEFAULTS.
 const DICTATION = ['auto', 'sapi', 'local'];
 
+// The bounds on the break timings live with the break screen, so the file that
+// validates them and the file that assumes them are the same file.
+const breaks = require('./breaks');
+
 // 'whisper' was this value's name while whisper was the only local engine it
 // could mean. Kept as an alias rather than dropped: a saved settings file from
 // that version must not silently fall back to 'auto' and change what the app does.
@@ -121,6 +125,18 @@ const DEFAULTS = {
   // my standup is at 9" and "you have not petted me all day, no notes" are two
   // different appetites.
   cheek: true,
+  // Stop for water, and to look at something further away than a monitor. On,
+  // because a reminder you have to go and switch on is one nobody switches on -
+  // and it is the one feature here that covers the whole screen, so it is also
+  // the one with the most ways out: a skip button, a snooze button, the Escape
+  // key, and Windows' own do not disturb, which stops it appearing at all.
+  breaks: true,
+  breakEvery: breaks.EVERY_MIN.def, // minutes between breaks
+  breakFor: breaks.FOR_S.def, // seconds the screen stays covered
+  // Roaming further than the taskbar, and sitting on top of the window you are
+  // working in. Movement only: it cannot touch your windows, and the section in
+  // PRIVACY.md on why says exactly what it never gets told about them.
+  mischief: true,
   autostart: false,
   ollama: 'http://127.0.0.1:11434',
 };
@@ -221,6 +237,14 @@ function load(raw) {
     // here is leave the pet remembering, which is what it says on the tin.
     memory: s.memory !== false,
     cheek: s.cheek !== false && s.memory !== false,
+    // Two more that default on, so the test is for a literal false. The
+    // timings are clamped rather than rejected: a hand-edited "every 0 minutes"
+    // is a break screen every tick, and falling back to the default is the only
+    // reading of that which is not a broken machine.
+    breaks: s.breaks !== false,
+    breakEvery: breaks.clampEvery(s.breakEvery),
+    breakFor: breaks.clampFor(s.breakFor),
+    mischief: s.mischief !== false,
     autostart: typeof s.autostart === 'boolean' ? s.autostart : DEFAULTS.autostart,
     ollama: validEndpoint(s.ollama) ? s.ollama : DEFAULTS.ollama,
   };

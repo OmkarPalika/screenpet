@@ -943,6 +943,187 @@ html, body {
 [data-bar="happiness"] { background: #f0708a; }
 [data-bar="energy"]    { background: #6fc3e0; }
 
+/* ---- breaks --------------------------------------------------------------
+
+   Offered as a thought the pet has, taken by clicking it, and then the pet does
+   the thing rather than a dialog telling you to. Nothing here interrupts on its
+   own: the thought is the whole of the interruption, and it is the size of a
+   coin. */
+
+.thought {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 44px;
+  padding: 0;
+  font: 24px/1 "Segoe UI Emoji", system-ui, sans-serif;
+  border: 1.5px solid #e6ddc9;
+  border-radius: 22px;
+  background: #fffdf7;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.22);
+  cursor: pointer;
+  animation: pop 200ms ease-out;
+}
+
+.thought:hover { background: #fff8e8; }
+.thought[hidden] { display: none; }
+
+/* The two trailing bubbles that make it a thought rather than a speech bubble.
+   Below it, and above when the stage flips - same rule as the tail on the
+   speech bubble, for the same reason. */
+.thought::before,
+.thought::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  border: 1.5px solid #e6ddc9;
+  border-radius: 50%;
+  background: #fffdf7;
+}
+
+.thought::before { width: 9px; height: 9px; bottom: -12px; margin-left: -12px; }
+.thought::after  { width: 5px; height: 5px; bottom: -21px; margin-left: -2px; }
+
+.stage[data-flip="down"] .thought::before { bottom: auto; top: -12px; }
+.stage[data-flip="down"] .thought::after  { bottom: auto; top: -21px; }
+
+/* Everything else on the display, dimmed. Not opaque: seeing your own work
+   greyed out behind the pet is what makes this read as a pause rather than as
+   something having gone wrong. */
+.veil {
+  position: fixed;
+  inset: 0;
+  background: rgb(14 16 22 / 0.62);
+  animation: fade-in 600ms ease-out;
+  cursor: pointer;
+}
+
+.veil[hidden] { display: none; }
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* How long is left, under the pet. Small on purpose - the pet is the thing to
+   look at, and a big number is a thing to watch tick down. */
+.counting {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 16%;
+  margin: 0;
+  text-align: center;
+  font: 13px/1.6 "Segoe UI", system-ui, sans-serif;
+  color: rgb(255 255 255 / 0.62);
+  letter-spacing: 0.4px;
+}
+
+.counting[hidden] { display: none; }
+
+/* Sitting and breathing. Slow, and it never quite stops moving, because a still
+   pet reads as a frozen one. The eyes shut the way sleep shuts them: there is
+   exactly one pair of closed lids in the drawing, and reusing it is what makes
+   every species able to meditate rather than only the blob. */
+.pet.is-meditating svg {
+  animation: breathe 5.4s ease-in-out infinite;
+  transform-origin: 60px 96px;
+}
+
+.pet.is-meditating .eyes { display: none; }
+.pet.is-meditating .lids { display: block; }
+.pet.is-meditating .mouth { d: path("M54 71q6 3 12 0"); }
+
+@keyframes breathe {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  45%      { transform: translateY(-5px) scale(1.035, 1.055); }
+}
+
+/* The calm coming off it, which is the only part of meditating a drawing this
+   simple can actually show. */
+.pet.is-meditating .fx::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 130px;
+  height: 130px;
+  margin: -65px 0 0 -65px;
+  border-radius: 50%;
+  border: 2px solid rgb(255 255 255 / 0.5);
+  animation: calm 5.4s ease-out infinite;
+}
+
+@keyframes calm {
+  0%   { opacity: 0.5; transform: scale(0.62); }
+  70%  { opacity: 0; transform: scale(1.5); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+
+/* Drinking. The glass does the travelling and the pet only leans back into it -
+   a body that swings across to a stationary glass reads as being pulled by it.
+   Two mouthfuls rather than one long tip, because one is a pour. */
+.pet.is-drinking svg {
+  animation: sip 4.6s ease-in-out infinite;
+  transform-origin: 60px 96px;
+}
+
+@keyframes sip {
+  0%, 100%     { transform: rotate(0deg); }
+  26%, 40%     { transform: rotate(7deg); }
+  53%          { transform: rotate(0deg); }
+  66%, 80%     { transform: rotate(7deg); }
+}
+
+/* Held out beside the pet, clear of the body, and it only overlaps the face
+   during the mouthful itself. */
+.glass {
+  position: absolute;
+  /* Over the pet, not under it. The drawing is the last child of .pet and paints
+     last, so without this the glass disappears behind the body at exactly the
+     moment it reaches the mouth. */
+  z-index: 2;
+  left: 50%;
+  bottom: 12px;
+  width: 30px;
+  height: 40px;
+  margin-left: 46px;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  border: 2px solid rgb(255 255 255 / 0.8);
+  border-top: none;
+  border-radius: 3px 3px 8px 8px;
+  background: rgb(255 255 255 / 0.14);
+  animation: sip-glass 4.6s ease-in-out infinite;
+  /* Tips about its own base, the way a hand holding it would. */
+  transform-origin: 50% 100%;
+}
+
+.glass[hidden] { display: none; }
+
+/* The water level is the countdown, set from JS as a percentage. The transition
+   is what makes it fall rather than jump once a second. */
+.glass i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(#8fd8f0, #57b7dd);
+  transition: height 1s linear;
+}
+
+/* Across to the mouth, tip, back. Down rather than up on the way across: the
+   glass is held level with the pet's middle and the mouth is below that, so
+   raising it puts the drink over one eye. */
+@keyframes sip-glass {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  18%      { transform: translate(-44px, 2px) rotate(0deg); }
+  26%, 40% { transform: translate(-44px, 2px) rotate(-32deg); }
+  53%      { transform: translate(-44px, 2px) rotate(0deg); }
+  66%, 80% { transform: translate(-44px, 2px) rotate(-32deg); }
+  92%      { transform: translate(0, 0) rotate(0deg); }
+}
+
 .dots::after { content: ""; animation: dots 1.1s steps(4, end) infinite; }
 
 @keyframes dots {

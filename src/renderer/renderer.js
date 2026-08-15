@@ -495,16 +495,34 @@ function blink(again = Math.random() < 0.28) {
 // leans across to see it properly. It stays looking there until the cursor
 // moves, which is the same rule the cursor already had - the last thing that
 // happened is the thing worth watching.
-window.pet.onGlance(({ x, y, peek }) => {
+window.pet.onGlance(({ x, y, peek, perch }) => {
   if (held) return; // being carried is more interesting than a window
   gaze(x, y);
   blink();
+  if (perch && idle()) return sitOn(perch);
   if (peek) move('peek');
 });
+
+/**
+ * Climb up and sit on the top edge of the window you just switched to.
+ *
+ * All it is given is a rectangle - it does not know, and cannot be told, what is
+ * inside it. Somewhere along the edge rather than the corner, because a pet that
+ * lands on exactly the same pixel every time is a widget.
+ */
+function sitOn({ x, y, w }) {
+  const along = x + Math.random() * Math.max(0, w - stage.offsetWidth);
+  setXY(along, y - petH());
+  move('jump');
+}
 
 document.addEventListener('mousemove', (e) => {
   gaze(e.clientX, e.clientY);
   if (held) return dragTo(e.clientX, e.clientY); // never hand focus back mid-drag
+  // During a break the whole window takes clicks, because the dimmed screen
+  // behind the pet is the thing you click to stop it. Hit-testing the pet would
+  // hand the mouse straight back to whatever is underneath.
+  if (breaking) return;
 
   const inside = hitZone().some(
     (b) => e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom
@@ -755,7 +773,8 @@ chatInput.addEventListener('keydown', (e) => {
 // How the pet looks and sounds. Species and palette hang off the root element:
 // the shape rules in pets.css are plain descendant selectors, so they work
 // anywhere they are set.
-window.pet.onLook(({ pet, skin, wear, voice: on, sounds, mic, camera, faces, bop }) => {
+window.pet.onLook(({ pet, skin, wear, voice: on, sounds, mic, camera, faces, bop, mischief: up }) => {
+  mischief = up !== false;
   document.documentElement.dataset.pet = pet;
   document.documentElement.dataset.skin = skin;
   document.documentElement.dataset.wear = wear || 'none';
@@ -1181,8 +1200,6 @@ function setXY(x, top = stageTop) {
   where = { x: roomX() ? stageX / roomX() : 0, y: roomY() ? stageTop / roomY() : 1 };
 }
 
-const setX = (x) => setXY(x);
-
 /**
  * Move without the walk. The stage eases every transform over 2.6 seconds,
  * which is what makes wandering look like walking and what makes anything else
@@ -1210,20 +1227,37 @@ function applyPlace(place) {
 window.addEventListener('resize', () => snap(where.x * roomX(), where.y * roomY()));
 
 const idle = () =>
-  !hovered && !busy && !held && bubble.hidden && menu.hidden && chatForm.hidden;
+  !hovered && !busy && !held && !breaking
+  && bubble.hidden && menu.hidden && chatForm.hidden;
 
 // How far either side of a parked pet counts as still being there, as a share
 // of the room. A pet that never moves is furniture; one that walks off the spot
 // you chose is disobedient. This is the gap between the two.
 const ROAM = 0.16;
 
+// Whether the pet gets to go anywhere but the floor. Off puts it back to pacing
+// the bottom of the screen and never sitting on your windows, which is what it
+// did before. Set from the settings; assumed on until they arrive.
+let mischief = true;
+
+// How often a wander goes up the screen instead of along it. Most of the time it
+// stays on the floor, because a pet permanently halfway up a monitor is not
+// roaming, it is in the way.
+const CLIMB = 0.3;
+
 let trips = 0;
 
 /** Pick somewhere to be and go there. Separate from the schedule so it can be
-    asked for twenty times in a row without leaving twenty timers behind. */
+    asked for twenty times in a row without leaving twenty timers behind.
+    @returns {boolean} whether it left the floor, which changes how it moves. */
 function wanderTo() {
   const room = window.innerWidth - stage.offsetWidth;
   let to = Math.random() * room;
+  // Where it already is, unless something below decides otherwise: a pet put on
+  // a shelf halfway up the screen stays on that shelf.
+  let top = stageTop;
+  const climbing = mischief && Math.random() < CLIMB;
+  if (climbing) top = Math.random() * roomY();
   if (home) {
     // Around where you put it, and back to it every other time - so it is always
     // visibly heading somewhere, and where it settles is still your spot.
@@ -1231,19 +1265,152 @@ function wanderTo() {
     // spot was restored from disk at launch, so a pet parked once in March was
     // still standing in exactly that place in June.
     const at = home.x * room;
-    to = trips++ % 2 ? at : at + (Math.random() * 2 - 1) * room * ROAM;
+    const back = trips++ % 2;
+    to = back ? at : at + (Math.random() * 2 - 1) * room * ROAM;
+    // Coming home means all the way home, off whatever it climbed onto.
+    if (back) top = home.y * roomY();
   }
-  setX(Math.max(0, Math.min(room, to)));
+  setXY(Math.max(0, Math.min(room, to)), top);
+  return top < roomY() - 1;
 }
 
 function wander() {
   if (idle()) {
-    wanderTo();
-    // The stage transition is what moves it; this is what makes it look like
-    // walking rather than sliding, and it runs for exactly that long.
-    move('walk');
+    // The stage transition is what moves it; the animation is what makes it look
+    // like walking rather than sliding, and it runs for exactly that long. Off
+    // the floor there is nothing to walk on, so it hops instead.
+    move(wanderTo() ? 'jump' : 'walk');
   }
   setTimeout(wander, 25000 + Math.random() * 45000);
+}
+
+// ---- breaks ---------------------------------------------------------------
+//
+// The pet thinks about a glass of water, or about sitting still for a minute.
+// That thought is the whole of the interruption: it is the size of a coin, it
+// goes away on its own if you ignore it, and nothing happens until you click it.
+//
+// Click it and the pet takes the screen - everything behind it dims, it walks to
+// the middle, and it drinks or meditates for as long as you set. Which is the
+// point: nobody is told to take a break, the pet takes one and you watch.
+
+const veil = document.getElementById('veil');
+const counting = document.getElementById('counting');
+const thought = document.getElementById('thought');
+const thoughtFace = document.getElementById('thought-face');
+const glass = document.getElementById('glass');
+const water = document.getElementById('water');
+
+// How long the offer stands. Long enough to finish a sentence and look up,
+// short enough that it is not still sitting there an hour later.
+const THOUGHT_MS = 45000;
+
+// The walk to the middle and back, matching the stage transition in style.css.
+const CROSS_MS = 2600;
+
+let thoughtTimer = null;
+let breakTimer = null;
+let arriveTimer = null;
+let breaking = false;
+let breakBack = null; // where it was standing before, as fractions
+
+function dropThought() {
+  clearTimeout(thoughtTimer);
+  thought.hidden = true;
+}
+
+window.pet.onThink(({ face }) => {
+  // Not over an answer, and not while it is being carried around.
+  if (busy || held || breaking) return;
+  thoughtFace.textContent = face;
+  thought.hidden = false;
+  express('curious', 2400);
+  clearTimeout(thoughtTimer);
+  thoughtTimer = setTimeout(dropThought, THOUGHT_MS);
+});
+
+thought.addEventListener('click', () => {
+  dropThought();
+  window.pet.breakTake();
+});
+
+// Anywhere on the dimmed screen stops it early. The pet itself stays pattable
+// during a break, which is the whole reason the veil is underneath it.
+veil.addEventListener('click', () => endBreak());
+
+window.pet.onBreak(({ kind, seconds }) => startBreak(kind, seconds));
+
+function startBreak(kind, seconds) {
+  dropThought();
+  hush(); // nothing it was in the middle of saying survives into the quiet bit
+  bubble.hidden = true;
+  menu.hidden = true;
+  breaking = true;
+  breakBack = { ...where };
+  veil.hidden = false;
+  counting.hidden = false;
+  // The window ignores the mouse except where the pet is standing; for as long
+  // as the veil is up, the whole of it has to take a click.
+  setInteractive(true);
+
+  // Into the middle of the screen, on foot.
+  setXY((window.innerWidth - stage.offsetWidth) / 2, roomY() / 2);
+  move('walk');
+
+  const total = Math.max(1, Math.round(Number(seconds) || 0));
+  let left = total;
+  const show = () => {
+    counting.textContent = `${left}s`;
+    // The water level is the clock for a water break, which is a better one
+    // than the number because you can read it without reading it.
+    if (kind === 'water') water.style.height = `${Math.round((left / total) * 100)}%`;
+  };
+  show();
+
+  // It starts once it gets there. Drinking on the way across looks like a pet
+  // being dragged along by a glass.
+  clearTimeout(arriveTimer);
+  arriveTimer = setTimeout(() => {
+    if (!breaking) return;
+    if (kind === 'water') {
+      glass.hidden = false;
+      petEl.classList.add('is-drinking');
+    } else {
+      petEl.classList.add('is-meditating');
+    }
+  }, CROSS_MS);
+
+  clearInterval(breakTimer);
+  breakTimer = setInterval(() => {
+    left -= 1;
+    show();
+    if (left <= 0) endBreak();
+  }, 1000);
+}
+
+function endBreak() {
+  if (!breaking) return;
+  breaking = false;
+  clearInterval(breakTimer);
+  clearTimeout(arriveTimer);
+  petEl.classList.remove('is-drinking', 'is-meditating');
+  glass.hidden = true;
+  water.style.height = '100%';
+  veil.hidden = true;
+  counting.hidden = true;
+  move(null);
+  setInteractive(false);
+
+  // Back to where it was standing, on foot, and before the main process is told
+  // - it resizes the window on that message, and the resize re-places the pet
+  // by fraction. Putting it home first means the fraction it re-places by is
+  // home rather than the middle of the screen.
+  if (breakBack) {
+    setXY(breakBack.x * roomX(), breakBack.y * roomY());
+    move('walk');
+    breakBack = null;
+  }
+  window.pet.breakDone();
 }
 
 // A quirk while nothing is happening - a stretch, a wag, a hop, depending on

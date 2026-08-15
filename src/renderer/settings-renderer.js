@@ -10,6 +10,10 @@ const autostart = el('autostart');
 const voice = el('voice');
 const sounds = el('sounds');
 const focus = el('focus');
+const breaksBox = el('breaks');
+const breakEvery = el('break-every');
+const breakFor = el('break-for');
+const mischief = el('mischief');
 const mic = el('mic');
 const dictationSel = el('dictation');
 const camera = el('camera');
@@ -250,6 +254,10 @@ saveBtn.addEventListener('click', async () => {
     voice: voice.checked,
     sounds: sounds.checked,
     focus: focus.checked,
+    breaks: breaksBox.checked,
+    breakEvery: Number(breakEvery.value),
+    breakFor: Number(breakFor.value),
+    mischief: mischief.checked,
     mic: mic.checked,
     dictation: dictationSel.value,
     camera: camera.checked,
@@ -274,6 +282,13 @@ saveBtn.addEventListener('click', async () => {
   voice.checked = current.voice;
   sounds.checked = current.sounds;
   focus.checked = current.focus;
+  breaksBox.checked = current.breaks;
+  // Clamped rather than rejected in settings.js, so what comes back is what the
+  // app is actually going to do - typing 2 minutes and being shown 5 is the
+  // point of putting it back in the box.
+  breakEvery.value = current.breakEvery;
+  breakFor.value = current.breakFor;
+  mischief.checked = current.mischief;
   wearSel.value = current.wear;
   camera.checked = current.camera;
   mic.checked = current.mic;
@@ -352,6 +367,13 @@ el('close').addEventListener('click', () => window.config.close());
   voice.checked = current.voice;
   sounds.checked = current.sounds;
   focus.checked = current.focus;
+  breaksBox.checked = current.breaks;
+  // Clamped rather than rejected in settings.js, so what comes back is what the
+  // app is actually going to do - typing 2 minutes and being shown 5 is the
+  // point of putting it back in the box.
+  breakEvery.value = current.breakEvery;
+  breakFor.value = current.breakFor;
+  mischief.checked = current.mischief;
   wearSel.value = current.wear;
   camera.checked = current.camera;
   mic.checked = current.mic;

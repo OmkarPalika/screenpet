@@ -1448,6 +1448,81 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   }
 }
 
+// ===== breaks ==============================================================
+//
+// The pet thinking about a glass of water, or about sitting still for a minute.
+// That thought is the whole of the interruption, and every check here is about
+// when there must not be one.
+
+{
+  const br = require('../src/core/breaks');
+  const NOW = 10_000_000;
+  const EVERY = 50 * 60000;
+
+  assert.strictEqual(br.due(NOW - EVERY, NOW, EVERY), true, 'a break that is owed is never thought of');
+  assert.strictEqual(br.due(NOW - EVERY + 1, NOW, EVERY), false, 'the interval is not respected');
+
+  // A game, a call, a presentation. The same do not disturb answer the pet
+  // already obeys before it speaks.
+  assert.strictEqual(
+    br.due(NOW - EVERY * 3, NOW, EVERY, { quiet: true }), false,
+    'a break was offered during a presentation'
+  );
+  // Mid-answer is the other one: the pet is writing something you asked for.
+  assert.strictEqual(
+    br.due(NOW - EVERY * 3, NOW, EVERY, { busy: true }), false,
+    'a break was offered over an answer being written'
+  );
+  // A hand-edited interval of nothing must not mean "every tick".
+  for (const bad of [0, -1, NaN, undefined]) {
+    assert.strictEqual(br.due(0, NOW, bad), false, `an interval of ${bad} fires forever`);
+  }
+
+  // Alternating, so neither kind becomes wallpaper - and it survives a counter
+  // that only ever goes up.
+  assert.deepStrictEqual(
+    [0, 1, 2, 3, 40001].map((i) => br.nth(i).kind),
+    ['water', 'rest', 'water', 'rest', 'rest'],
+    'the pet stopped alternating what it thinks about'
+  );
+  // A face for each, and no words: a thought with a sentence in it is a
+  // notification wearing a costume.
+  for (const b of br.BREAKS) {
+    assert.ok(b.face && b.face.length <= 4, `${b.kind} has no face to think about`);
+    assert.deepStrictEqual(Object.keys(b), ['kind', 'face'], `${b.kind} carries more than a face`);
+  }
+
+  // Both timings are clamped into something survivable. A thought every thirty
+  // seconds, and a break that lasts an hour, are the same bug.
+  const cfg = require('../src/core/settings');
+  const wild = cfg.load({ breakEvery: 0, breakFor: 100000 });
+  assert.strictEqual(wild.breakEvery, br.EVERY_MIN.min, 'a zero interval was accepted');
+  assert.strictEqual(wild.breakFor, br.FOR_S.max, 'an hour-long break was accepted');
+  const junk = cfg.load({ breakEvery: 'soon', breakFor: null });
+  assert.strictEqual(junk.breakEvery, br.EVERY_MIN.def, 'a junk interval did not fall back');
+  assert.strictEqual(junk.breakFor, br.FOR_S.def, 'a junk duration did not fall back');
+
+  // ...and it can be switched off outright, which anything that dims the screen
+  // has to be able to be.
+  assert.strictEqual(cfg.load({ breaks: false }).breaks, false, 'breaks cannot be turned off');
+  assert.strictEqual(cfg.load({}).breaks, true, 'breaks are not on by default');
+  assert.strictEqual(cfg.load({ mischief: false }).mischief, false, 'mischief cannot be turned off');
+
+  // Two rules in the main process, pinned rather than trusted to survive an
+  // edit. Nothing starts a break except a thought you actually clicked, and the
+  // dimmed screen comes back on a timer whatever the renderer is doing.
+  const fs = require('fs');
+  const main = fs.readFileSync('./src/main.js', 'utf8');
+  assert.ok(
+    /on\('break:take'[\s\S]{0,220}if \(!offered\) return;/.test(main),
+    'a renderer can start a break nobody was offered'
+  );
+  assert.ok(
+    /breakTimer = setTimeout\(endBreak/.test(main),
+    'the backstop that undims the screen if the countdown stalls is gone'
+  );
+}
+
 // ===== reminders ===========================================================
 
 {

@@ -1000,6 +1000,55 @@ after asking  -> visible=true "Tails!"       answered, and came back to say it
 later         -> visible=false               and went away again on its own
 ```
 
+## Stopping for water
+
+Every fifty minutes the pet **has a thought**: a little bubble beside it holding
+💧 or 🧘, alternating, because the two things worth stopping for are different —
+water is somewhere to go, sitting still is something to do where you sit, and one
+reminder repeated becomes wallpaper inside a day.
+
+That thought is the whole of the interruption. It is the size of a coin, there
+are no words in it, and **nothing happens unless you click it** — ignored, it
+goes away by itself after forty-five seconds and the pet asks again later.
+
+Click it and the pet takes the break, and you watch it:
+
+- everything behind it **dims**
+- it walks into the **middle of the screen**
+- and then it either **sits and breathes**, eyes shut, a ring of calm going out
+  from it — or it **drinks a glass of water**, tipping it up twice, and the
+  water level in the glass falls as the time runs down. The glass is the clock;
+  the number underneath is only there for people who want a number.
+
+Click anywhere on the dimmed screen to stop it early. The pet stays pattable
+throughout, which is the entire reason the dimmed layer is *underneath* it.
+
+Nobody is told to take a break. The pet takes one, and it is more persuasive than
+a dialog telling you to, which is the thing that makes this worth building at
+all.
+
+Even so, the thought only appears when it should:
+
+| It stays away when | Because |
+| --- | --- |
+| Windows says do not disturb — a game, a call, presentation mode | the same check the pet already passes before it speaks |
+| an answer is being written | you asked for that, and it is on the screen |
+| you are away from the machine | time away *is* the break, so the clock is pushed along rather than left running — five minutes in the kitchen must not be rewarded with a thought bubble the moment you sit back down |
+
+The main process holds a backstop timer that undims the screen whatever the
+renderer is doing, because a dimmed screen that never comes back is a fault
+rather than a reminder. And **only a thought that is actually on screen can be
+clicked into a break** — a renderer sending the message on its own gets nothing.
+
+**Take a break now** is in the tray menu, and asking by hand skips the thought
+and starts it. Both timings are settings, clamped to something survivable — no
+closer together than five minutes, no longer than ten minutes on screen — because
+a hand-edited `"breakEvery": 0` is a denial of service with a face on it.
+
+Nothing about a break is recorded. There is no streak, no history and no count of
+the ones you ignored: the file that would hold that is the whole of what anybody
+would object to, so it does not exist.
+
 ## Where it stands
 
 **Anywhere on the display, and never off it.** Pick the pet up and drop it where
@@ -1008,12 +1057,39 @@ of one display's work area and the pet is a div inside it, clamped to that box,
 so there is no gesture that can send it somewhere you cannot reach it. The work
 area rather than the display, so it cannot go behind the taskbar either.
 
-Placing it by hand is also what **stops it wandering**. Until then it walks along
-on its own every half minute or so; a pet that strolls away from where you
-deliberately parked it is worse than one that never moves. Where you put it is
+Placing it by hand makes that spot **home** rather than a peg. It wanders around
+it — within a sixth of the room either side — and comes back to it every other
+trip, because "stays where I put it" and "moves like it is alive" are both true
+of a real pet and only the first was true of this one. Parking it used to stop it
+moving at all, and the spot was restored from disk at launch, so a pet parked once
+in March was still standing in exactly that place in June. Where you put it is
 kept in `pet.json` as two fractions of the room available rather than as pixels,
 so it comes back to the same place on a different resolution, and the same place
 on the other monitor.
+
+### Roaming, and sitting on your windows
+
+With **Let it get into things** on — it is, by default — the pet stops treating
+the bottom of the screen as the only place it is allowed to be. Three in ten
+wanders go up the screen instead of along it, and it hops rather than walks when
+there is nothing under it. Coming home means all the way home, off whatever it
+climbed onto.
+
+It also, a third of the times it notices you change windows, climbs up and sits
+on the **top edge of the window you just switched to** — somewhere along that
+edge rather than the same pixel every time, which is the difference between a pet
+and a widget. Its own window ignores the mouse, so nothing it perches on stops
+being clickable.
+
+What it is told about that window is a **rectangle**. Not the title, not the
+process, not the application — so it has no idea whether it just sat on a
+spreadsheet or a game, and there is no version of this that does. It moves
+itself and nothing else: it cannot close, minimise, move or touch a single one of
+your windows, and it is not asking Windows for the ability.
+
+Switching it off puts the pet back on the floor and stops it perching. Measured
+rather than assumed — forty wanders from a parked pet stood at **eight** different
+heights with the setting on, and at **one** with it off: the floor.
 
 Near the top of the screen there is no room above the pet for a speech bubble, so
 everything that normally sits above it - the bubble and the menu - **flips to
