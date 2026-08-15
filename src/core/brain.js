@@ -133,6 +133,47 @@ function buildPrompt(screenText, mood = 'neutral') {
   ].join('\n');
 }
 
+// Watching, rather than being asked. One difference, and it is the whole
+// feature: silence. Most screens have nothing on them worth saying, and a pet
+// that remarks on every one of them gets switched off within the hour - so this
+// prompt spends most of its words on permission to say nothing at all.
+//
+// A sentinel word rather than an empty reply, because a small model told to
+// answer with nothing answers with a sentence about having nothing to say.
+const SILENT = 'NOTHING';
+
+// Also why the watch path never streams: the sentinel would be typed into the
+// bubble live, and then taken away again, which is worse than either outcome.
+//
+// The word alone, or the word followed by punctuation - a model told to answer
+// NOTHING often answers "NOTHING - there is no question here". A reply that
+// carries straight on into a sentence is a real answer that happens to start
+// with the word, and "Nothing beats a jet2 holiday" must survive. The cost of
+// the remaining ambiguity is a one-word answer of "Nothing." going unsaid, and
+// silence is the right way for this path to be wrong.
+const isSilent = (text) => /^\W*nothing\s*(?:[-–—:,.!?]|$)/i.test(String(text || '').trim());
+
+function buildWatchPrompt(screenText) {
+  return [
+    'You are a small friendly desktop pet, reading over the shoulder of the person',
+    'you live with. They did not ask you anything.',
+    'The text below was captured from their screen by OCR. It may be garbled',
+    'and may include unrelated interface text.',
+    `You may only speak if it contains a question you can answer. Otherwise reply with the single word ${SILENT}.`,
+    'Most of the time that is the right answer. Do not describe the screen, do not',
+    'greet them, do not comment on what they are working on, and never say that you',
+    `found nothing - say ${SILENT} instead.`,
+    'If there is a question: answer it in at most two short sentences, plainly and',
+    'completely, the way a person says it out loud.',
+    'Do not restate the question and do not explain your reasoning.',
+    'No emoji, no asterisks, no narrated actions.',
+    '',
+    '--- SCREEN ---',
+    screenText,
+    '--- END ---',
+  ].join('\n');
+}
+
 // Small vision models are far more brittle than text models, and the wording
 // below is not arbitrary - it was measured against moondream on a fixed image,
 // three runs per variant:
@@ -430,17 +471,28 @@ async function drink(res, onToken) {
   return whole;
 }
 
-/** Tier 1: OCR text. Works on any machine, no GPU. */
+/**
+ * Tier 1: OCR text. Works on any machine, no GPU.
+ *
+ * `watching` is a read nobody asked for, and it answers with nothing far more
+ * often than it answers - see buildWatchPrompt. The sentinel is turned back into
+ * an empty answer here so main.js has one rule for both paths: no answer, no
+ * bubble.
+ */
 async function ask(screenText, opts = {}) {
   const cleaned = cleanOcr(screenText);
   if (!cleaned) return EMPTY_SCREEN;
-  return generate(
+  const watching = opts.watching === true;
+  const answer = await generate(
     {
       model: opts.model || MODEL,
-      prompt: buildPrompt(redact(cleaned), opts.mood),
+      prompt: watching
+        ? buildWatchPrompt(redact(cleaned))
+        : buildPrompt(redact(cleaned), opts.mood),
     },
     opts
   );
+  return watching && isSilent(answer) ? EMPTY_SCREEN : answer;
 }
 
 /**
@@ -512,7 +564,7 @@ async function listModels(opts = {}) {
 
 module.exports = {
   redact, stripThinking, stripEcho, unquote, stripMarkup, cleanOcr, hasEnoughText,
-  buildPrompt, buildVisionPrompt, buildChatPrompt,
+  buildPrompt, buildVisionPrompt, buildChatPrompt, buildWatchPrompt, isSilent,
   ask, askVision, chat, detectVisionModel, listModels,
-  MODEL, EMPTY_SCREEN, MIN_SCREEN_TEXT,
+  MODEL, EMPTY_SCREEN, MIN_SCREEN_TEXT, SILENT,
 };

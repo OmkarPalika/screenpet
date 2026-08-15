@@ -1523,6 +1523,143 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   );
 }
 
+// ===== reading the screen without being asked ==============================
+//
+// The one thing in the app that reads your screen at a moment you did not
+// choose. Every check here is about a way it must not do that: not to a company,
+// not twice for the same screen, not during a presentation, and not with a
+// sentence when it has nothing to say.
+
+{
+  const wa = require('../src/core/watch');
+  const cfg = require('../src/core/settings');
+  const NOW = 10_000_000;
+  const EVERY = 60_000;
+
+  assert.strictEqual(wa.due(NOW - EVERY, NOW, EVERY), true, 'a read that is owed never happens');
+  assert.strictEqual(wa.due(NOW - EVERY + 1, NOW, EVERY), false, 'the interval is not respected');
+  assert.strictEqual(
+    wa.due(NOW - EVERY * 5, NOW, EVERY, { quiet: true }), false,
+    'the screen was read during a presentation'
+  );
+  assert.strictEqual(
+    wa.due(NOW - EVERY * 5, NOW, EVERY, { busy: true }), false,
+    'a second read started over an answer being written'
+  );
+  for (const bad of [0, -1, NaN, undefined]) {
+    assert.strictEqual(wa.due(0, NOW, bad), false, `an interval of ${bad} reads forever`);
+  }
+
+  // The same screen is read again - that is what a timer does - and answered
+  // once, which is what makes it bearable.
+  const page = 'the quick brown fox jumps over the lazy dog while nineteen ravens watch';
+  assert.strictEqual(wa.changed('', page), true, 'the first screen was not treated as new');
+  assert.strictEqual(wa.changed(page, page), false, 'the same screen was answered twice');
+  // A clock ticking over, or a line scrolling past, is not a new screen.
+  assert.strictEqual(
+    wa.changed(page, `${page} 14:32`), false,
+    'a clock in the corner counted as a new screen'
+  );
+  // Switching windows is.
+  assert.strictEqual(
+    wa.changed(page, 'invoice total vat payable due date supplier reference'), true,
+    'switching to a different window did not count as a new screen'
+  );
+  // Re-flowed rather than changed: the same words, wrapped differently.
+  assert.strictEqual(
+    wa.changed(page, page.split(' ').reverse().join('\n')), false,
+    'the same words in another order counted as a new screen'
+  );
+  // Nothing readable is not a new screen, whatever was there before.
+  assert.strictEqual(wa.changed(page, '   \n  '), false, 'a blank read counted as a new screen');
+  assert.strictEqual(wa.changed(page, null), false, 'a failed read counted as a new screen');
+
+  // Off by default. This is the setting that reads your screen at moments you
+  // did not pick, and shipping it on would be the app doing the one thing it
+  // spends a whole policy file promising not to do quietly.
+  assert.strictEqual(cfg.load({}).watch, false, 'the pet reads the screen on its own by default');
+  assert.strictEqual(cfg.load({ watch: true }).watch, true, 'the setting cannot be turned on');
+  // Anything but a literal true, exactly like the microphone and the camera.
+  for (const junk of ['yes', 1, {}, 'true']) {
+    assert.strictEqual(cfg.load({ watch: junk }).watch, false, `${junk} switched watching on`);
+  }
+
+  // ...and never with a hosted provider. Reading the screen every minute and
+  // sending each read to a company is not the same decision as pressing a key,
+  // and nobody made it - so choosing one turns this off in the same pass.
+  const hosted = cfg.load({ watch: true, network: true, provider: 'openai' });
+  assert.strictEqual(hosted.provider, 'openai', 'the provider did not stick');
+  assert.strictEqual(hosted.watch, false, 'the pet watches the screen for a hosted provider');
+  assert.strictEqual(
+    cfg.load({ watch: true, network: true, provider: 'ollama' }).watch, true,
+    'watching was refused for the local model'
+  );
+
+  // The interval is clamped rather than rejected: a hand-edited "every 0
+  // seconds" is a read on every tick, which is a machine with a fan problem.
+  assert.strictEqual(cfg.load({ watchEvery: 0 }).watchEvery, wa.EVERY_S.min, 'a zero interval was accepted');
+  assert.strictEqual(cfg.load({ watchEvery: 99999 }).watchEvery, wa.EVERY_S.max, 'an hour-long interval was accepted');
+  for (const junk of ['soon', null, '', undefined]) {
+    assert.strictEqual(cfg.load({ watchEvery: junk }).watchEvery, wa.EVERY_S.def, `a ${junk} interval did not fall back`);
+  }
+  // The floor is the tick it runs on. A shorter one would be a number in the
+  // settings window that quietly does not mean what it says.
+  assert.ok(wa.EVERY_S.min >= 20, 'the read interval can be set below the tick that checks it');
+
+  // Silence is the usual answer, and the sentinel is how a small model says it.
+  const { isSilent, buildWatchPrompt, SILENT } = require('../src/core/brain');
+  for (const quiet of ['NOTHING', 'nothing', ' nothing.', 'NOTHING - no question here']) {
+    assert.strictEqual(isSilent(quiet), true, `"${quiet}" would have been spoken out loud`);
+  }
+  // ...and a real answer that happens to begin with the word is not the
+  // sentinel. An empty reply is nothing to say by itself and never gets here.
+  for (const real of ['42', 'It is 42.', 'Nothing beats a jet2 holiday']) {
+    assert.strictEqual(isSilent(real), false, `"${real}" was swallowed`);
+  }
+  // The prompt has to hand the model that way out, or it will invent a sentence.
+  const wp = buildWatchPrompt('screen text here');
+  assert.ok(wp.includes(SILENT), 'the watch prompt never mentions how to say nothing');
+  assert.ok(/did not ask/i.test(wp), 'the watch prompt does not say that nobody asked');
+  assert.ok(wp.includes('screen text here'), 'the watch prompt drops the screen');
+
+  // ...and the sentinel never reaches the bubble: ask() turns it back into no
+  // answer at all, which is the same shape main.js already handles.
+  const fakeFetch = (reply) => async () => ({
+    ok: true, status: 200, json: async () => ({ response: reply }),
+  });
+  (async () => {
+    const hush = await ask('what a lovely screen this is, full of words and no questions', {
+      watching: true, fetch: fakeFetch('NOTHING'),
+    });
+    assert.strictEqual(hush, EMPTY_SCREEN, 'the sentinel was spoken out loud');
+    const answer = await ask('what is 17 times 23?', {
+      watching: true, fetch: fakeFetch('391.'),
+    });
+    assert.strictEqual(answer, '391.', 'a real answer was swallowed');
+  })();
+
+  // Four rules in the main process, pinned rather than trusted to survive an
+  // edit. The second lock on the hosted provider; the change gate; no vision
+  // tier on a read nobody asked for; and no error bubble every minute.
+  const main = require('fs').readFileSync('./src/main.js', 'utf8');
+  assert.ok(
+    /if \(unprompted && !providers\.isLocal\(settings\.provider\)\) return;/.test(main),
+    'a hand-edited settings file could send an unasked-for read to a company'
+  );
+  assert.ok(
+    /watch\.changed\(lastWatched, ocrText\)/.test(main),
+    'the same screen can be answered over and over'
+  );
+  assert.ok(
+    /const useVision = !unprompted &&/.test(main),
+    'an unasked-for read can reach the vision tier'
+  );
+  assert.ok(
+    /if \(unprompted\) console\.error\('watch:'/.test(main),
+    'a failing read puts a red bubble on screen every minute'
+  );
+}
+
 // ===== reminders ===========================================================
 
 {

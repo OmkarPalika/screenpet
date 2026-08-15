@@ -26,6 +26,10 @@ const DICTATION = ['auto', 'sapi', 'local'];
 // validates them and the file that assumes them are the same file.
 const breaks = require('./breaks');
 
+// Same arrangement for the reading-on-a-timer setting: the file that validates
+// the interval and the file that assumes it are the same file.
+const watch = require('./watch');
+
 // 'whisper' was this value's name while whisper was the only local engine it
 // could mean. Kept as an alias rather than dropped: a saved settings file from
 // that version must not silently fall back to 'auto' and change what the app does.
@@ -61,6 +65,12 @@ const DEFAULTS = {
   // meant. Falls back to the whole screen on its own whenever the crop would be
   // a bad idea - see window.js, which owns every one of those judgements.
   focus: true,
+  // Reading the screen on a timer instead of waiting for the hotkey, and
+  // answering only when it finds a question. Off, and off is the honest default:
+  // the hotkey means the pet reads the screen at moments you chose, and this
+  // means it reads it at moments it chose. Local models only - see load().
+  watch: false,
+  watchEvery: watch.EVERY_S.def, // seconds between reads
   // The microphone is opt-in and stays that way. A desktop pet that starts
   // listening because it shipped that way is not a pet, it is an incident.
   mic: false,
@@ -173,7 +183,7 @@ const { cleanCity } = require('./weather');
 
 // Which hosted providers exist at all. The table is in providers.js with the
 // URLs; nothing here or in a settings file can add one.
-const { PROVIDERS } = require('./providers');
+const { PROVIDERS, isLocal } = require('./providers');
 
 // A model name, which goes straight into a request body and, for Gemini, into a
 // path segment. Kept to the characters real model names actually use so nothing
@@ -192,6 +202,10 @@ function cleanModel(v) {
 /** Anything unrecognised falls back to the default rather than being trusted. */
 function load(raw) {
   const s = raw && typeof raw === 'object' ? raw : {};
+  // Resolved before the object below because two settings depend on it: the
+  // provider itself, and whether the pet is allowed to read the screen on its
+  // own at all.
+  const provider = s.network === true && PROVIDERS[s.provider] ? s.provider : DEFAULTS.provider;
   return {
     model: str(s.model) || DEFAULTS.model,
     vision: str(s.vision) || DEFAULTS.vision,
@@ -202,6 +216,13 @@ function load(raw) {
     voice: typeof s.voice === 'boolean' ? s.voice : DEFAULTS.voice,
     sounds: typeof s.sounds === 'boolean' ? s.sounds : DEFAULTS.sounds,
     focus: typeof s.focus === 'boolean' ? s.focus : DEFAULTS.focus,
+    // Needs a literal true, like the microphone and the camera, and additionally
+    // a model on this machine. Choosing a hosted provider turns it off in the
+    // same pass rather than leaving it on: reading the screen every minute and
+    // sending each read to a company is a different thing from doing it when you
+    // press a key, and nobody switched that on. main.js refuses it a second time.
+    watch: s.watch === true && isLocal(provider),
+    watchEvery: watch.clampEvery(s.watchEvery),
     // Anything but a literal true leaves these shut. A hand-edited "mic": "yes"
     // or a 1 left over from some other config format must not be the thing that
     // opens a microphone or a camera.
@@ -229,7 +250,7 @@ function load(raw) {
     web: s.web === true && s.network === true,
     // A provider that is not on the list, or one chosen with the network off,
     // falls back to the local model rather than to nothing.
-    provider: s.network === true && PROVIDERS[s.provider] ? s.provider : DEFAULTS.provider,
+    provider,
     providerModel: cleanModel(s.providerModel) || DEFAULTS.providerModel,
     faces: s.faces === true && s.camera === true,
     // These two default on, so the test is for a literal false rather than a

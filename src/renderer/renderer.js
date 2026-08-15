@@ -773,8 +773,14 @@ chatInput.addEventListener('keydown', (e) => {
 // How the pet looks and sounds. Species and palette hang off the root element:
 // the shape rules in pets.css are plain descendant selectors, so they work
 // anywhere they are set.
-window.pet.onLook(({ pet, skin, wear, voice: on, sounds, mic, camera, faces, bop, mischief: up }) => {
+window.pet.onLook(({
+  pet, skin, wear, voice: on, sounds, mic, camera, faces, bop,
+  mischief: up, watching,
+}) => {
   mischief = up !== false;
+  // The amber dot. Reading the screen on a timer is the one thing this app does
+  // that you did not just ask for, so it says so on the pet's own face.
+  document.getElementById('reading').hidden = !watching;
   document.documentElement.dataset.pet = pet;
   document.documentElement.dataset.skin = skin;
   document.documentElement.dataset.wear = wear || 'none';
