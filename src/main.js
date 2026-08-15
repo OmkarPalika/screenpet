@@ -13,6 +13,7 @@ const host = require('./system/host');
 const media = require('./system/media');
 const dnd = require('./system/dnd');
 const reminders = require('./core/reminders');
+const breaks = require('./core/breaks');
 const weather = require('./core/weather');
 const wake = require('./system/wake');
 const windows = require('./system/window');
@@ -287,6 +288,17 @@ function refreshTray() {
   const shown = win && !win.isDestroyed() && win.isVisible();
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Read screen now', click: answerScreen },
+    // Asked for by hand, so it starts rather than being offered - and it resets
+    // the clock, so a break taken at ten past is not followed by the scheduled
+    // one at quarter past.
+    {
+      label: 'Take a break now',
+      click: () => {
+        lastBreakAt = Date.now();
+        offered = null;
+        startBreak(breaks.nth(breakCount++).kind);
+      },
+    },
     { label: shown ? 'Hide pet' : 'Show pet', click: togglePet },
     // Two monitors and the pet is on the wrong one is not worth a settings page.
     { label: 'Move pet here', click: () => placeOn(cursorDisplay()) },
@@ -361,6 +373,78 @@ function pollQuiet() {
   });
 }
 
+// ---- breaks -----------------------------------------------------------------
+//
+// Every so often the pet takes the screen for twenty seconds and tells you to
+// drink something or look at something further away than a monitor.
+//
+// This is the only thing in the app that interrupts you rather than waits to be
+// asked, so all of the care is in when it does not: not during a game, a call or
+// a presentation, which is the same do not disturb check the pet already
+// respects; not while an answer is being written; and not while you are away,
+// because time away from the machine is the break.
+//
+// It always closes. Escape, either button, the countdown running out, or the
+// backstop timer below if the window somehow stops counting.
+
+let breakTimer = null;
+let breakCount = 0;
+let lastBreakAt = 0;
+let breaking = null; // the kind being taken, or null
+
+let offered = null; // the thought currently on screen, if you click it
+
+/** The pet thinks about it. Nothing else happens unless you click the thought. */
+function offerBreak() {
+  lastBreakAt = Date.now();
+  offered = breaks.nth(breakCount++);
+  send('pet:think', offered);
+}
+
+/**
+ * You clicked it. The pet's own window grows to cover the whole display - the
+ * work area leaves your taskbar lit up through a screen that is supposed to be
+ * a pause - and the renderer dims everything and walks the pet into the middle.
+ */
+function startBreak(kind) {
+  if (breaking || !win || win.isDestroyed()) return;
+  breaking = kind;
+  const seconds = settings.breakFor;
+  // Shown even during quiet hours, because at this point you asked for it.
+  if (!win.isVisible()) win.showInactive();
+  win.setBounds(cursorDisplay().bounds);
+  send('break:show', { kind, seconds });
+
+  // The screen comes back whatever the renderer does. A stalled countdown, a
+  // message that went missing, a page that fell over - none of those are
+  // allowed to leave a dimmed screen in front of somebody's work.
+  clearTimeout(breakTimer);
+  breakTimer = setTimeout(endBreak, (seconds + CROSS_S + 5) * 1000);
+}
+
+// The walk into the middle and back again, from style.css. Only used to know how
+// long the backstop above has to wait before it is genuinely late.
+const CROSS_S = 3;
+
+function endBreak() {
+  clearTimeout(breakTimer);
+  breakTimer = null;
+  if (!breaking) return;
+  breaking = null;
+  if (win && !win.isDestroyed()) win.setBounds(stageBounds(screen.getDisplayMatching(win.getBounds())));
+}
+
+ipcMain.on('break:take', () => {
+  // Only the thought that is actually on screen can be clicked into a break, and
+  // only once - a renderer sending this on its own gets nothing.
+  if (!offered) return;
+  const { kind } = offered;
+  offered = null;
+  startBreak(kind);
+});
+
+ipcMain.on('break:done', endBreak);
+
 // ---- noticing you move between windows --------------------------------------
 
 // A rectangle arrives whenever you change windows. The pet looks over at it, and
@@ -374,6 +458,13 @@ function pollQuiet() {
 // through a normal morning of flicking between two windows.
 const PEEK_MS = 45000;
 let lastPeekAt = 0;
+
+// ...and how often a peek turns into climbing up and sitting on the top edge of
+// whatever you just switched to. A third of the peeks, so a few times an hour at
+// most. It knows the rectangle and nothing else - it cannot read the title, so
+// it has no idea whether it just sat on a spreadsheet or a game, and the pet's
+// window ignores the mouse, so nothing it sits on stops being clickable.
+const PERCH_CHANCE = 0.34;
 
 function noticed(r) {
   if (!win || win.isDestroyed() || !win.isVisible()) return;
@@ -393,7 +484,19 @@ function noticed(r) {
   const peek = now - lastPeekAt > PEEK_MS;
   if (peek) lastPeekAt = now;
 
-  send('pet:glance', { x: p.x - at.x, y: p.y - at.y, peek });
+  // Where to sit, if it is going to: the top left of that rectangle, in the same
+  // window coordinates as the glance. The renderer picks the spot along the edge
+  // and subtracts its own height, because only it knows how tall the pet is.
+  const climb = peek && settings.mischief && Math.random() < PERCH_CHANCE;
+  const from = climb ? screen.screenToDipPoint({ x: r.x, y: r.y }) : null;
+  const to = climb ? screen.screenToDipPoint({ x: r.x + r.w, y: r.y }) : null;
+
+  send('pet:glance', {
+    x: p.x - at.x,
+    y: p.y - at.y,
+    peek,
+    perch: climb ? { x: from.x - at.x, y: from.y - at.y, w: to.x - from.x } : null,
+  });
 }
 
 // ---- renderer messaging -----------------------------------------------------
@@ -464,6 +567,17 @@ function tick() {
   pollQuiet();
   applyQuiet(now);
   state = pets.tick(state, now, { asleep: napping });
+
+  // Away from the machine is already a break, so the clock is pushed along
+  // rather than left running. Without this, five minutes in the kitchen is
+  // rewarded with a break screen the moment you sit back down.
+  if (napping) lastBreakAt = now;
+  else if (settings.breaks && breaks.due(lastBreakAt, now, settings.breakEvery * 60000, {
+    quiet: quiet && !quietOverride,
+    busy,
+  })) {
+    offerBreak();
+  }
 
   if (wasAsleep && !napping) talk('woke', { event: 'wake' });
   // Going under used to be silent, so the pet just turned grey and stopped
@@ -1097,6 +1211,7 @@ function sendLook() {
     camera: settings.camera,
     faces: settings.faces,
     bop: settings.bop,
+    mischief: settings.mischief,
   });
 }
 
@@ -1174,8 +1289,11 @@ app.whenReady().then(async () => {
     sendLook();
     restoreTimers(Date.now());
     // Launching counts as small talk, otherwise a fresh pet greets you and then
-    // immediately chatters because lastChatAt is still zero.
+    // immediately chatters because lastChatAt is still zero. The break clock
+    // starts here for the same reason, and with more at stake: at zero the first
+    // tick is overdue by fifty-five years and covers the screen on launch.
     state.lastChatAt = Date.now();
+    lastBreakAt = Date.now();
     tick();
     setInterval(tick, TICK_MS);
     talk(pets.greetKind(new Date().getHours()), { event: 'greet' });
@@ -1432,6 +1550,7 @@ app.on('will-quit', () => {
   wake.stop(); // the microphone closes before anything else happens
   windows.unwatch();
   voice.stop();
+  endBreak();
   // The timeouts go; the file stays. That is the whole point of the file.
   for (const id of timers.keys()) clearTimeout(id);
   clearTimeout(saveTimer);

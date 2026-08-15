@@ -32,7 +32,7 @@ app.whenReady().then(async () => {
   const errors = [];
   const ipc = {
     act: [], interactive: [], react: [], chat: [], chatOpen: [], photo: [], place: [],
-    ask: 0, listen: 0,
+    ask: 0, listen: 0, take: 0, done: 0,
   };
   ipcMain.on('pet:photo-taken', (_e, v) => ipc.photo.push(v));
   ipcMain.on('pet:listen', () => { ipc.listen += 1; });
@@ -43,6 +43,8 @@ app.whenReady().then(async () => {
   ipcMain.on('pet:chat', (_e, v) => ipc.chat.push(v));
   ipcMain.on('pet:chat-open', (_e, v) => ipc.chatOpen.push(v));
   ipcMain.on('pet:ask', () => { ipc.ask += 1; });
+  ipcMain.on('break:take', () => { ipc.take += 1; });
+  ipcMain.on('break:done', () => { ipc.done += 1; });
 
   const win = new BrowserWindow({
     width: 520,
@@ -635,6 +637,132 @@ app.whenReady().then(async () => {
     roamed.seen.some((d) => d < 0.001),
     'a parked pet never comes back to the spot you chose'
   );
+
+  // ...and with mischief on it does not only pace the bottom of the screen. The
+  // same forty wanders, counting how many different heights it stood at: one or
+  // two means the floor and home, which is what it did before.
+  const heights = (on) => js(`(() => {
+    mischief = ${on};
+    const tops = new Set();
+    for (let i = 0; i < 40; i++) { wanderTo(); tops.add(Math.round(stageTop)); }
+    return { tops: [...tops], floor: Math.round(roomY()) };
+  })()`);
+
+  const roaming = await heights(true);
+  check(
+    roaming.tops.length >= 5,
+    `mischief on and the pet stood at ${roaming.tops.length} height(s) in forty wanders`
+  );
+  check(
+    roaming.tops.some((t) => t < roaming.floor - 1),
+    'the pet never left the floor, so it is still pacing the taskbar'
+  );
+
+  // Off is off. Two heights at most: wherever it already was, and home.
+  const grounded = await heights(false);
+  check(
+    grounded.tops.length <= 2,
+    `mischief off and the pet still climbed to ${grounded.tops.length} heights`
+  );
+
+  // Sitting on the window you switched to. It is given the rectangle's top left
+  // and its width; where it puts itself along that edge is its own business, but
+  // it has to end up on the edge rather than through it.
+  await js('mischief = true; home = null;');
+  const perched = await js(`(() => {
+    const edge = Math.round(window.innerHeight / 2);
+    const seen = [];
+    for (let i = 0; i < 8; i++) {
+      sitOn({ x: 60, y: edge, w: 400 });
+      seen.push({ x: Math.round(stageX), bottom: Math.round(stageTop + petH()) });
+    }
+    return { seen, edge, w: 400, from: 60, stage: stage.offsetWidth };
+  })()`);
+  check(
+    perched.seen.every((p) => Math.abs(p.bottom - perched.edge) <= 1),
+    `the pet sat through the window edge rather than on it: ${JSON.stringify(perched.seen[0])}`
+  );
+  check(
+    perched.seen.every((p) => p.x >= perched.from - 1 && p.x <= perched.from + perched.w),
+    'the pet sat somewhere other than along the window it was pointed at'
+  );
+  check(
+    new Set(perched.seen.map((p) => p.x)).size > 1,
+    'the pet lands on exactly the same pixel every time, which reads as a widget'
+  );
+
+  // ---- breaks -------------------------------------------------------------
+  //
+  // A thought you can ignore, and a break you have to click for. Nothing here
+  // is allowed to happen on its own.
+
+  win.webContents.send('pet:think', { kind: 'water', face: '💧' });
+  await settle();
+  const thinking = await js(`(() => {
+    const t = document.getElementById('thought');
+    return { hidden: t.hidden, face: t.textContent.trim(), taken: false };
+  })()`);
+  check(!thinking.hidden, 'the pet was told to think about water and thought about nothing');
+  check(thinking.face === '💧', `the thought is holding ${JSON.stringify(thinking.face)}`);
+  check(ipc.take === 0, 'the thought started a break nobody clicked');
+
+  await js(`document.getElementById('thought').click()`);
+  await settle();
+  check(ipc.take === 1, 'clicking the thought did not ask for a break');
+  check(await js(`document.getElementById('thought').hidden`), 'the thought stayed up after being clicked');
+
+  // The break itself: dim, walk to the middle, drink, and the glass is the clock.
+  const parked = await js(`JSON.stringify(where)`);
+  win.webContents.send('break:show', { kind: 'water', seconds: 12 });
+  await new Promise((r) => setTimeout(r, 3200)); // the walk across, from style.css
+  const drinking = await js(`(() => {
+    const p = document.getElementById('pet').getBoundingClientRect();
+    return {
+      veil: !document.getElementById('veil').hidden,
+      counting: document.getElementById('counting').textContent,
+      drinking: document.getElementById('pet').classList.contains('is-drinking'),
+      glass: !document.getElementById('glass').hidden,
+      water: parseFloat(document.getElementById('water').style.height),
+      off: Math.abs((p.left + p.width / 2) - window.innerWidth / 2),
+    };
+  })()`);
+  check(drinking.veil, 'the screen did not dim for a break');
+  check(drinking.drinking && drinking.glass, 'the pet took a water break without drinking anything');
+  check(drinking.off <= 1, `the pet stopped ${drinking.off.toFixed(0)}px from the middle of the screen`);
+  check(/^\d+s$/.test(drinking.counting), `the countdown reads ${JSON.stringify(drinking.counting)}`);
+  check(
+    drinking.water > 0 && drinking.water < 100,
+    `the glass is at ${drinking.water}% three seconds in, so it is not the clock`
+  );
+
+  // Clicking the dimmed screen stops it, and the pet goes back where it was.
+  await js(`document.getElementById('veil').click()`);
+  await settle();
+  const stopped = await js(`(() => ({
+    veil: document.getElementById('veil').hidden,
+    breaking,
+    drinking: document.getElementById('pet').classList.contains('is-drinking'),
+    where: JSON.stringify(where),
+  }))()`);
+  check(stopped.veil && !stopped.breaking, 'clicking the dimmed screen did not end the break');
+  check(!stopped.drinking, 'the pet kept drinking after the break ended');
+  check(stopped.where === parked, `the pet did not go back where it was: ${stopped.where} vs ${parked}`);
+  check(ipc.done === 1, 'the main process was never told the break was over');
+
+  // ...and the other kind sits with its eyes shut, whichever species it is.
+  win.webContents.send('break:show', { kind: 'rest', seconds: 8 });
+  await new Promise((r) => setTimeout(r, 3200));
+  const resting = await js(`(() => ({
+    meditating: document.getElementById('pet').classList.contains('is-meditating'),
+    eyes: getComputedStyle(document.querySelector('.eyes')).display,
+    lids: getComputedStyle(document.querySelector('.lids')).display,
+    glass: document.getElementById('glass').hidden,
+  }))()`);
+  check(resting.meditating, 'a rest break did not sit the pet down');
+  check(resting.eyes === 'none' && resting.lids === 'block', 'the pet meditated with its eyes open');
+  check(resting.glass, 'the glass turned up at a rest break');
+  await js(`document.getElementById('veil').click()`);
+  await settle();
 
   win.setSize(520, 300);
   await settle();

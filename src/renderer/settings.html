@@ -94,6 +94,39 @@
     </p>
 
     <label class="check">
+      <input id="breaks" type="checkbox" />
+      <span>Remind me to stop</span>
+    </label>
+    <p class="hint">
+      Every so often the pet thinks about a glass of water, or about sitting
+      still — a little thought bubble beside it, alternating between the two.
+      Nothing happens unless you click it: ignored, it goes away on its own.
+      Click it and the pet dims the screen, walks into the middle and takes the
+      break itself while you watch. Click anywhere to stop it early. It never
+      appears while Windows is set to do not disturb — a game, a call, a
+      presentation — and time away from the machine counts as the break.
+    </p>
+
+    <div class="pair">
+      <label for="break-every">Every (minutes)</label>
+      <input id="break-every" type="number" min="5" max="240" step="5" />
+      <label for="break-for">For (seconds)</label>
+      <input id="break-for" type="number" min="5" max="600" step="5" />
+    </div>
+
+    <label class="check">
+      <input id="mischief" type="checkbox" />
+      <span>Let it get into things</span>
+    </label>
+    <p class="hint">
+      Roams the whole screen instead of pacing the bottom of it, and now and then
+      climbs up to sit on the top edge of whichever window you just switched to.
+      It is handed a rectangle and nothing else — not the title, not which
+      application — so it has no idea what it just sat on, and it cannot touch
+      your windows: it moves itself, and that is the whole of it.
+    </p>
+
+    <label class="check">
       <input id="mic" type="checkbox" />
       <span>Let me talk to it</span>
     </label>

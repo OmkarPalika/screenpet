@@ -11,9 +11,22 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <!-- A break, once you take one: everything behind the pet dims, it walks to
+         the middle of the screen, and it either sits and breathes or drinks.
+         Click anywhere on this to stop it early. -->
+    <div id="veil" class="veil" hidden></div>
+    <p id="counting" class="counting" hidden></p>
+
     <!-- The window covers the whole display; this is the bit that moves. -->
     <div id="stage" class="stage">
       <div id="bubble" class="bubble" hidden><span id="bubble-text"></span></div>
+
+      <!-- The pet wondering whether you want a break. A thought rather than a
+           line of speech, because it is offering: nothing happens until you
+           click it, and ignored it goes away on its own and asks again later. -->
+      <button id="thought" class="thought" type="button" hidden>
+        <span id="thought-face" class="thought-face"></span>
+      </button>
 
       <div id="menu" class="menu" hidden>
         <button data-act="feed">Feed</button>
@@ -42,6 +55,11 @@
 
       <div id="pet" class="pet" data-mood="neutral">
         <div id="fx" class="fx"></div>
+        <!-- The glass, for a water break. Drawn beside the pet rather than in
+             the SVG so it is the same glass whichever species is holding it -
+             and the water level in it is the countdown, which is a better clock
+             than a number because you can see it without reading it. -->
+        <div id="glass" class="glass" hidden><i id="water"></i></div>
         <!-- Lit only while the camera stream is actually open. -->
         <div id="cam" class="cam" hidden title="camera on"></div>
         <svg viewBox="0 0 120 110" width="120" height="110" aria-hidden="true">

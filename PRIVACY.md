@@ -45,7 +45,19 @@ anything to us, and there is no server to send it to.
 | A screenshot image | Only on the vision tier, when OCR finds too little text to work with | The local model only. **Never sent to a hosted provider** — an image cannot be redacted the way text can |
 | Microphone | Only with `Let me talk to it` on, and only while a phrase is being spoken | A recogniser on this machine: Windows' own, or whisper.cpp / Parakeet if you installed one. None of them reach the network, and with a local engine the audio is piped to it and never written to disk |
 | Camera | Only with the camera setting on | Answers "did anything move" and "is there a face" — never *whose* face. The detector used on each system — Windows.Media.FaceAnalysis, or Vision on macOS — is asked only to count. Neither is asked for landmarks or a face print, and no identify or compare call is made |
-| Which window is in front | Windows only, while the app is running | Nowhere. A rectangle arrives when you switch windows and the pet looks over at it. Never the title, the process, or the name of the application — the pet cannot tell a bank from a browser game, and nothing about it is written down, remembered between switches, or sent to a model. Nothing is read from that window unless you ask a question |
+| Which window is in front | Windows only, while the app is running | Nowhere. A rectangle arrives when you switch windows; the pet looks over at it, and with `Let it get into things` on it sometimes climbs up and sits on its top edge. Never the title, the process, or the name of the application — the pet cannot tell a bank from a browser game, and nothing about it is written down, remembered between switches, or sent to a model. Nothing is read from that window unless you ask a question |
+
+**The pet cannot touch your windows.** It can be told where one is, and it can
+move itself. It cannot close, minimise, resize or move anything, and it does not
+ask the operating system for the ability — which also means "close the ones I am
+not using" is not a feature it can be talked into. Its own window ignores the
+mouse, so anything it sits on stays clickable.
+
+The break reminders write nothing. There is no streak, no history and no record
+of how many you ignored — the two numbers in `settings.json` are how often and
+for how long, and that is the whole of it. A break is the pet dimming its own
+window and sitting in the middle of it; nothing is read from the screen it is
+covering, then or ever, unless you ask a question.
 
 The pet's own voice is synthesised by Windows on this machine and handed back as
 audio so the app can filter it. That audio exists in memory for as long as the

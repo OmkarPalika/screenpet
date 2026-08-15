@@ -47,6 +47,13 @@ contextBridge.exposeInMainWorld('pet', {
   onRecord: (fn) => ipcRenderer.on('pet:record', () => fn()),
   audio: (buf) => ipcRenderer.send('pet:audio', buf),
   battery: (level) => ipcRenderer.send('pet:battery', level),
+  // Breaks. The pet has a thought about water or about sitting still; you click
+  // it, or you do not. Four messages, none of which carry anything about the
+  // machine: think about this, I clicked it, here is how long, it is over.
+  onThink: (fn) => ipcRenderer.on('pet:think', (_e, what) => fn(what)),
+  breakTake: () => ipcRenderer.send('break:take'),
+  onBreak: (fn) => ipcRenderer.on('break:show', (_e, b) => fn(b)),
+  breakDone: () => ipcRenderer.send('break:done'),
   chatOpen: (open) => ipcRenderer.send('pet:chat-open', !!open),
   ask: () => ipcRenderer.send('pet:ask'),
   settings: () => ipcRenderer.send('pet:settings'),

@@ -109,6 +109,31 @@ code { font-family: Consolas, ui-monospace, monospace; font-size: 11px; }
 .check { display: flex; align-items: center; gap: 8px; font-weight: 400; }
 .check input { accent-color: var(--accent); }
 
+/* ---- number pairs ---- */
+
+/* Two numbers that only mean anything next to each other - how often, and for
+   how long. Stacked they read as two unrelated settings. */
+.pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 10px;
+  margin-bottom: 12px;
+}
+
+.pair label { margin: 0; align-self: end; }
+
+.pair input[type="number"] {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--fg);
+  font: inherit;
+}
+
+.pair input[type="number"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 /* ---- footer ---- */
 
 /* Pinned, not merely last. Every setting added used to mean a taller window,
