@@ -34,6 +34,9 @@ const memoryBox = el('memory');
 const cheek = el('cheek');
 const status = el('status');
 const saveBtn = el('save');
+const updateCheck = el('update-check');
+const updateInstall = el('update-install');
+const updateStatus = el('update-status');
 
 // Same shape check as settings.js. Duplicated deliberately: this one is only to
 // disable the button early, the one in the main process is the real gate.
@@ -355,6 +358,52 @@ function showCapabilities(caps) {
   }
 }
 
+// ---- updates ----
+
+// Nothing here runs on its own. The check happens because the button was
+// pressed, the download happens because the second button was pressed, and
+// between the two you are told which version it found.
+function showUpdate(res) {
+  updateInstall.hidden = res.state !== 'available';
+  if (res.state === 'available') {
+    updateStatus.textContent = `${res.latest} is out.`;
+    return;
+  }
+  updateStatus.textContent =
+    res.state === 'current' ? 'You have the newest one.'
+    : res.state === 'dev' ? 'Only the installed app can update itself.'
+    : res.why || 'The check did not go through.';
+}
+
+updateCheck.addEventListener('click', async () => {
+  updateCheck.disabled = true;
+  updateStatus.textContent = 'Checking…';
+  updateInstall.hidden = true;
+  try {
+    showUpdate(await window.config.update.check());
+  } finally {
+    updateCheck.disabled = false;
+  }
+});
+
+// Only resolves when it did not work: on success the app is already replacing
+// itself and this window is on its way out with it.
+updateInstall.addEventListener('click', async () => {
+  updateCheck.disabled = true;
+  updateInstall.disabled = true;
+  updateStatus.textContent = 'Downloading…';
+  const res = await window.config.update.install();
+  if (!res.ok) {
+    updateStatus.textContent = res.why || 'The download did not finish.';
+    updateCheck.disabled = false;
+    updateInstall.disabled = false;
+  }
+});
+
+window.config.update.onProgress((percent) => {
+  updateStatus.textContent = `Downloading… ${percent}%`;
+});
+
 // ---- panels ----
 
 // Five panels rather than one scroll. Only the visible one is measured for
@@ -459,6 +508,13 @@ el('close').addEventListener('click', () => window.config.close());
   // Written rather than left in the markup so there is one version number in
   // the app and it comes from the app, not from a string somebody has to
   // remember to bump.
+  // Unpackaged, `app.getVersion()` is Electron's own version rather than the
+  // pet's, so it is not shown: a wrong number is worse than no number.
+  el('version-hint').textContent = data.packaged
+    ? `You are running ${data.version}.`
+    : 'This is a development build - only an installed copy can replace itself.';
+  updateCheck.disabled = !data.packaged;
+  clampHint(el('version-hint'));
   el('autostart-hint').textContent = data.packaged
     ? ''
     : 'Only available in the packaged app - in development this would launch Electron itself.';

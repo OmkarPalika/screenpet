@@ -4,6 +4,10 @@
   "private": true,
   "description": "Desktop pet that answers what is on your screen. Fully offline.",
   "author": "Omkar Palika",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OmkarPalika/screenpet.git"
+  },
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
@@ -13,6 +17,7 @@
     "demo": "electron demo/record.js",
     "license": "node build/license.js",
     "dist": "npm run license && electron-builder",
+    "release": "npm run license && electron-builder --publish always",
     "pack": "npm run license && electron-builder --dir",
     "doctor": "node test/doctor.js",
     "build:helper": "swiftc -O -o src/system/mac/screenpet-helper src/system/mac/screenpet-helper.swift -framework Vision -framework CryptoKit -framework Security"
@@ -25,6 +30,13 @@
   "build": {
     "appId": "dev.screenpet.app",
     "productName": "screenpet",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "OmkarPalika",
+        "repo": "screenpet"
+      }
+    ],
     "asarUnpack": [
       "src/system/*.ps1",
       "src/system/mac/*"
@@ -65,5 +77,11 @@
       "category": "public.app-category.utilities",
       "icon": "build/icon.png"
     }
+  },
+  "allowScripts": {
+    "electron@43.4.0": true
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

@@ -154,6 +154,24 @@ Notes that matter:
   provider, and a stored key.
 - Screenshots are never sent to a hosted provider under any setting.
 
+### Checking for updates
+
+`Check for updates` in Settings is the one request that is not behind the
+internet switch, because it is behind something stricter: a button. Nothing is
+checked on a timer, nothing is checked at launch, and nothing is downloaded
+until you press a second button that says so.
+
+| Action | What leaves | Who receives it |
+| --- | --- | --- |
+| Check for updates | A request for this project's release list. No settings, no screen text, no memory, no account, no identifier | github.com |
+| Download and install | A request for the installer file itself | github.com |
+
+GitHub sees what any web server sees when you fetch a file — your IP address and
+the request — and nothing the app added. The release address is fixed at build
+time from `package.json`; no setting, model or skill can point it elsewhere. The
+installer is checked against the release manifest's SHA-512 before it is run,
+and it replaces the copy you already have instead of opening the setup wizard.
+
 ## Redaction, and what it does not promise
 
 Before screen text reaches any model, it is scanned for things shaped like

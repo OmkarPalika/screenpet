@@ -1687,6 +1687,23 @@ app.whenReady().then(async () => {
     })()`),
     'the settings tabs do not show exactly one panel, or a control sits outside them'
   );
+  // The update button is the one control that downloads and runs an executable,
+  // so the check here is that it stays off in an unpackaged build - where there
+  // is no installed copy to replace - and that pressing it never gets that far
+  // on its own. `packaged: false` above is what puts it in that state.
+  check(
+    await sjs(`(() => {
+      document.querySelector('.tab[data-tab="more"]').click();
+      const check = document.getElementById('update-check');
+      const install = document.getElementById('update-install');
+      return check.closest('.panel') !== null
+        && install.hidden === true
+        && check.disabled === true
+        && /development build/.test(document.getElementById('version-hint').textContent);
+    })()`),
+    'the update button is reachable in a build that cannot update, or the version is missing'
+  );
+  await sjs(`document.querySelector('.tab[data-tab="pet"]').click()`);
   fs.writeFileSync(path.join(ROOT, 'pet-settings.png'), (await sw.webContents.capturePage()).toPNG());
 
   // A malformed accelerator must not be savable - registering one throws.
