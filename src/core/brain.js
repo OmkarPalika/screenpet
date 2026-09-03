@@ -352,6 +352,21 @@ const KEEP_ALIVE = process.env.SCREENPET_KEEP_ALIVE || '30m';
  * sent to that company. It is redacted first, by the patterns above, which is a
  * filter for the secrets it knows the shape of and not a promise about the rest.
  */
+/**
+ * A failure the pet can say as it stands.
+ *
+ * These used to be returned rather than thrown, which read fine in a bubble and
+ * was wrong everywhere else: "I cannot reach the local model" arrived at the
+ * caller as an answer, so the pet spoke it in the answer voice, `npm run smoke`
+ * counted it as a successful read and exited 0, and nothing anywhere could tell
+ * a reply apart from a dead socket. They throw now. Callers already catch and
+ * show `err.message`, so the wording reaches the bubble unchanged.
+ *
+ * `said` marks the ones already phrased for a person, so the catch at the
+ * bottom passes them through instead of relabelling them as a network failure.
+ */
+const speak = (message) => Object.assign(new Error(message), { said: true });
+
 async function generate(body, opts = {}) {
   const fetchImpl = opts.fetch || globalThis.fetch;
 
@@ -368,8 +383,9 @@ async function generate(body, opts = {}) {
       ))));
     } catch (err) {
       // providers.js only ever throws messages that are safe to show - it never
-      // puts the key, the prompt or a provider's error body in one.
-      return err.message;
+      // puts the key, the prompt or a provider's error body in one. Passed
+      // through as a failure rather than returned as an answer: see `speak`.
+      throw err;
     }
   }
 
@@ -395,9 +411,9 @@ async function generate(body, opts = {}) {
     // message - "is Ollama running?" sends you to check a service that is fine,
     // and the default model is one plenty of people will not have pulled yet.
     if (res.status === 404) {
-      return `I do not have "${body.model}" yet.\nRun: ollama pull ${body.model}`;
+      throw speak(`I do not have "${body.model}" yet.\nRun: ollama pull ${body.model}`);
     }
-    if (!res.ok) throw new Error(`Ollama returned ${res.status}`);
+    if (!res.ok) throw speak(`Ollama answered ${res.status}, which I cannot read.`);
     if (live) {
       const whole = await drink(res, opts.onToken);
       return stripMarkup(unquote(stripEcho(stripThinking(whole))));
@@ -408,8 +424,11 @@ async function generate(body, opts = {}) {
     // one file that is meant to have none.
     return stripMarkup(unquote(stripEcho(stripThinking(String(data.response || '')))));
   } catch (err) {
-    if (err.name === 'AbortError') return 'That took too long. Try a smaller model.';
-    return `I cannot reach the local model. Is Ollama running?\n(${err.message})`;
+    // Already phrased for the bubble by one of the throws above. Relabelling it
+    // as a dead socket would send somebody to restart a service that answered.
+    if (err.said) throw err;
+    if (err.name === 'AbortError') throw speak('That took too long. Try a smaller model.');
+    throw speak(`I cannot reach the local model. Is Ollama running?\n(${err.message})`);
   } finally {
     clearTimeout(timer);
   }

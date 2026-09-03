@@ -2003,23 +2003,31 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   // that replies in 1.2s and one that replies in 12.6s every time.
   assert.strictEqual(JSON.parse(sent).keep_alive, '30m', 'model not kept warm');
 
-  // Failure modes return a message, never throw into the pet.
+  // Failure modes throw, and the message is still the one a person reads.
+  //
+  // These used to be returned. Returning them meant a dead socket arrived at the
+  // caller as an answer: the pet spoke "I cannot reach the local model" in the
+  // answer voice with the answer face, and `npm run smoke` - whose whole job is
+  // to prove the app can answer - saw a reply and exited 0. A check that cannot
+  // fail for the one thing it checks is not a check.
   const down = async () => { throw new Error('ECONNREFUSED'); };
-  assert.match(await ask('hi', { fetch: down }), /Ollama/);
+  await assert.rejects(ask('hi', { fetch: down }), /Ollama/);
 
   const http500 = async () => ({ ok: false, status: 500 });
-  assert.match(await ask('hi', { fetch: http500 }), /Ollama/);
+  await assert.rejects(ask('hi', { fetch: http500 }), /500/);
 
   // A missing model is not a missing Ollama, and the default is one plenty of
   // people will not have pulled. Sending them to check a service that is running
   // fine is the wrong instruction.
   const http404 = async () => ({ ok: false, status: 404 });
-  const missing = await ask('hi', { fetch: http404, model: 'deepseek-r1:8b' });
-  assert.match(missing, /ollama pull deepseek-r1:8b/);
-  assert.ok(!/is Ollama running/i.test(missing), 'a missing model blamed the server');
+  await assert.rejects(
+    ask('hi', { fetch: http404, model: 'deepseek-r1:8b' }),
+    (err) => /ollama pull deepseek-r1:8b/.test(err.message)
+      && !/is Ollama running/i.test(err.message)
+  );
 
   const slow = async () => { const e = new Error('aborted'); e.name = 'AbortError'; throw e; };
-  assert.match(await ask('hi', { fetch: slow }), /too long/);
+  await assert.rejects(ask('hi', { fetch: slow }), /too long/);
 
   // --- vision tier ---------------------------------------------------------
   const { askVision, detectVisionModel, listModels } = require('../src/core/brain');
