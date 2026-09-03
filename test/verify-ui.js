@@ -1480,7 +1480,7 @@ app.whenReady().then(async () => {
   });
 
   const sw = new BrowserWindow({
-    width: 460, height: 940, show: true, // must match openSettings() in main.js
+    width: 500, height: 700, show: true, // must match openSettings() in main.js
     webPreferences: {
       preload: path.join(SRC, 'preload.js'),
       backgroundThrottling: false,
@@ -1650,12 +1650,42 @@ app.whenReady().then(async () => {
       && document.getElementById('api-key').value === ''`),
     'the settings window has a way to read a stored API key'
   );
-  // The window is not resizable, so anything below the fold is unreachable.
+  // Save sits in a footer outside the scrolling panel, so it is reachable at any
+  // window height. It used to share its class with the API-key button row, and
+  // both were position:fixed at the bottom - stacked exactly on top of one
+  // another.
   check(
     await sjs(
       `document.getElementById('save').getBoundingClientRect().bottom <= window.innerHeight`
     ),
-    'Save button falls outside the settings window - it is not resizable, so it cannot be reached'
+    'Save button falls outside the settings window'
+  );
+  check(
+    await sjs(`(() => {
+      const key = document.getElementById('key-save').getBoundingClientRect();
+      const save = document.getElementById('save').getBoundingClientRect();
+      return key.bottom <= save.top || key.top >= save.bottom || key.width === 0;
+    })()`),
+    'the API-key buttons overlap the Save button'
+  );
+  // One panel at a time, and every setting has to live in one of them - a
+  // control in no panel is unreachable however tall the window is.
+  check(
+    await sjs(`(() => {
+      const panels = [...document.querySelectorAll('.panel')];
+      const tabs = [...document.querySelectorAll('.tab')];
+      if (panels.length !== tabs.length) return false;
+      for (const t of tabs) {
+        t.click();
+        const shown = panels.filter((p) => !p.hidden);
+        if (shown.length !== 1 || shown[0].dataset.panel !== t.dataset.tab) return false;
+        if (t.getAttribute('aria-selected') !== 'true') return false;
+      }
+      tabs[0].click();
+      return [...document.querySelectorAll('input, select')]
+        .every((c) => c.closest('.panel'));
+    })()`),
+    'the settings tabs do not show exactly one panel, or a control sits outside them'
   );
   fs.writeFileSync(path.join(ROOT, 'pet-settings.png'), (await sw.webContents.capturePage()).toPNG());
 

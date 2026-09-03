@@ -88,6 +88,7 @@ function fillModels(models, selected) {
     ? 'Used for reading text off the screen.'
     : 'Could not reach Ollama, so this list may be incomplete.';
   el('model-hint').classList.toggle('warn', !models.length);
+  clampHint(el('model-hint'));
 }
 
 function fillSkins(skins) {
@@ -141,6 +142,7 @@ function showVision(visionModel) {
     : 'No vision-capable model installed, so text is read with Windows OCR. '
       + 'Pull one (for example moondream) to handle diagrams.';
   hint.classList.toggle('warn', !visionModel);
+  clampHint(hint);
 }
 
 // The main process refuses these combinations anyway; greying them out here is
@@ -183,6 +185,8 @@ function showProvider() {
   if (!local) watchBox.checked = false;
   const watchLabel = watchBox.closest('label');
   if (watchLabel) watchLabel.classList.toggle('unavailable', !local);
+
+  clampHint(hint);
 
   providerModel.placeholder = p && p.model ? p.model : '';
   providerModel.disabled = local;
@@ -351,6 +355,45 @@ function showCapabilities(caps) {
   }
 }
 
+// ---- panels ----
+
+// Five panels rather than one scroll. Only the visible one is measured for
+// clamping, because a hidden element has no height to measure.
+const panels = Array.from(document.querySelectorAll('.panel'));
+const tabs = Array.from(document.querySelectorAll('.tab'));
+
+function showTab(name) {
+  for (const t of tabs) t.setAttribute('aria-selected', String(t.dataset.tab === name));
+  for (const p of panels) p.hidden = p.dataset.panel !== name;
+  document.querySelector('main').scrollTop = 0;
+  for (const h of document.querySelectorAll(`[data-panel="${name}"] .hint`)) clampHint(h);
+}
+
+for (const t of tabs) t.addEventListener('click', () => showTab(t.dataset.tab));
+
+// Every word of the hints is kept - they are what the app promises about your
+// screen, your microphone and your camera, and none of that is worth hiding
+// behind a click you have to know to make. Two lines are always visible and the
+// rest is one click away. A hint that already fits gets no button: measured
+// rather than guessed, because the text is prose written for a fixed width and
+// half of it fits.
+function clampHint(hint) {
+  if (!hint.offsetParent) return;
+  const next = hint.nextElementSibling;
+  if (next && next.classList.contains('more')) next.remove();
+  hint.classList.remove('clamp');
+  if (!hint.textContent.trim()) return;
+  hint.classList.add('clamp');
+  if (hint.scrollHeight <= hint.clientHeight + 1) return hint.classList.remove('clamp');
+  const more = document.createElement('button');
+  more.className = 'more';
+  more.textContent = 'more';
+  more.addEventListener('click', () => {
+    more.textContent = hint.classList.toggle('clamp') ? 'more' : 'less';
+  });
+  hint.after(more);
+}
+
 el('close').addEventListener('click', () => window.config.close());
 
 (async () => {
@@ -413,9 +456,15 @@ el('close').addEventListener('click', () => window.config.close());
   gateDevices();
   autostart.checked = current.autostart;
   autostart.disabled = !data.packaged;
+  // Written rather than left in the markup so there is one version number in
+  // the app and it comes from the app, not from a string somebody has to
+  // remember to bump.
   el('autostart-hint').textContent = data.packaged
     ? ''
     : 'Only available in the packaged app - in development this would launch Electron itself.';
+  clampHint(el('autostart-hint'));
 
   validate();
 })();
+
+showTab('pet');

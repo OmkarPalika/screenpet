@@ -266,9 +266,14 @@ function createWindow() {
 function openSettings() {
   if (settingsWin && !settingsWin.isDestroyed()) return settingsWin.focus();
   settingsWin = new BrowserWindow({
-    width: 460,
-    height: 940,
-    resizable: false,
+    width: 500,
+    height: 700,
+    minWidth: 420,
+    minHeight: 460,
+    // Resizable now that the panel between the tabs and the button row is the
+    // only thing that scrolls - Save cannot be pushed off the bottom, which is
+    // the reason this was pinned shut and 940px tall.
+    resizable: true,
     title: 'screenpet',
     icon: path.join(ASSETS, 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
