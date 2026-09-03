@@ -1638,6 +1638,23 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.strictEqual(answer, '391.', 'a real answer was swallowed');
   })();
 
+  // A read nobody asked for does not pay for the monologue - measured at 8181ms
+  // with thinking and 548ms without, for the same answer. A read you asked for
+  // still does.
+  (async () => {
+    const sent = [];
+    const spy = async (_u, init) => {
+      sent.push(JSON.parse(init.body));
+      return { ok: true, status: 200, json: async () => ({ response: 'NOTHING' }) };
+    };
+    await ask('a screen with plenty of words on it and nothing being asked', {
+      watching: true, fetch: spy,
+    });
+    await ask('a screen with plenty of words on it and nothing being asked', { fetch: spy });
+    assert.strictEqual(sent[0].think, false, 'the unasked-for read still thinks it through');
+    assert.strictEqual('think' in sent[1], false, 'the hotkey read lost the reasoner');
+  })();
+
   // Four rules in the main process, pinned rather than trusted to survive an
   // edit. The second lock on the hosted provider; the change gate; no vision
   // tier on a read nobody asked for; and no error bubble every minute.

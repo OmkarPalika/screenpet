@@ -483,15 +483,26 @@ async function ask(screenText, opts = {}) {
   const cleaned = cleanOcr(screenText);
   if (!cleaned) return EMPTY_SCREEN;
   const watching = opts.watching === true;
-  const answer = await generate(
-    {
-      model: opts.model || MODEL,
-      prompt: watching
-        ? buildWatchPrompt(redact(cleaned))
-        : buildPrompt(redact(cleaned), opts.mood),
-    },
-    opts
-  );
+  const body = {
+    model: opts.model || MODEL,
+    prompt: watching
+      ? buildWatchPrompt(redact(cleaned))
+      : buildPrompt(redact(cleaned), opts.mood),
+  };
+  // The reasoner earns its wait when you pressed the hotkey and are watching the
+  // bubble. It does not earn it here: the honest answer is NOTHING almost every
+  // time, and thinking it through first costs a full reasoning pass every
+  // watchEvery seconds to arrive at silence. Measured on deepseek-r1:8b against
+  // five quiet screens, five runs each: 8181ms and 23/25 correct with thinking,
+  // 548ms and 24/25 without. It is not a quality trade - both misfires with
+  // thinking on were the model misspelling its own sentinel as NOTING, which
+  // isSilent does not catch and the pet would have said out loud.
+  //
+  // Switched off, never on: a model that cannot think rejects a request for it
+  // outright, while think:false is accepted by every model tested, thinking or
+  // not - see the same reasoning in chat().
+  if (watching) body.think = false;
+  const answer = await generate(body, opts);
   return watching && isSilent(answer) ? EMPTY_SCREEN : answer;
 }
 
