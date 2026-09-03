@@ -681,6 +681,53 @@ function tick() {
 
 // ---- answering --------------------------------------------------------------
 
+// Whether there is a model to answer with at all.
+//
+// The pet does not need one. It wanders, naps, sits on your windows, takes
+// breaks, eats, is petted, wears hats, answers every skill in skills.js and
+// pulls all forty faces without ever speaking to Ollama. Reading the screen is
+// the one thing that needs a model, and it is meant to read as a part you
+// switch on rather than as the app being broken until you do.
+//
+// So this exists to tell "off" apart from "broken" before anything shows a
+// thinking bubble and then a failed fetch three seconds later.
+let brainReady = false;
+
+/**
+ * One GET to loopback. Cheap enough to redo whenever settings change and
+ * whenever a read is asked for, which is what makes installing Ollama halfway
+ * through a session work without restarting the pet.
+ */
+async function probeBrain() {
+  // A hosted provider is a key and a URL rather than an install. There is
+  // nothing local to look for, and providers.js is the thing that reports on it.
+  if (!providers.isLocal(settings.provider)) {
+    brainReady = true;
+    return true;
+  }
+  brainReady = (await listModels({ endpoint: endpoint() })).length > 0;
+  return brainReady;
+}
+
+/**
+ * Said instead of answering, when there is no model to answer with. The pet's
+ * own words, out of the line bank, because nothing has gone wrong.
+ *
+ * Never during the smoke check: that check exists to prove the app can answer,
+ * and a pet cheerfully saying it cannot read would have it pass on a machine
+ * with no model at all.
+ */
+function sayNoBrain() {
+  if (process.env.SCREENPET_SMOKE) return false;
+  send('pet:say', {
+    text: pets.line('nobrain', lineIndex++, settings.pet),
+    kind: 'chat',
+    expr: pets.expressionFor('nobrain'),
+    chatter: true,
+  });
+  return true;
+}
+
 async function resolveVision() {
   // A screenshot cannot be redacted, so the vision tier is local-only. Choosing
   // a hosted provider gives up reading diagrams rather than uploading the screen
@@ -769,14 +816,32 @@ async function readScreen({ unprompted = false } = {}) {
   // refuses the combination; this is the second lock on the same door, and the
   // one that holds if a settings file is edited by hand.
   if (unprompted && !providers.isLocal(settings.provider)) return;
+  // Set before the probe below, which awaits: without it a second press of the
+  // hotkey during that round trip walks straight past the guard on the line
+  // above and reads the screen twice.
   busy = true;
-  if (!unprompted) {
-    // The hour, and nothing else. Not what was on the screen, not what was asked.
-    noteEvent('ask');
-    attention();
-    send('pet:say', { text: 'thinking', kind: 'thinking' });
-  }
   try {
+    if (!unprompted) {
+      // The hour, and nothing else. Not what was on the screen, not what was
+      // asked. True whether or not there turns out to be a model to answer
+      // with: you asked, and the pet noticed you.
+      noteEvent('ask');
+      attention();
+    }
+    // Nothing to answer with. Checked before the screenshot rather than after
+    // the model refuses, so there is no shot taken, no thinking bubble and no
+    // wait - and re-probed here, so installing Ollama and pressing the hotkey
+    // again is all it takes to turn reading on.
+    if (!brainReady && !(await probeBrain())) {
+      // A timer that cannot read says nothing at all. Once a minute is the
+      // wrong frequency for news that does not change.
+      if (unprompted) return;
+      // Falls through only for the smoke check, which sayNoBrain refuses: it is
+      // there to prove the app can answer, so it takes the real path and
+      // reports the real failure.
+      if (sayNoBrain()) return;
+    }
+    if (!unprompted) send('pet:say', { text: 'thinking', kind: 'thinking' });
     const png = await grabScreen();
     // Mood is passed for tone only. Nothing here can refuse to answer.
     const mood = pets.mood(state, { asleep: asleep() });
@@ -1113,9 +1178,15 @@ async function replyTo(message) {
   // would just be the pet talking over itself.
   attention();
   if (runSkill(text)) return;
+  // Same reason as readScreen: the probe below awaits, so the guard at the top
+  // of this function has to be closed before it rather than after.
   busy = true;
-  send('pet:say', { text: 'thinking', kind: 'thinking' });
   try {
+    // After the skills, not before: timers, faces, memory, music and the rest of
+    // skills.js are the pet's own and never needed a model, so a machine with no
+    // Ollama still has a pet that does most of what you ask it.
+    if (!brainReady && !(await probeBrain()) && sayNoBrain()) return;
+    send('pet:say', { text: 'thinking', kind: 'thinking' });
     const onToken = providers.isLocal(settings.provider) && !process.env.SCREENPET_SMOKE
       ? streamer() : undefined;
     const reply = await chat(text, {
@@ -1307,6 +1378,7 @@ async function applySettings() {
   sendLook();
   refreshTray(); // the mute state is shown there
   visionModel = await resolveVision();
+  await probeBrain();
 }
 
 /** The one way settings change, wherever the change came from. */
@@ -1595,6 +1667,10 @@ ipcMain.handle('config:get', async () => ({
   visionModel,
   packaged: app.isPackaged,
   version: app.getVersion(),
+  // Whether anything can answer at all. The settings window says which of "no
+  // model installed" and "Ollama is not running" it is looking at, and says it
+  // without calling either one a failure.
+  brain: brainReady,
   // What this machine can actually do. A switch for a capability the host does
   // not have is worse than no switch: it reads as a promise and then does
   // nothing. The settings window disables those and says why.

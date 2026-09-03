@@ -339,6 +339,21 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   ]) {
     assert.ok(pets.line(kind, 0).length > 0, `no lines for ${kind}`);
   }
+
+  // Asked to read with no model installed. This is the whole of what somebody
+  // who has not installed Ollama ever sees from the reading half of the app, so
+  // it has to exist, it has to have a face, and it has to say what to do about
+  // it rather than only that it cannot.
+  assert.ok(pets.LINES.nobrain.length >= 4, 'the no-model bank is too thin to repeat from');
+  for (const l of pets.LINES.nobrain) assert.ok(l.trim().length > 0, 'blank no-model line');
+  assert.ok(
+    pets.LINES.nobrain.some((l) => /ollama/i.test(l)),
+    'no line says what to install, so the pet only ever says it cannot'
+  );
+  assert.ok(pets.expressionFor('nobrain'), 'the no-model line has no face');
+  // Not the crash face. Nothing went wrong, and painting it as an error is what
+  // this whole path exists to stop.
+  assert.notStrictEqual(pets.expressionFor('nobrain'), pets.expressionFor('error'));
 }
 
 // --- species voices, with the shared bank underneath ---

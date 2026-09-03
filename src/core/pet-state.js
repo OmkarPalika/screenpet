@@ -540,6 +540,19 @@ const LINES = {
     'not a single question. suspicious',
   ],
 
+  // No model on this machine. Not an error, and said in the pet's own voice for
+  // that reason: reading the screen is the one thing here that needs Ollama, and
+  // everything else the pet does - wandering, napping, breaks, the skills, being
+  // fed, every one of its faces - works without it. A red bubble about a failed
+  // fetch tells you the app is broken. It is not. It just cannot read yet.
+  nobrain: [
+    'screens are a blur to me. install Ollama and I will learn to read',
+    'that part needs a model on this machine. everything else still works',
+    'no reading brain yet! I am excellent company regardless',
+    'I cannot read that one. get Ollama, pull a model, then ask me again',
+    'still illiterate. it is on my list',
+  ],
+
   // The poke ladder. Three separate banks because "stop" and "STOP" and
   // "*sniffles*" are three different feelings, not one with more exclamation marks.
   shyly: ['oh - hello', 'that is a lot of attention', '*hides*', 'you are very close'],
@@ -676,6 +689,9 @@ const EXPRESSIONS = {
   quiet: 'deadpan',
   relieved: 'joy',
   nothing: 'giggle',
+  // Asked to read with no model installed. Sheepish rather than 'oops': nothing
+  // went wrong, the pet simply cannot do that one yet.
+  nobrain: 'grimace',
   milestone: 'joy',
   doze: 'doze',
   listen: 'listen',
