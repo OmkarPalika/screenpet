@@ -816,6 +816,10 @@ async function readScreen({ unprompted = false } = {}) {
   // refuses the combination; this is the second lock on the same door, and the
   // one that holds if a settings file is edited by hand.
   if (unprompted && !providers.isLocal(settings.provider)) return;
+  // Declared out here so the finally can stop it. A failure now throws out of
+  // ask(), and a streamer left running paints its queued partial answer into
+  // the bubble up to 70ms after the error has already replaced it.
+  let onToken = null;
   // Set before the probe below, which awaits: without it a second press of the
   // hotkey during that round trip walks straight past the guard on the line
   // above and reads the screen twice.
@@ -876,14 +880,13 @@ async function readScreen({ unprompted = false } = {}) {
     // Never while watching either: most of those answers are the sentinel that
     // means "say nothing", and streaming would type it into the bubble and then
     // take it away again.
-    const onToken = providers.isLocal(settings.provider) && !process.env.SCREENPET_SMOKE && !unprompted
-      ? streamer() : undefined;
+    onToken = providers.isLocal(settings.provider) && !process.env.SCREENPET_SMOKE && !unprompted
+      ? streamer() : null;
     const answer = useVision
       ? await askVision(png.toString('base64'), {
           ...where, mood, model: visionModel, timeoutMs: VISION_TIMEOUT_MS, onToken,
         })
       : await ask(ocrText, { ...where, mood, onToken, watching: unprompted });
-    if (onToken) onToken.stop();
 
     // Kept for a follow-up question, redacted the same way the model's copy was.
     // Vision answers keep no text: there was none to read, and the screenshot
@@ -894,9 +897,8 @@ async function readScreen({ unprompted = false } = {}) {
 
     if (unprompted) {
       // Nothing worth saying is the usual outcome, and it is said by not saying
-      // anything. The second half is for the answer that is the same every time
-      // - most often "Ollama is not running", which is worth hearing once and
-      // not once a minute.
+      // anything. The second half is for an answer that comes back identical
+      // read after read, which is worth hearing once and not once a minute.
       if (!answer || answer === lastWatchSaid) return;
       lastWatchSaid = answer;
       return send('pet:say', { text: answer, kind: 'answer', expr: pets.expressionFor('answer') });
@@ -919,6 +921,7 @@ async function readScreen({ unprompted = false } = {}) {
     if (unprompted) console.error('watch:', err.message);
     else send('pet:say', { text: err.message, kind: 'error', expr: pets.expressionFor('error') });
   } finally {
+    if (onToken) onToken.stop();
     busy = false;
   }
 }
@@ -1178,8 +1181,10 @@ async function replyTo(message) {
   // would just be the pet talking over itself.
   attention();
   if (runSkill(text)) return;
-  // Same reason as readScreen: the probe below awaits, so the guard at the top
-  // of this function has to be closed before it rather than after.
+  // Both out here for the same reasons they are in readScreen: the probe below
+  // awaits, so the guard at the top has to be closed before it, and the finally
+  // has to be able to stop a streamer that a thrown failure jumped over.
+  let onToken = null;
   busy = true;
   try {
     // After the skills, not before: timers, faces, memory, music and the rest of
@@ -1187,8 +1192,8 @@ async function replyTo(message) {
     // Ollama still has a pet that does most of what you ask it.
     if (!brainReady && !(await probeBrain()) && sayNoBrain()) return;
     send('pet:say', { text: 'thinking', kind: 'thinking' });
-    const onToken = providers.isLocal(settings.provider) && !process.env.SCREENPET_SMOKE
-      ? streamer() : undefined;
+    onToken = providers.isLocal(settings.provider) && !process.env.SCREENPET_SMOKE
+      ? streamer() : null;
     const reply = await chat(text, {
       ...(await llm()),
       mood: pets.mood(state, { asleep: asleep() }),
@@ -1200,13 +1205,13 @@ async function replyTo(message) {
       // Ollama on loopback; with a hosted provider chosen, it goes there.
       memory: settings.memory ? memory.brief(mem, text, Date.now()) : [],
     });
-    if (onToken) onToken.stop();
     history.push({ you: text, pet: reply });
     if (history.length > HISTORY_TURNS) history.shift();
     talk(null, { text: reply, event: replies++ % 2 ? 'wink' : 'chat' });
   } catch (err) {
     send('pet:say', { text: err.message, kind: 'error', expr: pets.expressionFor('error') });
   } finally {
+    if (onToken) onToken.stop();
     busy = false;
   }
 }
