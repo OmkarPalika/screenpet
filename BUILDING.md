@@ -12,6 +12,80 @@ npm run dist
 Produces `dist/screenpet-0.1.0-setup.exe` and a portable build. Nothing else is
 needed: the PowerShell scripts in `src/system/` are interpreted, not compiled.
 
+## Publishing a release
+
+`Check for updates` in Settings reads GitHub's release list for
+`OmkarPalika/screenpet`, which is the `publish` block in `package.json`. Two
+things have to be true for it to find anything:
+
+1. That repository has to exist and have a release. It does not yet — there is
+   no git remote on this checkout.
+2. The release has to carry `latest.yml` next to the installer. That file is
+   what electron-updater reads, and it holds the SHA-512 the download is checked
+   against. `npm run dist` does not produce it; publishing does.
+
+```bash
+npm version patch
+```
+```bash
+npm run release
+```
+
+`release` is `electron-builder --publish always`, which needs a GitHub token
+with `repo` scope in `GH_TOKEN`. It uploads the installer, the portable build
+and `latest.yml` to a draft release for the current `version` in
+`package.json` — publish the draft and the button in Settings will see it.
+
+Bump the version before every release. electron-updater compares semver, so a
+release that reuses a version number is invisible to everyone already running
+it.
+
+## Signing the Windows build
+
+Unsigned, SmartScreen warns on first install, and electron-updater skips its
+publisher-signature check on the downloaded installer — the SHA-512 in
+`latest.yml` is then the only thing standing between a compromised release feed
+and code running as you. Signing is what turns that into two independent checks.
+
+**Since June 2023 every code-signing certificate's private key has to live on
+FIPS 140-2 Level 2 hardware.** No CA issues a plain `.pfx` any more, so the
+choice is a USB token that has to be plugged in, or a cloud signing service.
+
+| Route | Rough cost | Notes |
+| --- | --- | --- |
+| Azure Trusted Signing | ~$10/month | Cheapest, no hardware, signs in CI. Organisations need three years of verifiable trading history; there is an individual tier |
+| Certum open-source certificate | ~€60–100/year | Aimed at open-source authors, cheapest one-off. Physical USB token, so signing happens on your machine |
+| SSL.com / DigiCert / Sectigo OV | ~$200–400/year | Token or the CA's own cloud signer |
+| Any of the above, EV | ~2–3× the OV price | The only reason to pay it: EV gets SmartScreen reputation immediately. OV builds it over downloads and time |
+
+Whichever you pick, the identity check is the slow part — expect days, and for a
+personal certificate expect to prove your address.
+
+Once you have one, sign at build time. electron-builder 25 and later nest the
+Windows options, which older guides on the web do not:
+
+```jsonc
+// package.json, inside "build"
+"win": {
+  "signtoolOptions": {
+    // Exactly as it appears in the certificate. electron-updater compares this
+    // against the signature on a downloaded installer before running it.
+    "publisherName": "Omkar Palika",
+    "certificateSubjectName": "Omkar Palika",
+    "rfc3161TimeStampServer": "http://timestamp.digicert.com"
+  }
+}
+```
+
+With a USB token that is all of it — signtool finds the certificate in the
+Windows store by subject name, and the token asks for its PIN. For Azure Trusted
+Signing use `azureSignOptions` instead and put the credentials in
+`AZURE_TENANT_ID`, `AZURE_CLIENT_ID` and `AZURE_CLIENT_SECRET`; never in
+`package.json`.
+
+Timestamping is not optional. Without it every signature you have ever made
+stops verifying the day the certificate expires.
+
 ## macOS
 
 macOS needs one thing Windows does not — a small compiled helper. Vision (text

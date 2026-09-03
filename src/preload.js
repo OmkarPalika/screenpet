@@ -70,4 +70,12 @@ contextBridge.exposeInMainWorld('config', {
   // providers have a key, never with a key. There is deliberately no getKey.
   setKey: (provider, key) => ipcRenderer.invoke('keys:set', String(provider), String(key)),
   clearKey: (provider) => ipcRenderer.invoke('keys:clear', String(provider)),
+  // Updates. Three one-way calls, all started by a button: ask what is out,
+  // fetch and install it, and hear how far the download got. Nothing about this
+  // machine goes the other way - see system/update.js.
+  update: {
+    check: () => ipcRenderer.invoke('update:check'),
+    install: () => ipcRenderer.invoke('update:install'),
+    onProgress: (fn) => ipcRenderer.on('update:progress', (_e, percent) => fn(Number(percent))),
+  },
 });

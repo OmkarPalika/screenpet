@@ -24,6 +24,7 @@ const memory = require('./core/memory');
 const net = require('./core/net');
 const providers = require('./core/providers');
 const keys = require('./system/keys');
+const update = require('./system/update');
 const {
   ask, askVision, chat, detectVisionModel, listModels, hasEnoughText, redact,
 } = require('./core/brain');
@@ -1593,6 +1594,7 @@ ipcMain.handle('config:get', async () => ({
   models: await listModels({ endpoint: endpoint() }),
   visionModel,
   packaged: app.isPackaged,
+  version: app.getVersion(),
   // What this machine can actually do. A switch for a capability the host does
   // not have is worse than no switch: it reads as a promise and then does
   // nothing. The settings window disables those and says why.
@@ -1628,6 +1630,36 @@ ipcMain.handle('keys:clear', async (_e, provider) => {
   writeJson('keys.json', keyStore);
   keys.drop(provider);
   return { ok: true, keys: keys.present(keyStore) };
+});
+
+/**
+ * Is there a newer one? Pressed, never scheduled - see update.js for what the
+ * request carries, which is nothing about this machine.
+ */
+ipcMain.handle('update:check', async () => {
+  try {
+    return await update.check();
+  } catch (err) {
+    return { state: 'error', why: err.message, version: app.getVersion() };
+  }
+});
+
+/**
+ * Download it, check it against the release manifest, and replace this copy.
+ * Only resolves when it did not happen: on success the app is already on its
+ * way out and there is nobody left to answer.
+ */
+ipcMain.handle('update:install', async () => {
+  try {
+    await update.install((percent) => {
+      if (settingsWin && !settingsWin.isDestroyed()) {
+        settingsWin.webContents.send('update:progress', percent);
+      }
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, why: err.message };
+  }
 });
 
 ipcMain.handle('config:save', async (_e, patch) => ({

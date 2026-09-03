@@ -1681,7 +1681,12 @@ location.
 **The build is unsigned.** Windows SmartScreen will warn on first run and some
 users will not get past that. Shipping properly needs an Authenticode
 certificate; an EV one avoids the reputation-building period. That is a purchase
-and an identity check, not a code change.
+and an identity check, not a code change. The routes, the prices and the
+electron-builder config for each are in [BUILDING.md](BUILDING.md#signing-the-windows-build).
+
+Signing also matters to updates: unsigned, electron-updater skips the publisher
+check on an installer it downloaded, and the SHA-512 in `latest.yml` is the only
+thing left guarding it.
 
 ## Shipping
 
@@ -1690,7 +1695,8 @@ autostart is wired to `setLoginItemSettings` (packaged builds only).
 
 What is left, and none of it is code:
 
-- A code signing certificate, or accept the SmartScreen warning
+- A code signing certificate, or accept the SmartScreen warning — [BUILDING.md](BUILDING.md#signing-the-windows-build)
+- A GitHub repository with a published release, or `Check for updates` finds nothing
 - Steamworks account and the $100 app fee, store page, depot upload
 - Or itch.io, which has no fee and no signing expectation — a better first stop
 - Screenshots and a capture of the pet answering something, which is the entire
@@ -2122,7 +2128,10 @@ exits. The one path the other two cannot reach.
   December unless you say `forget`.
 - **Autostart is wired but not exercised end to end.** It is gated on
   `app.isPackaged` and only reachable from the settings window of a built app.
-- **No auto-update.** Every new version is a manual download.
+- **Updates are a button, never a background check.** Settings → More →
+  `Check for updates` asks GitHub what is out and installs it over the copy you
+  have. Nothing polls, nothing downloads unasked, and none of it works in
+  development — there is no installed copy for an installer to replace.
 - **`ocr.ps1` needs Windows PowerShell 5.1**, not PowerShell 7 — the WinRT type
   projections it uses do not exist in 7.
 - **The first answer after a cold start is still the slow one.** ~7.6s of model

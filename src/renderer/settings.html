@@ -366,6 +366,27 @@
       <section class="panel" data-panel="more" role="tabpanel" hidden>
         <div class="card">
           <div class="set">
+            <span class="title">Version</span>
+            <p class="hint" id="version-hint"></p>
+            <div class="keyrow">
+              <button id="update-check" class="ghost">Check for updates</button>
+              <button id="update-install" class="ghost" hidden>Download and install</button>
+              <span class="status" id="update-status"></span>
+            </div>
+            <p class="hint">
+              Nothing is checked on a timer and nothing downloads until you press the
+              second button. The only thing that leaves this machine is a request for
+              the release list &mdash; <strong>no settings, no screen, no memory, no
+              account and no identifier</strong> go with it. The installer that comes
+              back is checked against the release manifest before it is run, and it
+              installs over the copy you already have rather than opening the setup
+              wizard again.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="set">
             <label class="check">
               <input id="memory" type="checkbox" />
               <span>Remember things between sessions</span>
