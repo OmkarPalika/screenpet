@@ -77,7 +77,7 @@ function paintPreviews() {
   el('pets').dataset.skin = skin;
 }
 
-function fillModels(models, selected) {
+function fillModels(models, selected, brain) {
   modelSel.replaceChildren();
   const names = models.length ? models : [selected];
   for (const name of names) {
@@ -87,10 +87,18 @@ function fillModels(models, selected) {
     modelSel.append(opt);
   }
   modelSel.value = selected;
+  // Not styled as a warning when there is nothing installed. Nothing is broken:
+  // the pet works without a model, and reading the screen is the part this
+  // switches on. Calling that an error is what makes people uninstall the app
+  // rather than install Ollama.
   el('model-hint').textContent = models.length
     ? 'Used for reading text off the screen.'
-    : 'Could not reach Ollama, so this list may be incomplete.';
-  el('model-hint').classList.toggle('warn', !models.length);
+    : brain
+      ? 'Could not list what is installed, so this may be incomplete.'
+      : 'Nothing installed yet, so the pet cannot read your screen — everything else '
+        + 'it does works without a model. Install Ollama, pull this one, and reading '
+        + 'switches itself on.';
+  el('model-hint').classList.remove('warn');
   clampHint(el('model-hint'));
 }
 
@@ -454,7 +462,7 @@ el('close').addEventListener('click', () => window.config.close());
   keysPresent = data.keys || {};
   fillProviders(data.providers || [{ name: 'ollama', label: 'Ollama — on this machine', local: true }],
     current.provider);
-  fillModels(data.models, current.model);
+  fillModels(data.models, current.model, data.brain);
   fillPets(data.pets);
   fillSkins(data.skins);
   fillWear(data.wear || ['none'], current.wear);

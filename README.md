@@ -1,8 +1,16 @@
 # screenpet
 
-A desktop pet that reads your screen and answers the question on it. **On the
-default settings nothing leaves your machine at all** — the model runs here, the
-OCR runs here, the speech runs here.
+A desktop pet that lives in your tray and, when you want it to, reads your
+screen and answers the question on it. **On the default settings nothing leaves
+your machine at all** — the model runs here, the OCR runs here, the speech runs
+here.
+
+**Nothing has to be installed for the pet itself.** It wanders, naps, sits on
+top of the window you are working in, stops you for water, eats, is petted,
+wears hats, sets timers, remembers what you tell it to and pulls forty faces
+with no model anywhere. Reading the screen is the one part that needs
+[Ollama](https://ollama.com), it is off until Ollama is there, and until then
+the pet says so in its own words rather than showing you a failed request.
 
 There is one switch that changes that, off out of the box, and everything it
 unlocks is itself off until you say so: weather, web lookups, and the option of
@@ -1510,8 +1518,11 @@ the central feature at all.
 ## Requirements
 
 - Windows 10/11, or macOS (see [BUILDING.md](BUILDING.md))
-- [Ollama](https://ollama.com) running locally
 - Node 18+
+- [Ollama](https://ollama.com) running locally, **only** to read the screen and
+  to hold a conversation. Everything else the pet does works without it, and the
+  app looks for it again every time you ask — install it mid-session and the
+  next press of the hotkey reads the screen.
 - A microphone and a Windows speech recogniser, **only** if you switch on
   `Let me talk to it`. Check what you have:
 
@@ -1533,13 +1544,18 @@ npm install
 npm start
 ```
 
-Default model is `deepseek-r1:8b`. Pull it if you do not have it:
+That is the whole of it — a pet appears and the care loop, the skills, the
+breaks and the faces all work.
+
+To have it read your screen, install Ollama and pull the default model:
 
 ```bash
 ollama pull deepseek-r1:8b
 ```
 
-If you skip this the pet says so plainly and repeats the command back to you,
+Skip it and nothing is broken: the pet says it cannot read yet and what to
+install, once, when you ask it to read. Ollama running but without that model
+is a different sentence, which repeats the exact `pull` command back to you
 rather than claiming Ollama is down.
 
 **Bigger is not better here, and reasoning beats size.** Eight models were given
