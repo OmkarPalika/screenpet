@@ -4,7 +4,7 @@
 
    Every species keeps the same face rig - same classes, same coordinates - and
    varies only ears, extras and body outline. That is what lets all fifteen
-   expressions work on all six pets without a single extra rule. */
+   expressions work on all ten pets without a single extra rule. */
 
 /* ---- skins: one palette swap, so moods stay filters rather than 4x5 rules ---- */
 
@@ -54,8 +54,8 @@
 .zzz    { display: none; fill: #6c7a8c; font: 600 15px "Segoe UI", system-ui, sans-serif; }
 .anger  { display: none; fill: none; stroke: #e2483f; stroke-width: 2.6; stroke-linecap: round; }
 
-/* Worn rather than drawn into any body, so all six species can put them on and
-   nobody has to redraw them six times. */
+/* Worn rather than drawn into any body, so every species can put them on and
+   nobody has to redraw them ten times. */
 .shades { display: none; }
 .lens   { fill: #2b2622; }
 .bridge { fill: none; stroke: #2b2622; stroke-width: 2.6; stroke-linecap: round; }
@@ -77,8 +77,9 @@
    own - they were already drawn for the expressions, so wearing one is a rule.
 
    Nothing here is species-aware. A hat on a bun sits between the ears rather
-   than on top of them; that reads as a hat, and six sets of nudges to make it
-   read as a slightly better hat is not a trade worth making. */
+   than on top of them; that reads as a hat, and one set of nudges per
+   species to make it read as a slightly better hat is not a trade worth
+   making. */
 
 .cape, .wardrobe > * { display: none; }
 

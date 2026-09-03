@@ -11,36 +11,404 @@
     <link rel="stylesheet" href="settings.css" />
   </head>
   <body>
-    <h1>screenpet</h1>
-    <p class="sub">Everything stays on this machine.</p>
+    <header>
+      <h1>screenpet</h1>
+      <p class="sub">Everything stays on this machine.</p>
+      <!-- Five panels rather than one scroll. The settings did not get fewer,
+           but you are no longer asked to read all of them to find one. -->
+      <nav id="tabs" role="tablist" aria-label="Settings">
+        <button class="tab" data-tab="pet" role="tab" aria-selected="true">Pet</button>
+        <button class="tab" data-tab="reading" role="tab" aria-selected="false">Reading</button>
+        <button class="tab" data-tab="senses" role="tab" aria-selected="false">Senses</button>
+        <button class="tab" data-tab="internet" role="tab" aria-selected="false">Internet</button>
+        <button class="tab" data-tab="more" role="tab" aria-selected="false">More</button>
+      </nav>
+    </header>
 
-    <label for="model">Model</label>
-    <select id="model"></select>
-    <p class="hint" id="model-hint">Used for reading text off the screen.</p>
+    <main>
+      <!-- ================= Pet ================= -->
+      <section class="panel" data-panel="pet" role="tabpanel">
+        <div class="card">
+          <div class="set">
+            <span class="title">Pet</span>
+            <div class="pets" id="pets"></div>
+          </div>
 
-    <label for="vision">Diagrams and images</label>
-    <select id="vision">
-      <option value="auto">Auto — only when there is no text to read</option>
-      <option value="off">Off — always read text only</option>
-    </select>
-    <p class="hint" id="vision-hint"></p>
+          <div class="set">
+            <span class="title">Skin</span>
+            <div class="skins" id="skins"></div>
+          </div>
 
-    <label for="hotkey">Hotkey</label>
-    <input id="hotkey" type="text" spellcheck="false" />
-    <p class="hint">For example <code>CommandOrControl+Shift+Space</code>.</p>
+          <div class="set">
+            <label for="wear">Wearing</label>
+            <select id="wear"></select>
+            <p class="hint">
+              Worn over whichever pet you picked, so all ten wear the same one. The
+              mask is holes rather than lenses - it keeps the eyes, and the forty faces.
+            </p>
+          </div>
+        </div>
 
-    <label for="pets">Pet</label>
-    <div class="pets" id="pets"></div>
+        <div class="card">
+          <div class="set">
+            <label class="check">
+              <input id="voice" type="checkbox" />
+              <span>Speak replies out loud</span>
+            </label>
+            <p class="hint">Uses a voice already installed on Windows. Mute from the tray icon.</p>
+          </div>
 
-    <label for="skin">Skin</label>
-    <div class="skins" id="skins"></div>
+          <div class="set">
+            <label class="check">
+              <input id="sounds" type="checkbox" />
+              <span>Little noises</span>
+            </label>
+            <p class="hint">
+              A woof, a meow, a chirp — whichever this one is — when it says something.
+              Made up on the spot rather than played from a file.
+            </p>
+          </div>
 
-    <label for="wear">Wearing</label>
-    <select id="wear"></select>
-    <p class="hint">
-      Worn over whichever pet you picked, so all six wear the same one. The mask
-      is holes rather than lenses - it keeps the eyes, and the forty faces.
-    </p>
+          <div class="set">
+            <label class="check">
+              <input id="mischief" type="checkbox" />
+              <span>Let it get into things</span>
+            </label>
+            <p class="hint">
+              Roams the whole screen instead of pacing the bottom of it, and now and then
+              climbs up to sit on the top edge of whichever window you just switched to.
+              It is handed a rectangle and nothing else — not the title, not which
+              application — so it has no idea what it just sat on, and it cannot touch
+              your windows: it moves itself, and that is the whole of it.
+            </p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="set">
+            <label class="check">
+              <input id="breaks" type="checkbox" />
+              <span>Remind me to stop</span>
+            </label>
+            <p class="hint">
+              Every so often the pet thinks about a glass of water, or about sitting
+              still — a little thought bubble beside it, alternating between the two.
+              Nothing happens unless you click it: ignored, it goes away on its own.
+              Click it and the pet dims the screen, walks into the middle and takes the
+              break itself while you watch. Click anywhere to stop it early. It never
+              appears while Windows is set to do not disturb — a game, a call, a
+              presentation — and time away from the machine counts as the break.
+            </p>
+            <div class="kids">
+              <div class="num">
+                <label for="break-every">Every</label>
+                <input id="break-every" type="number" min="5" max="240" step="5" />
+                <span class="unit">minutes</span>
+              </div>
+              <div class="num">
+                <label for="break-for">For</label>
+                <input id="break-for" type="number" min="5" max="600" step="5" />
+                <span class="unit">seconds</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= Reading ================= -->
+      <section class="panel" data-panel="reading" role="tabpanel" hidden>
+        <div class="card">
+          <div class="set">
+            <label for="model">Model</label>
+            <select id="model"></select>
+            <p class="hint" id="model-hint">Used for reading text off the screen.</p>
+          </div>
+
+          <div class="set">
+            <label for="vision">Diagrams and images</label>
+            <select id="vision">
+              <option value="auto">Auto — only when there is no text to read</option>
+              <option value="off">Off — always read text only</option>
+            </select>
+            <p class="hint" id="vision-hint"></p>
+          </div>
+
+          <div class="set">
+            <label for="hotkey">Hotkey</label>
+            <input id="hotkey" type="text" spellcheck="false" />
+            <p class="hint">For example <code>CommandOrControl+Shift+Space</code>.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="set">
+            <label class="check">
+              <input id="focus" type="checkbox" />
+              <span>Read the window I am in</span>
+            </label>
+            <p class="hint">
+              Reads the window you are actually working in rather than everything on the
+              screen. Falls back to the whole screen by itself when that would not help —
+              a maximised window, or one mostly on the other monitor.
+            </p>
+          </div>
+
+          <div class="set">
+            <label class="check">
+              <input id="watch" type="checkbox" />
+              <span>Read the screen without being asked</span>
+            </label>
+            <p class="hint" id="watch-hint">
+              Normally the pet reads your screen when you press the hotkey and at no
+              other time. With this on it reads it on the timer below as well, and
+              answers when it finds a question — otherwise it says nothing at all, which
+              is most of the time. It skips a screen it has already read, stays quiet
+              while Windows is set to do not disturb, and stops entirely while you are
+              away from the machine. An amber dot on the pet is lit for as long as it is
+              on. <strong>Only with a model on this machine</strong> — choosing a hosted
+              provider switches this off, because reading your screen every minute and
+              sending each read to a company is not the same decision as doing it when
+              you press a key.
+            </p>
+            <div class="kids">
+              <div class="num">
+                <label for="watch-every">Read every</label>
+                <input id="watch-every" type="number" min="20" max="600" step="10" />
+                <span class="unit">seconds</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= Senses ================= -->
+      <section class="panel" data-panel="senses" role="tabpanel" hidden>
+        <div class="card">
+          <div class="set">
+            <label class="check">
+              <input id="mic" type="checkbox" />
+              <span>Let me talk to it</span>
+            </label>
+            <p class="hint">
+              Adds <code>Listen…</code> to the pet's menu. The speech is recognised on this
+              machine; no audio is saved or sent anywhere.
+            </p>
+
+            <div class="kids">
+              <div class="set">
+                <label for="dictation">Recognised by</label>
+                <select id="dictation">
+                  <option value="auto">Auto — a local engine if installed, Windows otherwise</option>
+                  <option value="sapi">Windows</option>
+                  <option value="local">whisper.cpp or Parakeet</option>
+                </select>
+                <p class="hint" id="dictation-hint">
+                  Both run on this machine and neither reaches the network. Windows' own recogniser
+                  needs no setup and is what the pet has always used — measured on real speech it got
+                  <strong>88% of words wrong</strong>, and scored every result below its own confidence
+                  floor, which is why it so often says it did not catch that. On the same recordings
+                  whisper.cpp scored <strong>21%</strong> and Parakeet <strong>19%</strong>.
+                  Neither is bundled: put <code>whisper-cli.exe</code> or
+                  <code>parakeet-cli.exe</code> — plus <code>model.bin</code> — in the app's
+                  <code>whisper</code> folder and this picks up whichever is there. Parakeet is
+                  better at commands and says nothing when you said nothing; whisper is a third
+                  the size and better at code words.
+                </p>
+              </div>
+
+              <div class="set">
+                <label class="check">
+                  <input id="wake" type="checkbox" />
+                  <span>Answer to “hey pet”</span>
+                </label>
+                <p class="hint" id="wake-hint">
+                  <strong>This holds the microphone open for as long as it
+                  is on</strong> — that is what a wake word costs, and there is no version of it that
+                  does not. Windows does the listening, on this machine, with a grammar containing
+                  only the wake phrases: it is not a transcriber looking for a word, it is incapable
+                  of recognising anything else. The only thing that ever comes back from it is the
+                  fact that you said it.
+                </p>
+              </div>
+
+              <div class="set">
+                <label class="check">
+                  <input id="bop" type="checkbox" />
+                  <span>Bop along to music</span>
+                </label>
+                <p class="hint">
+                  Holds the microphone open. The pet listens for a beat and moves
+                  on it. The audio is turned into one number — how loud, right now — and thrown away;
+                  nothing is recognised, recorded or sent. Off, it still dances when you ask, and
+                  opens the microphone only for the length of the dance.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="set">
+            <label class="check">
+              <input id="camera" type="checkbox" />
+              <span>Notice when I am at the desk</span>
+            </label>
+            <p class="hint">
+              Uses the camera to tell whether anything moved, and nothing else. Frames are
+              shrunk to 32×24, compared with the one before, and discarded — it cannot
+              recognise a face, and nothing is saved or sent. A green dot on the pet shows
+              whenever the camera is open. Ask it to <code>take a photo</code> and it keeps
+              that one frame, in your Pictures folder — the only frame it ever writes down,
+              and still nothing it sends anywhere.
+            </p>
+
+            <div class="kids">
+              <div class="set">
+                <label class="check">
+                  <input id="faces" type="checkbox" />
+                  <span>Tell a face from a curtain</span>
+                </label>
+                <p class="hint" id="faces-hint">
+                  Uses the face detector built into the operating system, so the pet can tell
+                  the difference between a person sitting down and a door opening. It answers
+                  <em>how many faces</em> and nothing else — no name, no identity, no template kept.
+                  The frame is handed to Windows in memory and never written to disk.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= Internet ================= -->
+      <section class="panel" data-panel="internet" role="tabpanel" hidden>
+        <div class="card">
+          <div class="set">
+            <label class="check">
+              <input id="network" type="checkbox" />
+              <span>Let it out on the internet</span>
+            </label>
+            <p class="hint" id="network-hint">
+              <strong>Off by default, and off is the point of this app.</strong> While it is off
+              the pet is sealed in: a model on this machine, and anything that would need the
+              network says so instead of doing it. Turning it on sends nothing by itself — it
+              unlocks the settings below, each of which is its own decision. Turning it
+              back off switches them off with it.
+            </p>
+
+            <div class="kids">
+              <div class="set">
+                <label class="check">
+                  <input id="weather" type="checkbox" />
+                  <span>Let it ask about the weather</span>
+                </label>
+                <p class="hint" id="weather-hint">
+                  Asking about the weather sends the town below to
+                  open-meteo.com — no account, no key, nothing from your screen, camera or
+                  microphone, and no location lookup. Off, the pet says it cannot see outside,
+                  which is the truth.
+                </p>
+                <div class="num wide">
+                  <label for="city">Town</label>
+                  <input id="city" type="text" spellcheck="false" placeholder="Abu Dhabi" />
+                </div>
+              </div>
+
+              <div class="set">
+                <label class="check">
+                  <input id="web" type="checkbox" />
+                  <span>Let it look things up</span>
+                </label>
+                <p class="hint" id="web-hint">
+                  <code>look up the speed of light</code> sends those
+                  words to DuckDuckGo and Wikipedia — no key, no account, so nothing ties the
+                  lookup to you. Only what you typed after the command goes; nothing from your
+                  screen, memory, camera or microphone.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="set">
+            <label for="provider">Which model answers</label>
+            <select id="provider"></select>
+            <p class="hint" id="provider-hint"></p>
+          </div>
+
+          <div class="set">
+            <label for="provider-model">Model name</label>
+            <input id="provider-model" type="text" spellcheck="false" />
+            <p class="hint">Leave blank for the provider's default. Model names go stale.</p>
+          </div>
+
+          <div class="set">
+            <label for="api-key">API key</label>
+            <input id="api-key" type="password" spellcheck="false" autocomplete="off"
+                   placeholder="paste here to store it" />
+            <div class="keyrow">
+              <span class="status" id="key-status"></span>
+              <button id="key-clear" class="ghost">Forget key</button>
+              <button id="key-save" class="ghost">Store key</button>
+            </div>
+            <p class="hint">
+              Stored in <code>keys.json</code>, wrapped with Windows DPAPI under your account —
+              not in the settings file, and never shown again once stored. Copying that file to
+              another machine or another user gets an unreadable lump. It is not a vault:
+              anything running as you can unwrap it, exactly as the pet does.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= More ================= -->
+      <section class="panel" data-panel="more" role="tabpanel" hidden>
+        <div class="card">
+          <div class="set">
+            <label class="check">
+              <input id="memory" type="checkbox" />
+              <span>Remember things between sessions</span>
+            </label>
+            <p class="hint">
+              Say <code>remember my standup is at 9</code> and it writes that down, on this
+              machine, and brings it up later. <strong>Only what you tell it to remember is
+              written</strong> — never your chat, your screen, the microphone or the camera.
+              Everything else it picks up is a counter: which hour you tend to ask it things,
+              how often you looked after it today. Say <code>what do you remember</code> to
+              read it back, <code>forget the standup</code> to drop one, or
+              <code>forget everything</code> to empty it. Switching this off deletes the file.
+            </p>
+
+            <div class="kids">
+              <div class="set">
+                <label class="check">
+                  <input id="cheek" type="checkbox" />
+                  <span>Let it be cheeky about it</span>
+                </label>
+                <p class="hint" id="cheek-hint">
+                  The pet occasionally brings up what it remembers to
+                  needle you — how many headpats you managed on your best day against today, the
+                  hour you always turn up, the thing you told it you would do. Every one of those
+                  numbers is real; it teases with what it has, not with anything invented. At most
+                  one remark every ninety minutes, and never during quiet hours.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="set">
+            <label class="check">
+              <input id="autostart" type="checkbox" />
+              <span>Start with Windows</span>
+            </label>
+            <p class="hint" id="autostart-hint"></p>
+          </div>
+        </div>
+      </section>
+    </main>
 
     <!-- Cloned once per species by settings-renderer.js. The shapes come from
          pets.css, so this is only the rig the species rules hang off - there is
@@ -62,260 +430,11 @@
       </svg>
     </template>
 
-    <label class="check">
-      <input id="autostart" type="checkbox" />
-      <span>Start with Windows</span>
-    </label>
-    <p class="hint" id="autostart-hint"></p>
-
-    <label class="check">
-      <input id="voice" type="checkbox" />
-      <span>Speak replies out loud</span>
-    </label>
-    <p class="hint">Uses a voice already installed on Windows. Mute from the tray icon.</p>
-
-    <label class="check">
-      <input id="focus" type="checkbox" />
-      <span>Read the window I am in</span>
-    </label>
-    <p class="hint">
-      Reads the window you are actually working in rather than everything on the
-      screen. Falls back to the whole screen by itself when that would not help —
-      a maximised window, or one mostly on the other monitor.
-    </p>
-
-    <label class="check">
-      <input id="watch" type="checkbox" />
-      <span>Read the screen without being asked</span>
-    </label>
-    <p class="hint" id="watch-hint">
-      Normally the pet reads your screen when you press the hotkey and at no
-      other time. With this on it reads it on the timer below as well, and
-      answers when it finds a question — otherwise it says nothing at all, which
-      is most of the time. It skips a screen it has already read, stays quiet
-      while Windows is set to do not disturb, and stops entirely while you are
-      away from the machine. An amber dot on the pet is lit for as long as it is
-      on. <strong>Only with a model on this machine</strong> — choosing a hosted
-      provider switches this off, because reading your screen every minute and
-      sending each read to a company is not the same decision as doing it when
-      you press a key.
-    </p>
-
-    <div class="pair">
-      <label for="watch-every">Read every (seconds)</label>
-      <input id="watch-every" type="number" min="20" max="600" step="10" />
-    </div>
-
-    <label class="check">
-      <input id="sounds" type="checkbox" />
-      <span>Little noises</span>
-    </label>
-    <p class="hint">
-      A woof, a meow, a chirp — whichever this one is — when it says something.
-      Made up on the spot rather than played from a file.
-    </p>
-
-    <label class="check">
-      <input id="breaks" type="checkbox" />
-      <span>Remind me to stop</span>
-    </label>
-    <p class="hint">
-      Every so often the pet thinks about a glass of water, or about sitting
-      still — a little thought bubble beside it, alternating between the two.
-      Nothing happens unless you click it: ignored, it goes away on its own.
-      Click it and the pet dims the screen, walks into the middle and takes the
-      break itself while you watch. Click anywhere to stop it early. It never
-      appears while Windows is set to do not disturb — a game, a call, a
-      presentation — and time away from the machine counts as the break.
-    </p>
-
-    <div class="pair">
-      <label for="break-every">Every (minutes)</label>
-      <input id="break-every" type="number" min="5" max="240" step="5" />
-      <label for="break-for">For (seconds)</label>
-      <input id="break-for" type="number" min="5" max="600" step="5" />
-    </div>
-
-    <label class="check">
-      <input id="mischief" type="checkbox" />
-      <span>Let it get into things</span>
-    </label>
-    <p class="hint">
-      Roams the whole screen instead of pacing the bottom of it, and now and then
-      climbs up to sit on the top edge of whichever window you just switched to.
-      It is handed a rectangle and nothing else — not the title, not which
-      application — so it has no idea what it just sat on, and it cannot touch
-      your windows: it moves itself, and that is the whole of it.
-    </p>
-
-    <label class="check">
-      <input id="mic" type="checkbox" />
-      <span>Let me talk to it</span>
-    </label>
-    <p class="hint">
-      Adds <code>Listen…</code> to the pet's menu. The speech is recognised on this
-      machine; no audio is saved or sent anywhere.
-    </p>
-
-    <label for="dictation">Recognised by</label>
-    <select id="dictation">
-      <option value="auto">Auto — a local engine if installed, Windows otherwise</option>
-      <option value="sapi">Windows</option>
-      <option value="local">whisper.cpp or Parakeet</option>
-    </select>
-    <p class="hint" id="dictation-hint">
-      Both run on this machine and neither reaches the network. Windows' own recogniser
-      needs no setup and is what the pet has always used — measured on real speech it got
-      <strong>88% of words wrong</strong>, and scored every result below its own confidence
-      floor, which is why it so often says it did not catch that. On the same recordings
-      whisper.cpp scored <strong>21%</strong> and Parakeet <strong>19%</strong>.
-      Neither is bundled: put <code>whisper-cli.exe</code> or
-      <code>parakeet-cli.exe</code> — plus <code>model.bin</code> — in the app's
-      <code>whisper</code> folder and this picks up whichever is there. Parakeet is
-      better at commands and says nothing when you said nothing; whisper is a third
-      the size and better at code words.
-    </p>
-
-    <label class="check">
-      <input id="wake" type="checkbox" />
-      <span>Answer to “hey pet”</span>
-    </label>
-    <p class="hint" id="wake-hint">
-      Needs the setting above. <strong>This holds the microphone open for as long as it
-      is on</strong> — that is what a wake word costs, and there is no version of it that
-      does not. Windows does the listening, on this machine, with a grammar containing
-      only the wake phrases: it is not a transcriber looking for a word, it is incapable
-      of recognising anything else. The only thing that ever comes back from it is the
-      fact that you said it.
-    </p>
-
-    <label class="check">
-      <input id="bop" type="checkbox" />
-      <span>Bop along to music</span>
-    </label>
-    <p class="hint">
-      Needs the microphone too, and holds it open. The pet listens for a beat and moves
-      on it. The audio is turned into one number — how loud, right now — and thrown away;
-      nothing is recognised, recorded or sent. Off, it still dances when you ask, and
-      opens the microphone only for the length of the dance.
-    </p>
-
-    <label class="check">
-      <input id="camera" type="checkbox" />
-      <span>Notice when I am at the desk</span>
-    </label>
-    <p class="hint">
-      Uses the camera to tell whether anything moved, and nothing else. Frames are
-      shrunk to 32×24, compared with the one before, and discarded — it cannot
-      recognise a face, and nothing is saved or sent. A green dot on the pet shows
-      whenever the camera is open. Ask it to <code>take a photo</code> and it keeps
-      that one frame, in your Pictures folder — the only frame it ever writes down,
-      and still nothing it sends anywhere.
-    </p>
-
-    <label class="check">
-      <input id="faces" type="checkbox" />
-      <span>Tell a face from a curtain</span>
-    </label>
-    <p class="hint" id="faces-hint">
-      Needs the camera. Uses the face detector built into the operating system, so the pet can tell
-      the difference between a person sitting down and a door opening. It answers
-      <em>how many faces</em> and nothing else — no name, no identity, no template kept.
-      The frame is handed to Windows in memory and never written to disk.
-    </p>
-
-    <label class="check">
-      <input id="network" type="checkbox" />
-      <span>Let it out on the internet</span>
-    </label>
-    <p class="hint" id="network-hint">
-      <strong>Off by default, and off is the point of this app.</strong> While it is off
-      the pet is sealed in: a model on this machine, and anything that would need the
-      network says so instead of doing it. Turning it on sends nothing by itself — it
-      unlocks the three settings below, each of which is its own decision. Turning it
-      back off switches all three off with it.
-    </p>
-
-    <label class="check">
-      <input id="weather" type="checkbox" />
-      <span>Let it ask about the weather</span>
-    </label>
-    <p class="hint" id="weather-hint">
-      Needs the setting above. Asking about the weather sends the town below to
-      open-meteo.com — no account, no key, nothing from your screen, camera or
-      microphone, and no location lookup. Off, the pet says it cannot see outside,
-      which is the truth.
-    </p>
-
-    <label for="city">Town</label>
-    <input id="city" type="text" spellcheck="false" placeholder="Abu Dhabi" />
-    <p class="hint">You can put the next town over.</p>
-
-    <label class="check">
-      <input id="web" type="checkbox" />
-      <span>Let it look things up</span>
-    </label>
-    <p class="hint" id="web-hint">
-      Needs the internet setting. <code>look up the speed of light</code> sends those
-      words to DuckDuckGo and Wikipedia — no key, no account, so nothing ties the
-      lookup to you. Only what you typed after the command goes; nothing from your
-      screen, memory, camera or microphone.
-    </p>
-
-    <label for="provider">Which model answers</label>
-    <select id="provider"></select>
-    <p class="hint" id="provider-hint"></p>
-
-    <label for="provider-model">Model name</label>
-    <input id="provider-model" type="text" spellcheck="false" />
-    <p class="hint">Leave blank for the provider's default. Model names go stale.</p>
-
-    <label for="api-key">API key</label>
-    <input id="api-key" type="password" spellcheck="false" autocomplete="off"
-           placeholder="paste here to store it" />
-    <div class="row">
-      <span class="status" id="key-status"></span>
-      <button id="key-clear" class="ghost">Forget key</button>
-      <button id="key-save" class="ghost">Store key</button>
-    </div>
-    <p class="hint">
-      Stored in <code>keys.json</code>, wrapped with Windows DPAPI under your account —
-      not in the settings file, and never shown again once stored. Copying that file to
-      another machine or another user gets an unreadable lump. It is not a vault:
-      anything running as you can unwrap it, exactly as the pet does.
-    </p>
-
-    <label class="check">
-      <input id="memory" type="checkbox" />
-      <span>Remember things between sessions</span>
-    </label>
-    <p class="hint">
-      Say <code>remember my standup is at 9</code> and it writes that down, on this
-      machine, and brings it up later. <strong>Only what you tell it to remember is
-      written</strong> — never your chat, your screen, the microphone or the camera.
-      Everything else it picks up is a counter: which hour you tend to ask it things,
-      how often you looked after it today. Say <code>what do you remember</code> to
-      read it back, <code>forget the standup</code> to drop one, or
-      <code>forget everything</code> to empty it. Switching this off deletes the file.
-    </p>
-
-    <label class="check">
-      <input id="cheek" type="checkbox" />
-      <span>Let it be cheeky about it</span>
-    </label>
-    <p class="hint" id="cheek-hint">
-      Needs the setting above. The pet occasionally brings up what it remembers to
-      needle you — how many headpats you managed on your best day against today, the
-      hour you always turn up, the thing you told it you would do. Every one of those
-      numbers is real; it teases with what it has, not with anything invented. At most
-      one remark every ninety minutes, and never during quiet hours.
-    </p>
-
-    <div class="row">
+    <footer class="row">
       <span class="status" id="status"></span>
       <button id="close" class="ghost">Close</button>
       <button id="save" class="primary">Save</button>
-    </div>
+    </footer>
 
     <script src="lighting.js"></script>
     <script src="settings-renderer.js"></script>
