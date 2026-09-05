@@ -2,9 +2,10 @@
 
 **screenpet** · version 0.1.0
 
-screenpet has **no runtime npm dependencies**. Everything below is either
-bundled by the packaging step, provided by the operating system, installed
-separately by you, or contacted only when you switch a network setting on.
+screenpet has **one runtime npm dependency**, `electron-updater`, which brings
+fifteen of its own. Everything below is either bundled by the packaging step,
+provided by the operating system, installed separately by you, or contacted only
+when you switch a network setting on.
 
 ## Bundled in the packaged app
 
@@ -17,6 +18,36 @@ separately by you, or contacted only when you switch a network setting on.
 Electron ships its own aggregated licence file (`LICENSES.chromium.html`) beside
 the executable in every build; that file, not this one, is the authoritative
 notice for Chromium and its own dependencies.
+
+### Inside `app.asar`
+
+The update check and download. These are the packages `npm ls --omit=dev` lists,
+and they are in the shipped archive — `@electron/asar`'s own listing of
+`resources/app.asar` is where this table came from, rather than the manifest,
+because what ships is the thing that needs a notice.
+
+| Component | Version | Licence |
+| --- | --- | --- |
+| [electron-updater](https://github.com/electron-userland/electron-builder) | 6.8.9 | MIT |
+| [builder-util-runtime](https://github.com/electron-userland/electron-builder) | 9.7.0 | MIT |
+| [argparse](https://github.com/nodeca/argparse) | 2.0.1 | Python-2.0 |
+| [debug](https://github.com/debug-js/debug) | 4.4.3 | MIT |
+| [fs-extra](https://github.com/jprichardson/node-fs-extra) | 10.1.0 | MIT |
+| [graceful-fs](https://github.com/isaacs/node-graceful-fs) | 4.2.11 | ISC |
+| [js-yaml](https://github.com/nodeca/js-yaml) | 4.3.1 | MIT |
+| [jsonfile](https://github.com/jprichardson/node-jsonfile) | 6.2.1 | MIT |
+| [lazy-val](https://github.com/develar/lazy-val) | 1.0.5 | MIT |
+| [lodash.escaperegexp](https://github.com/lodash/lodash) | 4.1.2 | MIT |
+| [lodash.isequal](https://github.com/lodash/lodash) | 4.5.0 | MIT |
+| [ms](https://github.com/vercel/ms) | 2.1.3 | MIT |
+| [sax](https://github.com/isaacs/sax-js) | 1.6.1 | BlueOak-1.0.0 |
+| [semver](https://github.com/npm/node-semver) | 7.7.4 | ISC |
+| [tiny-typed-emitter](https://github.com/binier/tiny-typed-emitter) | 2.1.0 | MIT |
+| [universalify](https://github.com/RyanZim/universalify) | 2.0.1 | MIT |
+
+All permissive. Two are not MIT or ISC and both require the notice above to
+travel with the software: `argparse` is under the Python licence, and `sax` is
+under Blue Oak 1.0.0.
 
 ## Build and development only — not shipped
 

@@ -2981,6 +2981,38 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.deepStrictEqual(stray, [], 'PowerShell scripts outside src/system are packed into the asar unreadable');
   }
 
+  // --- everything that ships is credited ---
+  //
+  // Adding electron-updater put sixteen packages inside app.asar while the
+  // notices file still said the app had no runtime dependencies at all. Two of
+  // them are not MIT - argparse is under the Python licence and sax under Blue
+  // Oak - and both require their notice to travel with the software, so this is
+  // a licence obligation and not tidiness.
+  //
+  // Read from package-lock.json rather than by shelling out to `npm ls`,
+  // because this file has to run on a checkout with nothing installed.
+  {
+    const fs = require('fs');
+    const lock = JSON.parse(fs.readFileSync('./package-lock.json', 'utf8'));
+    const notices = fs.readFileSync('./THIRD-PARTY-NOTICES.md', 'utf8');
+
+    const shipped = Object.entries(lock.packages)
+      .filter(([at, p]) => at.startsWith('node_modules/') && !p.dev && !p.devOptional)
+      .map(([at, p]) => [at.slice(at.lastIndexOf('node_modules/') + 'node_modules/'.length), p.version]);
+
+    assert.ok(shipped.length, 'no runtime dependencies found, so this check is not checking anything');
+    for (const [name, version] of shipped) {
+      assert.ok(
+        notices.includes(`[${name}](`),
+        `${name} ships inside app.asar and is not in THIRD-PARTY-NOTICES.md`
+      );
+      assert.ok(
+        new RegExp(`\\[${name.replace(/\./g, '\\.')}\\]\\([^)]*\\) \\| ${version.replace(/\./g, '\\.')} `).test(notices),
+        `THIRD-PARTY-NOTICES.md lists ${name} at a different version than the lockfile's ${version}`
+      );
+    }
+  }
+
   // --- its own voice for its own words ---
   {
     const mjs = require('fs').readFileSync('./src/main.js', 'utf8');
