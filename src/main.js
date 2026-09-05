@@ -235,13 +235,24 @@ function placeOn(display) {
 // one monitor.
 const cursorDisplay = () => screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
 
-function createWindow() {
+function createWindow(asked = true) {
   win = new BrowserWindow({
     ...stageBounds(screen.getPrimaryDisplay()),
     // Launching into a game or a presentation should not put a pet on the screen
     // for even one frame. It still loads and still works; it is just not shown
     // until Windows says the coast is clear.
-    show: !quiet,
+    //
+    // Unless you asked for it. Opening it from the Start menu, or from the tray
+    // after the window has gone, is a request, and a request outranks Windows
+    // for as long as the quiet spell lasts - which is the rule togglePet has
+    // always applied, and the reason the Start menu was the one door that did
+    // not. Started at login is nobody asking, and applyAutostart registers that
+    // one with a flag so this can tell the two apart.
+    //
+    // Windows says "not now" far more often than it sounds like it does - a
+    // full screen video counts, and Windows 11 ships Do Not Disturb on for that
+    // - so without this the pet is invisible on launch with nothing to say why.
+    show: asked || !quiet,
     frame: false,
     transparent: true,
     resizable: false,
@@ -252,7 +263,11 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.js') },
   });
 
-  hiddenByQuiet = quiet;
+  // Put away by quiet hours, rather than never shown because you asked. The
+  // override is the same one the tray click sets, and it lapses with the quiet
+  // spell rather than for good.
+  hiddenByQuiet = !asked && quiet;
+  quietOverride = asked && quiet;
   // Windows hands a frameless transparent window back a few pixels taller than
   // it was asked for, which puts the strip over the taskbar. setBounds is exact.
   win.setBounds(stageBounds(screen.getPrimaryDisplay()));
@@ -1391,7 +1406,14 @@ function applyWake() {
 function applyAutostart() {
   // Skipped in dev: this would register electron.exe, not the packaged app.
   if (!app.isPackaged) return;
-  app.setLoginItemSettings({ openAtLogin: settings.autostart, path: process.execPath });
+  app.setLoginItemSettings({
+    openAtLogin: settings.autostart,
+    path: process.execPath,
+    // Windows started this, not you. createWindow reads it to decide whether
+    // quiet hours outrank the launch: they do when the machine did it, and they
+    // do not when you did.
+    args: ['--hidden'],
+  });
 }
 
 // How the pet looks and sounds. One message, because the renderer needs all of
@@ -1481,7 +1503,7 @@ app.whenReady().then(async () => {
   // first answer comes back, which is precisely the interruption this prevents.
   quiet = await dnd.quiet();
 
-  createWindow();
+  createWindow(!process.argv.includes('--hidden'));
   createTray();
 
   // One process for the whole session, started with the pet and killed with it.

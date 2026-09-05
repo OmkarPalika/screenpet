@@ -1458,6 +1458,28 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.strictEqual(dnd.isQuiet(state), true, `state ${state} was treated as a good time to talk`);
   }
   assert.strictEqual(dnd.isQuiet(7), false, 'the pet stays silent when nothing is in the way');
+
+  // Five of those six are quiet, which makes "keep the pet off the screen" the
+  // usual answer rather than the rare one - and launching it by hand into that
+  // is a pet that never appears and never says why. Asking for it outranks
+  // Windows until the quiet spell ends, which is the rule the tray click has
+  // always used; being started at login does not, and the flag is how the two
+  // are told apart.
+  const mjs = require('fs').readFileSync('./src/main.js', 'utf8');
+  assert.ok(mjs.includes('show: asked || !quiet'), 'quiet hours hide a pet you asked for by hand');
+  assert.ok(mjs.includes('quietOverride = asked && quiet'), 'a pet you asked for is put away again on the next poll');
+  assert.ok(
+    mjs.includes("createWindow(!process.argv.includes('--hidden'))"),
+    'the pet cannot tell being launched from being started at login'
+  );
+  assert.ok(mjs.includes("args: ['--hidden']"), 'autostart stopped saying so, and now shows itself over a game');
+  // The tray rebuilding a window that has gone is you asking as well, so it must
+  // not inherit the flag the process was started with.
+  const toggle = mjs.slice(mjs.indexOf('function togglePet()'));
+  assert.ok(
+    toggle.slice(0, toggle.indexOf('\n}')).includes('return createWindow();'),
+    'a tray click that rebuilds the window is treated as an autostart'
+  );
   for (const unknown of [0, 8, 99, -1, NaN]) {
     assert.strictEqual(dnd.isQuiet(unknown), true, `unknown state ${unknown} was treated as talkative`);
   }
