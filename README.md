@@ -239,7 +239,7 @@ and quit it — the pet has no taskbar button by design.
 | Town | Where to ask about. You can put the next town over. |
 | Let it look things up | Off by default, needs the internet switch. The words after `look up`, to DuckDuckGo and Wikipedia. |
 | Which model answers | Ollama on this machine by default. Anything else sends the text read off your screen to that company. |
-| Model name / API key | For a hosted provider. The key is wrapped with DPAPI and never shown again. |
+| Model name / API key | For a hosted provider. Whatever you type as the model wins, so a name newer than this app still works — OpenAI is sent the reply ceiling as `max_completion_tokens`, which its newer models require and its older ones accept. The key is wrapped with DPAPI and never shown again. |
 | Remember things between sessions | **On** by default. Writes only what you asked it to remember. Off deletes the file. See [What it remembers](DESIGN.md#what-it-remembers). |
 | Let it be cheeky about it | On by default, needs the above. The pet needling you with what it has. |
 | Start with Windows | Packaged builds only — in development this would register `electron.exe`. |

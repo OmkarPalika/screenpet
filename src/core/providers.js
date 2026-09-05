@@ -37,6 +37,16 @@ const PROVIDERS = {
     url: 'https://api.openai.com/v1/chat/completions',
     model: 'gpt-4o-mini',
     keys: 'platform.openai.com',
+    // OpenAI's own endpoint refuses max_tokens outright on its newer models -
+    // "Unsupported parameter: 'max_tokens' is not supported with this model" -
+    // and wants max_completion_tokens, which the older ones accept as well. The
+    // model name is a free text field where whatever you type wins, so without
+    // this, typing a current model name is a request that cannot succeed.
+    //
+    // Only here. NVIDIA and Mistral speak the same shape but are their own
+    // implementations of the older spec, and sending them a parameter OpenAI
+    // invented is how you break two providers to fix one.
+    tokens: 'max_completion_tokens',
   },
   gemini: {
     label: 'Google Gemini',
@@ -92,10 +102,10 @@ const needsKey = (provider) => !isLocal(provider);
 const SHAPES = {
   openai: {
     headers: (key) => ({ 'content-type': 'application/json', authorization: `Bearer ${key}` }),
-    body: (model, prompt) => ({
+    body: (model, prompt, spec = {}) => ({
       model,
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: MAX_TOKENS,
+      [spec.tokens || 'max_tokens']: MAX_TOKENS,
     }),
     read: (data) => {
       const choice = data && Array.isArray(data.choices) && data.choices[0];
@@ -178,7 +188,7 @@ async function generate(prompt, opts = {}) {
     const res = await (opts.fetch || globalThis.fetch)(urlFor(opts.provider, model), {
       method: 'POST',
       headers: shape.headers(key),
-      body: JSON.stringify(shape.body(model, prompt)),
+      body: JSON.stringify(shape.body(model, prompt, spec)),
       signal: controller.signal,
     });
     if (!res.ok) throw new Error(failure(res.status));
