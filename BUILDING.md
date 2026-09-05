@@ -25,12 +25,22 @@ things have to be true for it to find anything:
    what electron-updater reads, and it holds the SHA-512 the download is checked
    against. `npm run dist` does not produce it; publishing does.
 
-Write the release notes first. Move the `Unreleased` section of
-[CHANGELOG.md](CHANGELOG.md) under the version you are about to tag - `npm test`
-fails if `package.json` names a version the changelog has no section for, so
-this is checked rather than remembered. The privacy policy undertakes to
+Write the release notes first. Give the version its section in
+[CHANGELOG.md](CHANGELOG.md), or move the `Unreleased` section under it -
+`npm test` fails if `package.json` names a version the changelog has no section
+for, so this is checked rather than remembered. The privacy policy undertakes to
 announce anything that widens what leaves the machine in the notes for the
 version that introduces it; that promise is kept here or not at all.
+
+For the first release there is nothing to bump: `package.json` already says
+`0.1.0` and the changelog already has its section. Replace `— unreleased` with
+the date, commit, and tag it by hand.
+
+```bash
+git tag v0.1.0
+```
+
+Every release after that gets the bump instead, which writes the tag itself:
 
 ```bash
 npm version patch
