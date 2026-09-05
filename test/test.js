@@ -1029,6 +1029,219 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   }
 }
 
+// ===== singing at it =======================================================
+//
+// The pet dances and says something nice when you sing. It hears that out of
+// the spectrum it was already watching for the beat, so there is no second
+// microphone and no second consent - and it can be checked here without one,
+// because the whole thing takes a Uint8Array and answers with a boolean.
+
+{
+  const singing = require('../src/renderer/singing');
+
+  // A 48kHz machine through a 512-point FFT: 256 bins, 93.75Hz each. The number
+  // is read off the audio context in the renderer rather than assumed, because
+  // a 44.1kHz machine puts the voice somewhere else.
+  const HZ = 93.75;
+  const BINS = 256;
+  const at = (hz) => Math.round(hz / HZ);
+
+  const spectrum = (fill) => {
+    const bins = new Uint8Array(BINS);
+    fill(bins);
+    return bins;
+  };
+
+  // A held vowel: a fundamental with its harmonics falling away above it,
+  // standing over a quiet floor. Falling away rather than four of the same
+  // height, which is both what a voice does and what makes the peak a peak -
+  // four equal harmonics measure as very nearly flat.
+  const vowel = spectrum((b) => {
+    b.fill(14);
+    for (const [hz, level] of [[220, 250], [440, 170], [660, 110], [880, 70]]) b[at(hz)] = level;
+  });
+  // The same loudness spread flat across everything - a hiss, a fan, a room.
+  const hiss = spectrum((b) => b.fill(70));
+  // The same shape as the vowel and a fortieth of the level: somebody singing
+  // two rooms away, a radio left on downstairs. Peaked, so only the quiet floor
+  // rejects it - without that this is a pet that praises the neighbours.
+  const distant = spectrum((b) => {
+    for (const [hz, level] of [[220, 8], [440, 5], [660, 3], [880, 2]]) b[at(hz)] = level;
+  });
+  const silence = spectrum(() => {});
+  // A kick drum: loud, and entirely under the voice band.
+  const drum = spectrum((b) => { for (let i = 0; i < at(150); i++) b[i] = 250; });
+  // A cymbal: loud, and entirely over it.
+  const cymbal = spectrum((b) => { for (let i = at(1200); i < BINS; i++) b[i] = 250; });
+
+  assert.strictEqual(singing.voiced(vowel, HZ), true, 'a held vowel is not heard as one');
+  assert.strictEqual(singing.voiced(hiss, HZ), false, 'a flat hiss counts as singing');
+  assert.strictEqual(singing.voiced(silence, HZ), false, 'silence counts as singing');
+  assert.strictEqual(singing.voiced(drum, HZ), false, 'a kick drum counts as singing');
+  assert.strictEqual(singing.voiced(cymbal, HZ), false, 'a cymbal counts as singing');
+  assert.strictEqual(singing.voiced(distant, HZ), false, 'singing two rooms away counts as singing at it');
+
+  // Junk in, false out. This runs forty times a second on whatever the machine
+  // hands it, and an exception in there takes the beat listener with it.
+  for (const bad of [null, undefined, new Uint8Array(0), 'bins']) {
+    assert.strictEqual(singing.voiced(bad, HZ), false, `${JSON.stringify(bad)} was heard as singing`);
+  }
+  for (const bad of [0, -1, NaN, undefined]) {
+    assert.strictEqual(singing.voiced(vowel, bad), false, `a bin width of ${bad} was accepted`);
+  }
+  // A spectrum too coarse to say anything about a voice says nothing, rather
+  // than saying something about two bins.
+  assert.strictEqual(singing.voiced(new Uint8Array(8).fill(200), HZ), false, 'eight bins was enough to hear singing');
+
+  // --- and the holding, which is the part that tells it from talking ---
+  const FRAME = 25;
+  const feed = (heard, what, ms, from = 0) => {
+    let fired = 0;
+    let t = from;
+    for (; t < from + ms; t += FRAME) if (heard(what, HZ, t)) fired += 1;
+    return { fired, t };
+  };
+
+  // A vowel held past HOLD_MS counts, once.
+  {
+    const heard = singing.tracker();
+    const short = feed(heard, vowel, singing.HOLD_MS - FRAME * 2);
+    assert.strictEqual(short.fired, 0, 'a vowel shorter than a note counted as singing');
+    const on = feed(heard, vowel, 1000, short.t);
+    assert.strictEqual(on.fired, 1, `holding on fired ${on.fired} times rather than once`);
+  }
+
+  // Talking: bursts of voice with a gap between them, and no burst long enough.
+  // This is the case the whole file exists to reject.
+  {
+    const heard = singing.tracker();
+    let t = 0;
+    let fired = 0;
+    for (let word = 0; word < 12; word++) {
+      // ~200ms of vowel, then ~300ms of consonants and gaps. Neither the burst
+      // nor the gap is unusual for speech; the point is that nothing is held.
+      for (let i = 0; i < 8; i++, t += FRAME) if (heard(vowel, HZ, t)) fired += 1;
+      for (let i = 0; i < 12; i++, t += FRAME) if (heard(hiss, HZ, t)) fired += 1;
+    }
+    assert.strictEqual(fired, 0, 'talking was praised as singing');
+  }
+
+  // A consonant inside a sung word must not reset the note, or nothing ever
+  // reaches HOLD_MS and the feature never fires at all.
+  {
+    const heard = singing.tracker();
+    let t = 0;
+    let fired = 0;
+    for (let i = 0; i < 60; i++, t += FRAME) {
+      // Four frames of gap - 100ms, comfortably under BREAK_MS - every half
+      // second, which is roughly what a sung line does.
+      const frame = i % 20 >= 16 ? hiss : vowel;
+      if (heard(frame, HZ, t)) fired += 1;
+    }
+    assert.strictEqual(fired, 1, `a consonant in the middle of a note reset it: fired ${fired}`);
+  }
+
+  // Once per performance, not once per bar.
+  {
+    const heard = singing.tracker();
+    const all = feed(heard, vowel, singing.AGAIN_MS - 500);
+    assert.strictEqual(all.fired, 1, `praised ${all.fired} times in one stretch of singing`);
+    const later = feed(heard, vowel, 2000, all.t + 1000);
+    assert.strictEqual(later.fired, 1, 'singing again later was ignored');
+  }
+
+  // And it has to be able to stop. A long silence ends the stretch, so the next
+  // note starts its own rather than inheriting the last one's head start.
+  {
+    const heard = singing.tracker();
+    feed(heard, vowel, singing.HOLD_MS - FRAME * 2);
+    const after = feed(heard, silence, 2000, singing.HOLD_MS);
+    assert.strictEqual(after.fired, 0, 'silence fired');
+    const fresh = feed(heard, vowel, singing.HOLD_MS - FRAME * 2, singing.HOLD_MS + 2000);
+    assert.strictEqual(fresh.fired, 0, 'a new note inherited the last one, so half a note counts');
+  }
+
+  // The two numbers that will need moving on a different microphone are the two
+  // that are named, rather than buried in the middle of an expression.
+  assert.ok(singing.PEAK > 1, 'the tonality floor stopped being a ratio');
+  assert.ok(singing.QUIET > 0 && singing.QUIET < 1, 'the quiet floor is not a share of full scale');
+  // Long enough to be a note rather than a syllable.
+  assert.ok(singing.HOLD_MS >= 600, `${singing.HOLD_MS}ms is a spoken vowel, not a sung one`);
+  assert.ok(singing.BREAK_MS < singing.HOLD_MS, 'a gap longer than a note counts as part of one');
+
+  // --- the wiring, which is the half a spectrum cannot show ---
+  const fs = require('fs');
+  const rjs = fs.readFileSync('./src/renderer/renderer.js', 'utf8');
+  const mjs = fs.readFileSync('./src/main.js', 'utf8');
+  const pjs = fs.readFileSync('./src/preload.js', 'utf8');
+  const html = fs.readFileSync('./src/renderer/index.html', 'utf8');
+
+  // --- and the one way a new renderer script can take the whole thing down ---
+  //
+  // They are classic scripts sharing one top level scope, so two files
+  // declaring the same name is not a shadowed variable, it is a redeclaration,
+  // which is a parse error, which kills whichever script loads second before it
+  // runs a line. singing.js did exactly this on its first draft - it had a
+  // QUIET, and so does renderer.js - and what it cost was every feature in the
+  // renderer, silently, with the only sign being a console line nobody was
+  // reading.
+  //
+  // verify-ui.js catches it, but only by rendering the whole app and noticing
+  // that nothing works. This is the same fact for the price of a regex.
+  const scripts = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(scripts.length >= 4, `only ${scripts.length} renderer scripts found`);
+  const declared = new Map(scripts.map((name) => [
+    name,
+    // No leading whitespace, which in these files is what top level means.
+    new Set([...fs.readFileSync(`./src/renderer/${name}`, 'utf8')
+      .matchAll(/^(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1])),
+  ]));
+  for (const [a, mine] of declared) {
+    for (const [b, theirs] of declared) {
+      if (a >= b) continue;
+      const both = [...mine].filter((n) => theirs.has(n));
+      assert.deepStrictEqual(both, [], `${a} and ${b} both declare ${both.join(', ')} at the top level, so whichever loads second will not parse`);
+    }
+  }
+
+  assert.ok(html.includes('singing.js'), 'the renderer never loads the singing detector');
+  // The tags, not the prose - renderer.js is named in two comments above them.
+  const tags = [...html.matchAll(/<script src="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(
+    tags.indexOf('singing.js') >= 0 && tags.indexOf('singing.js') < tags.indexOf('renderer.js'),
+    `singing.js loads after the file that uses it: ${tags.join(', ')}`
+  );
+  // Read off the context rather than assumed: a 44.1kHz machine puts the voice
+  // in different bins from a 48kHz one, and a hardcoded number is a pet that
+  // only hears singing on the machine this was written on.
+  assert.ok(
+    /hzPerBin = audioCtx\.sampleRate/.test(rjs),
+    'the bin width is guessed rather than read off the audio context'
+  );
+  // Forgotten when the microphone closes, or a dance twenty minutes ago is
+  // still half way through a note.
+  const stopBeat = rjs.slice(rjs.indexOf('function stopBeat()'), rjs.indexOf('async function listenForBeat'));
+  assert.ok(
+    stopBeat.includes('heardSinging = null;'),
+    'the singing tracker outlives the microphone, so a dance twenty minutes ago is still mid-note'
+  );
+
+  // Reported, not acted on in the renderer: every line the pet says goes
+  // through one door in main so the bank and the face cannot drift apart, and
+  // quiet hours get to refuse it there.
+  assert.ok(pjs.includes("ipcRenderer.send('pet:sang')"), 'singing never reaches the main process');
+  const sang = mjs.slice(mjs.indexOf("ipcMain.on('pet:sang'"), mjs.indexOf("ipcMain.on('pet:presence'"));
+  assert.ok(sang.includes('busy || asleep()'), 'the pet praises your singing over its own half-written answer');
+  assert.ok(sang.includes('attention()'), 'singing at the pet does not count as noticing it');
+  assert.ok(/talk\('sung', \{ event: 'sung', move: 'dance' \}\)/.test(sang), 'the pet does not dance, or does not say anything');
+
+  // The line and the face it needs.
+  assert.ok(pets.line('sung', 0).length > 0, 'no lines for being sung to');
+  assert.ok(pets.expressionFor('sung'), 'being sung to has no face');
+  // About you, not about itself: the pet is the audience here.
+  assert.notStrictEqual(pets.expressionFor('sung'), pets.expressionFor('praise'));
+}
+
 // ===== voice ===============================================================
 
 // The whole feature turns on one claim: neither direction of speech leaves the

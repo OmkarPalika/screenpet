@@ -35,6 +35,11 @@ contextBridge.exposeInMainWorld('pet', {
   // own detector, which answers with a count and nothing else. Never written
   // anywhere - see faces.js.
   face: (dataUrl) => ipcRenderer.send('pet:face-check', dataUrl),
+  // You were singing. Nothing about what was sung crosses this - not the words,
+  // not the tune, not a measurement of either. The renderer decides out of the
+  // same spectrum it is already watching for the beat, and what arrives here is
+  // that it happened. See singing.js.
+  sang: () => ipcRenderer.send('pet:sang'),
   // "Dance" was asked for: open the microphone for this many milliseconds and
   // move to whatever is playing. Nothing comes back the other way - the beat
   // never crosses this bridge, because nothing on the far side needs it.

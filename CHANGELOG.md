@@ -18,7 +18,9 @@ What the app does is [README.md](README.md); why it behaves the way it does is
 - A desktop pet that reads the screen with local OCR and answers with a local
   Ollama model. The screen text never leaves the machine.
 - The care loop: ten pets, ten skins, a wardrobe, hunger, sleep, wandering,
-  petting, moods and mischief.
+  petting, moods and mischief. Sing at it while it is bopping along and it
+  dances and says something nice, worked out from the spectrum it was already
+  listening to rather than from anything new being opened or kept.
 - A name, if you give it one. Up to 24 characters in any script; the pet
   answers to it, and says one line when you first choose it.
 - A house. The pet walks out of it when the app starts and back into it when

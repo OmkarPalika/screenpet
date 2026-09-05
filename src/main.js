@@ -1696,6 +1696,21 @@ ipcMain.on('pet:listen', listenAndReply);
 
 // Three words, never a frame. The renderer reduces what the camera saw to one
 // of these before it crosses the bridge; see "the room" in renderer.js.
+// You sang at it. The microphone was already open for the beat, so this costs
+// no new permission and nothing about what was sung crosses the bridge - see
+// singing.js and the note on the beat in renderer.js.
+//
+// Rate limited on the far side rather than here, because that is where the
+// clock the notes are measured against lives. The two guards worth having are
+// the two everything else the pet says off its own bat has: not over an answer
+// you are waiting for, and not while it is asleep.
+ipcMain.on('pet:sang', () => {
+  if (busy || asleep()) return;
+  // Singing at it is paying it attention, whatever else it is.
+  attention();
+  talk('sung', { event: 'sung', move: 'dance' });
+});
+
 ipcMain.on('pet:presence', (_e, event) => {
   if (!['arrived', 'left', 'blind'].includes(event)) return;
   if (busy) return; // do not talk over an answer you are waiting for

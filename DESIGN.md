@@ -1426,6 +1426,36 @@ drum lives and where speech mostly does not. Nothing is buffered, recognised or
 stored, and **the beat never crosses into the main process**: the pet moves in
 the renderer, because nothing on the other side needs to know.
 
+### And if it is you making the noise
+
+The same spectrum answers a second question for free: whether that is a record
+or whether it is you. The pet dances and says something nice when you sing at
+it, and it works out that you are out of the bins it was already reading — no
+second microphone, no second consent, and still nothing kept.
+
+There is no pitch tracker in it, and there does not need to be. The difference
+between singing and talking that is visible in a magnitude spectrum without one
+is that **talking drops out and singing holds**: every consonant is a gap, a
+spoken vowel rarely lasts a fifth of a second, and holding a note is the entire
+point of a note. So: a tonal, voice-band sound, held for nearly a second, with
+gaps under a fifth of a second forgiven because sung words have consonants too.
+
+Three things fall out of that, and all three are the right way round:
+
+- **humming counts**, which it should
+- **a long "aaaah" counts**, which is close enough
+- **a sustained church organ would count**, which is the honest ceiling. The
+  upgrade is a pitch tracker watching for notes that *change*; it is a real
+  amount of work, and nobody has yet been annoyed by an over-enthusiastic pet.
+
+This is the one place the beat's rule is broken on purpose. A beat is a
+movement and the main process has no use for it, so it never crosses. Singing
+is answered with a *line*, and every line the pet says goes through one door in
+the main process so the bank and the face cannot drift apart — which also means
+quiet hours and a half-written answer both get to refuse it, in the one place
+that already knows about either. What crosses is that it happened. Not the
+words, not the tune, not a measurement of either.
+
 Without a microphone the pet still dances when asked. It just dances to nothing,
 which is what it always did.
 
