@@ -30,6 +30,17 @@
       <section class="panel" data-panel="pet" role="tabpanel">
         <div class="card">
           <div class="set">
+            <label for="pet-name">Name</label>
+            <input id="pet-name" type="text" maxlength="24" spellcheck="false"
+                   placeholder="unnamed" autocomplete="off" />
+            <p class="hint">
+              What you call it. It answers to this and mentions it when you ask,
+              and stays unnamed if you leave it empty. Stored in settings.json
+              with everything else and never sent anywhere the question is not.
+            </p>
+          </div>
+
+          <div class="set">
             <span class="title">Pet</span>
             <div class="pets" id="pets"></div>
           </div>

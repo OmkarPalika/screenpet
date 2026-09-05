@@ -4,6 +4,7 @@ const el = (id) => document.getElementById(id);
 const modelSel = el('model');
 const visionSel = el('vision');
 const hotkeyInput = el('hotkey');
+const nameInput = el('pet-name');
 const skinsBox = el('skins');
 const wearSel = el('wear');
 const autostart = el('autostart');
@@ -274,6 +275,7 @@ saveBtn.addEventListener('click', async () => {
     model: modelSel.value,
     vision: visionSel.value,
     hotkey: hotkeyInput.value.trim(),
+    name: nameInput.value.trim(),
     pet: species,
     skin,
     wear: wearSel.value,
@@ -307,6 +309,9 @@ saveBtn.addEventListener('click', async () => {
   // Reflect what was actually accepted - a rejected value silently reverting
   // would be worse than showing the user it did not stick.
   hotkeyInput.value = current.hotkey;
+  // Shows what was accepted, not what was typed: a name that was all emoji
+  // comes back empty, which is the honest answer.
+  nameInput.value = current.name;
   voice.checked = current.voice;
   sounds.checked = current.sounds;
   focus.checked = current.focus;
@@ -481,6 +486,9 @@ el('close').addEventListener('click', () => window.config.close());
   visionSel.value = current.vision;
 
   hotkeyInput.value = current.hotkey;
+  // Shows what was accepted, not what was typed: a name that was all emoji
+  // comes back empty, which is the honest answer.
+  nameInput.value = current.name;
   voice.checked = current.voice;
   sounds.checked = current.sounds;
   focus.checked = current.focus;
