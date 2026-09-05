@@ -1,7 +1,5 @@
 # Security Policy
 
-**screenpet** · version 0.1.0
-
 ## Reporting a vulnerability
 
 Email palikaomkar@gmail.com with the words "screenpet security" in the subject.
@@ -31,6 +29,17 @@ The design rules that follow from that are the things worth testing:
   `settings.json`, and nothing a model or a skill can produce, may point them at
   another host. A path traversal through a model name, a settings field that
   becomes a URL, or a redirect that lands off-host all count.
+- **The update feed is baked in at build time.** `app-update.yml` inside the
+  installed app names this repository's releases, written from the `publish`
+  block at package time. Nothing in `settings.json` and no environment variable
+  can change it, deliberately: this is the one path in the app that downloads an
+  executable and then runs it, so a field that redirects it is arbitrary code
+  execution. Nothing checks on a timer, nothing downloads until the second
+  button is pressed, and the request that goes out carries no settings, no
+  screen, no memory, no account and no identifier. A way to make the updater
+  fetch from another host, or to make it run anything it did not verify, is the
+  highest-severity bug in this app after a default install reaching the
+  internet.
 - **The local endpoint is loopback-only**, validated in `src/core/settings.js`. A
   hand-edited settings file must not be able to send screen text to a remote
   "Ollama".
@@ -65,7 +74,13 @@ vulnerabilities — but a way to *widen* one is:
 - **Anything on screen is fair game to the local model.** That is the feature.
 - **Builds are unsigned** until there is a code-signing certificate, so
   SmartScreen will warn. Verify what you downloaded against the hash published
-  with the release.
+  with the release. It weakens the updater too, and this is worth stating
+  plainly: electron-updater checks the download's sha512 against `latest.yml`,
+  but with nothing signed there is no publisher check on top of that, and
+  `latest.yml` is served from the same release as the installer it vouches for.
+  So the trust boundary is the GitHub account, not the binary - anyone who can
+  publish a release can hand every running copy something it will execute.
+  A certificate is what closes that, and there is not one yet.
 - **Local dictation runs a binary you supplied.** If a known engine binary and
   its matching model are present in the `whisper` folder inside the app data
   directory, the app executes that binary. Only the filenames in `src/system/dictate.js`'s `ENGINES` table are
