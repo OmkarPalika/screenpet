@@ -2831,6 +2831,186 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     );
   }
 
+  // --- going home rather than vanishing --------------------------------------
+  {
+    const fs = require('fs');
+    const main = fs.readFileSync('./src/main.js', 'utf8');
+    const preload = fs.readFileSync('./src/preload.js', 'utf8');
+    const html = fs.readFileSync('./src/renderer/index.html', 'utf8');
+    const css = fs.readFileSync('./src/renderer/style.css', 'utf8');
+    const renderer = fs.readFileSync('./src/renderer/renderer.js', 'utf8');
+
+    // Three doors out - the tray, the pet's own menu and the hotkey - and the
+    // goodbye has to be on all of them. One of them calling app.quit() straight
+    // is a pet that vanishes depending on which button you pressed, which reads
+    // as a crash rather than a choice.
+    assert.ok(main.includes("{ label: 'Quit', click: farewell }"), 'the tray quits without a goodbye');
+    assert.ok(
+      main.includes("globalShortcut.register('CommandOrControl+Shift+Q', farewell)"),
+      'the quit hotkey quits without a goodbye'
+    );
+    assert.ok(main.includes("ipcMain.on('pet:quit', farewell)"), "the pet's own menu quits without a goodbye");
+
+    // The whole animation is the renderer's, and the renderer can be wedged,
+    // backgrounded or gone. Nothing in it is allowed to be the reason somebody
+    // cannot quit, so main holds its own clock.
+    const body = main.slice(main.indexOf('function farewell()'), main.indexOf('function pushState('));
+    assert.ok(/setTimeout\(\(\) => app\.quit\(\), FAREWELL_MS\)/.test(body),
+      'nothing quits the app if the renderer never finishes the walk');
+    assert.ok(/if \(quitting\) return;/.test(body), 'pressing Quit twice restarts the goodbye');
+    assert.ok(/isVisible\(\)/.test(body) && /SCREENPET_SMOKE/.test(body),
+      'the app plays an animation nobody can see before quitting');
+
+    // Both halves of the round trip.
+    assert.ok(preload.includes("ipcRenderer.on('pet:leave'"), 'the renderer is never told to go home');
+    assert.ok(preload.includes("ipcRenderer.send('pet:left')"), 'the renderer cannot say it got there');
+    assert.ok(main.includes("ipcMain.on('pet:left'"), 'nobody listens for the door shutting');
+
+
+    // ...and the same round trip on the way in. The house is placed around
+    // wherever the pet was left, which the renderer only knows once the first
+    // state push has arrived - so this is sent after that push rather than on
+    // load, and skipped entirely when there is no window to watch it.
+    assert.ok(main.includes("send('pet:enter')"), 'the pet never comes out of the house');
+    assert.ok(preload.includes("ipcRenderer.on('pet:enter'"), 'the renderer is never told to come out');
+    assert.ok(renderer.includes('window.pet.onEnter(arrive)'), 'nothing runs the arrival');
+    {
+      const start = main.slice(main.indexOf("once('did-finish-load'"));
+      assert.ok(
+        start.indexOf('tick();') < start.indexOf("send('pet:enter')"),
+        'the arrival is sent before the pet has been told where it was left'
+      );
+      assert.ok(
+        start.includes('const entering = win.isVisible() && !process.env.SCREENPET_SMOKE;'),
+        'the app plays an arrival nobody can see'
+      );
+      assert.ok(
+        start.includes('entering ? ARRIVE_MS : 0'),
+        'the greeting is not held back, so it is said from inside a shut house'
+      );
+    }
+    // The set, and the parts of it the renderer reaches for by id.
+    assert.ok(/id="house"/.test(html), 'there is no house to walk into');
+    assert.ok(/id="house-door"/.test(html), 'the house has no door');
+    assert.ok(/id="house-back"/.test(html), 'the doorway has nothing behind it');
+    for (const rule of ['.house', '.house-back', '.house.is-close', '.house-door',
+      '.house-door.is-open', '.house.is-shut', '.house-back.is-going', '.house-doorway',
+      '.stage.is-leaving', '.stage.is-entering', '.stage.is-inside']) {
+      assert.ok(css.includes(rule), `${rule} is used but never drawn`);
+    }
+
+    // Three layers in one order, and the order is the whole effect: the inside
+    // of the doorway paints under the pet, the pet, then the facade over it.
+    // The facade earns that with a z-index; the recess earns its place by being
+    // before the stage in the document. Move it after and the pet vanishes
+    // behind a black rectangle instead of standing in a doorway.
+    assert.ok(
+      html.indexOf('id="house-back"') < html.indexOf('id="stage"'),
+      'the inside of the doorway is painted over the pet, so nothing is ever seen going in'
+    );
+    // The facade is behind the pet while it walks up to the door and in front of
+    // it once it is inside. Both halves matter: in front the whole time, the
+    // approach is a pet walking into masonry, which is what the last version
+    // looked like; behind the whole time, stepping in is a pet standing on a
+    // house. Read by splitting rather than matching - this file is edited
+    // through shells that eat a backslash a layer, and a regex that has quietly
+    // lost its escape matches nothing and passes.
+    assert.ok(
+      !css.split('.house {')[1].split('}')[0].includes('z-index'),
+      'the house paints over the pet on the way in, so walking to the door is walking into a wall'
+    );
+    assert.ok(
+      css.includes('.house.is-close { z-index: 3; }'),
+      'the wall never comes forward, so the pet ends up standing on the house rather than in it'
+    );
+    assert.ok(
+      renderer.includes("house.classList.add('is-close')"),
+      'nothing ever brings the wall forward'
+    );
+
+    // Occlusion is the effect right up until the house leaves, and then it is a
+    // liability: the wall sinking into the ground uncovers a pet that was never
+    // anywhere else. It has to actually stop being drawn, behind the shut door
+    // where nothing can be seen to happen.
+    assert.ok(
+      renderer.includes("stage.classList.add('is-inside')"),
+      'the pet is only ever covered up, so the house leaving hands it back'
+    );
+    // Scoped to the goodbye: coming out of the house uses the same class names
+    // in the other order, so a search of the whole file finds the wrong one.
+    const goodbye = renderer.slice(renderer.indexOf('async function leave()'));
+    assert.ok(
+      goodbye.indexOf("stage.classList.add('is-inside')") < goodbye.indexOf("classList.add('is-going')"),
+      'the pet is put away after the house has already started to leave'
+    );
+
+    // The idle bob owns the transform property outright while it runs, and an
+    // animation beats a declared transform - so without this the pet does not
+    // shrink on the way in by exactly nothing, silently.
+    assert.ok(
+      /\.stage\.is-leaving \.pet \{\s*animation: none;/.test(css),
+      'the idle bob keeps the transform, so the pet never shrinks going through the door'
+    );
+
+    // The walk aims at a hole cut in the facade by a clip-path. Two independent
+    // sets of numbers describing one doorway, in two files, is a thing that goes
+    // out of step - and out of step it is a pet walking into a wall, which is
+    // what the first version did. So they are checked against each other.
+    //
+    // Read by splitting rather than by matching, because this file is written
+    // and rewritten through shells that eat a backslash a layer, and a regex
+    // that has quietly lost its escape matches nothing and passes.
+    const num = (name, src = renderer) => parseInt(src.split(`const ${name} = `)[1], 10);
+    const bodyW = parseInt(css.split('.house-body {')[1].split('width: ')[1], 10);
+    const notch = css.split('clip-path: polygon(')[1].split(')')[0];
+
+    // Every x in the polygon. The two that are neither edge of the wall are the
+    // jambs, whatever order the outline happens to walk them in.
+    const jamb = [...new Set(
+      notch.split(/[^0-9]+/).filter(Boolean).map(Number).filter((_, i) => i % 2 === 0)
+    )].filter((x) => x !== 0 && x !== bodyW).sort((a, b) => a - b);
+
+    assert.strictEqual(jamb.length, 2, 'the wall has no doorway cut out of it');
+    const bodyInset = (num('HOUSE_W') - bodyW) / 2;
+    assert.strictEqual(jamb[0] + bodyInset, num('DOOR_X'), 'the hole in the wall is not where the pet walks');
+    assert.strictEqual(jamb[1] - jamb[0], num('DOOR_W'), 'the hole in the wall is not the width of the door');
+    assert.ok(
+      css.includes(`left: ${num('DOOR_X')}px`) && css.includes(`width: ${num('DOOR_W')}px`),
+      'the door is not hung in the hole'
+    );
+
+    // Centred, and this is load-bearing rather than decorative. The pet stops
+    // one fixed distance from the door whichever way it came, so where that
+    // leaves it relative to the house depends on where the door is in the house.
+    // Centred, it stops just past the near corner from either side. Off centre,
+    // one approach leaves it standing on the wall and the other leaves it out in
+    // the open beyond the house entirely.
+    assert.strictEqual(
+      num('DOOR_X') + num('DOOR_W') / 2,
+      num('HOUSE_W') / 2,
+      'the door is off centre, so the pet arrives at a different place depending on which way it came'
+    );
+
+    // And the pet has to fit through it, with the shrink the way in applies.
+    const scale = parseFloat(css.split('.stage.is-entering .pet {')[1].split('scale(')[1]);
+    assert.ok(
+      num('PET_W') * scale < num('DOOR_W'),
+      `a pet ${Math.round(num('PET_W') * scale)}px wide does not fit a ${num('DOOR_W')}px door`
+    );
+
+    // The walk home is deliberately not the wander transition. Two point six
+    // seconds is right for a pet crossing the screen on its own time and much
+    // too long for one you have just asked to go away, and the total has to stay
+    // under the backstop or the app quits mid-walk every time.
+    const ms = (name) => Number((renderer.match(new RegExp(`const ${name} = (\\d+);`)) || [])[1]);
+    const total = ms('WALK_MS') + ms('DOOR_MS') + ms('INSIDE_MS') + ms('LIGHT_MS') + ms('HOUSE_GONE_MS');
+    assert.ok(total > 0, 'the goodbye has no timings');
+    assert.ok(
+      total < Number(main.match(/const FAREWELL_MS = (\d+);/)[1]),
+      `the goodbye takes ${total}ms and the app stops waiting sooner, so nobody ever sees the end of it`
+    );
+  }
+
   // --- the name you gave it -------------------------------------------------
   {
     const fs = require('fs');

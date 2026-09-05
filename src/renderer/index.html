@@ -17,6 +17,26 @@
     <div id="veil" class="veil" hidden></div>
     <p id="counting" class="counting" hidden></p>
 
+    <!-- Where it goes when you quit. Outside the stage on purpose: the stage is
+         the thing that walks, and a house that walks with it is a rucksack.
+         Positioned from the left by the renderer, standing on the same floor.
+
+         Two pieces, because the pet goes between them: the dark inside of the
+         doorway comes first and paints under the pet, and the facade - which
+         has the doorway cut out of it - comes after the stage and paints over
+         it. That is what makes walking in an occlusion rather than a fade. -->
+    <div id="house-back" class="house-back" hidden aria-hidden="true"></div>
+
+    <div id="house" class="house" hidden aria-hidden="true">
+      <div class="house-roof"></div>
+      <div class="house-body">
+        <div class="house-window"></div>
+      </div>
+      <div class="house-doorway">
+        <div id="house-door" class="house-door"></div>
+      </div>
+    </div>
+
     <!-- The window covers the whole display; this is the bit that moves. -->
     <div id="stage" class="stage">
       <div id="bubble" class="bubble" hidden><span id="bubble-text"></span></div>

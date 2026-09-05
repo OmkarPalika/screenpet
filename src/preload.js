@@ -59,6 +59,12 @@ contextBridge.exposeInMainWorld('pet', {
   settings: () => ipcRenderer.send('pet:settings'),
   setInteractive: (v) => ipcRenderer.send('pet:interactive', !!v),
   quit: () => ipcRenderer.send('pet:quit'),
+  // Coming out of the house on launch, and going back into it on quit. The
+  // main process asks for the walk and, on the way out, waits; left() is the
+  // renderer saying the door is shut, which is what ends that wait early.
+  onEnter: (fn) => ipcRenderer.on('pet:enter', () => fn()),
+  onLeave: (fn) => ipcRenderer.on('pet:leave', () => fn()),
+  left: () => ipcRenderer.send('pet:left'),
 });
 
 contextBridge.exposeInMainWorld('config', {

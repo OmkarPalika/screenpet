@@ -339,7 +339,7 @@ function refreshTray() {
     { type: 'separator' },
     { label: 'Settings…', click: openSettings },
     { type: 'separator' },
-    { label: 'Quit', click: () => { quitting = true; app.quit(); } },
+    { label: 'Quit', click: farewell },
   ]));
 }
 
@@ -526,6 +526,41 @@ function send(channel, payload) {
     applyQuiet();
   }
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+}
+
+// Quitting, with a goodbye. The pet walks to a little house and goes inside
+// before the process ends - a desktop pet that vanishes mid-step is a window
+// closing, and one that goes home is a pet.
+//
+// Backstop rather than a schedule: the renderer says when it is done, and this
+// is what happens if it never does. A wedged renderer, a paused animation in a
+// backgrounded window, a compositor that dropped the frame - none of them are
+// allowed to be the reason someone cannot quit. Comfortably longer than the
+// animation, which is about 1.5s.
+const FAREWELL_MS = 3200;
+
+// How long the pet takes to come out of its house on launch. Only used to hold
+// the greeting back until there is somebody outside to hear it, so it is allowed
+// to be an approximation of the renderer's timings rather than a promise about
+// them - too short and the greeting is swallowed, too long and it is late.
+const ARRIVE_MS = 2000;
+
+/**
+ * The one way out, wherever Quit was pressed. All three doors - the tray, the
+ * pet's own menu and the hotkey - come through here, so the goodbye cannot exist
+ * on some of them and not others.
+ */
+function farewell() {
+  // Pressing Quit twice must not restart the walk, and must not queue a second
+  // exit behind the first.
+  if (quitting) return;
+  quitting = true;
+  // Nothing anyone could watch: no window, hidden in the tray, hidden by a game,
+  // or the smoke check, which exits the moment it has its answer.
+  const seen = win && !win.isDestroyed() && win.isVisible();
+  if (!seen || process.env.SCREENPET_SMOKE) return app.quit();
+  send('pet:leave');
+  setTimeout(() => app.quit(), FAREWELL_MS);
 }
 
 function pushState(extra = {}) {
@@ -1329,7 +1364,7 @@ function applyHotkey() {
   } catch (err) {
     console.error(`Bad hotkey ${settings.hotkey}: ${err.message}`);
   }
-  globalShortcut.register('CommandOrControl+Shift+Q', () => { quitting = true; app.quit(); });
+  globalShortcut.register('CommandOrControl+Shift+Q', farewell);
 }
 
 // The microphone is held open for as long as this is on, which is why it is the
@@ -1480,7 +1515,20 @@ app.whenReady().then(async () => {
     lastWatchAt = Date.now();
     tick();
     setInterval(tick, TICK_MS);
-    talk(pets.greetKind(new Date().getHours()), { event: 'greet' });
+
+    // Out of the house it walked into when this last closed. Sent after the
+    // first tick on purpose: that push is what tells the renderer where the pet
+    // was left, and the house is built around that spot rather than around
+    // wherever an unplaced pet happens to be sitting.
+    const entering = win.isVisible() && !process.env.SCREENPET_SMOKE;
+    if (entering) send('pet:enter');
+
+    // The greeting waits until it is outside. Everything the pet says is hidden
+    // while it is in the doorway, so said on launch it is said to a shut door.
+    setTimeout(
+      () => talk(pets.greetKind(new Date().getHours()), { event: 'greet' }),
+      entering ? ARRIVE_MS : 0
+    );
   });
 
   await applySettings();
@@ -1673,7 +1721,11 @@ ipcMain.handle('pet:voice', async (_e, text, rate) => {
 
 ipcMain.on('pet:ask', answerScreen);
 ipcMain.on('pet:settings', openSettings);
-ipcMain.on('pet:quit', () => { quitting = true; app.quit(); });
+ipcMain.on('pet:quit', farewell);
+
+// The pet is inside and the door is shut. Ends the wait early; FAREWELL_MS is
+// still running underneath and app.quit() twice is harmless.
+ipcMain.on('pet:left', () => { if (quitting) app.quit(); });
 
 ipcMain.handle('config:get', async () => ({
   settings,

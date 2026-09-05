@@ -21,6 +21,8 @@ What the app does is [README.md](README.md); why it behaves the way it does is
   petting, moods and mischief.
 - A name, if you give it one. Up to 24 characters in any script; the pet
   answers to it, and says one line when you first choose it.
+- A house. The pet walks out of it when the app starts and back into it when
+  you quit, rather than appearing and vanishing.
 - Timers, breaks, memory, skills, a voice, and dictation.
 - Two answering tiers, a settings window, and a Windows installer.
 - A `Download and install` button that replaces the app without the setup

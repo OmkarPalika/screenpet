@@ -53,6 +53,10 @@ app.whenReady().then(async () => {
     act: [], interactive: [], react: [], chat: [], chatOpen: [], photo: [], place: [],
     ask: 0, listen: 0, take: 0, done: 0,
   };
+  // The renderer saying the door is shut. Counted rather than flagged so it
+  // reads the same as every other tally in here.
+  let wentHome = 0;
+  ipcMain.on('pet:left', () => { wentHome += 1; });
   ipcMain.on('pet:photo-taken', (_e, v) => ipc.photo.push(v));
   ipcMain.on('pet:listen', () => { ipc.listen += 1; });
   ipcMain.on('pet:act', (_e, name) => ipc.act.push(name));
@@ -1464,6 +1468,187 @@ app.whenReady().then(async () => {
     }
   }`);
 
+  // --- coming and going -------------------------------------------------------
+  //
+  // The two animations nobody can re-run: one plays once on the way in and the
+  // other once on the way out. Both are driven here through the same IPC
+  // messages the main process sends, and looked at in the states worth looking
+  // at - out on the doorstep, and inside with the light on.
+  {
+    win.webContents.send('pet:look', { pet: 'cat', skin: 'butter', wear: 'none' });
+
+    // Every other shot in here is framed on the pet, and 520px is right for
+    // that. This one is not about the pet: it is a walk the length of a room,
+    // and in a 520px window there is nowhere to put a 240px house far enough
+    // away to walk to - it lands on top of the pet and the walk is 40px. So the
+    // window becomes a screen for the length of this block. Nothing about it is
+    // wider than the narrowest real display.
+    const framed = win.getBounds();
+    win.setBounds({ ...framed, width: 1100, height: 400 });
+    await settle();
+
+    // Off to one side to start, so the walk is actually a walk rather than a
+    // house appearing on top of the pet.
+    await js(`(() => { const s = document.getElementById('stage');
+      s.classList.add('is-dragging');
+      s.style.transform = 'translate(60px, 0px)';
+      requestAnimationFrame(() => s.classList.remove('is-dragging')); })()`);
+    await settle();
+
+    check(await js(`document.getElementById('house').hidden`), 'the house is on screen before you quit');
+
+    // Every wait in here is for a state rather than a duration. Both sequences
+    // are five or six delays long and a hard-coded total is a check that breaks
+    // the day one of them moves by forty milliseconds.
+    const till = async (expr) => {
+      for (let i = 0; i < 90; i += 1) {
+        if (await js(expr)) return true;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return false;
+    };
+
+    // --- and first, coming out of it ---
+    //
+    // The pet was left somewhere. The house is built around that spot, the pet
+    // is put in the doorway without travelling there, and it walks back out to
+    // exactly where it was - so the arrival ends in the state the app would have
+    // started in without any of this.
+    const left = await js(`document.getElementById('pet').getBoundingClientRect().left`);
+    win.webContents.send('pet:enter');
+
+    check(await till(`!document.getElementById('house').hidden`), 'nothing comes out of anything on launch');
+    check(
+      await js(`document.getElementById('house').classList.contains('is-close')`),
+      'the wall is behind the pet before it has come out, so it steps out of a house it was never in'
+    );
+    check(
+      await till(`document.getElementById('house-door').classList.contains('is-open')`),
+      'the door never opened on the way out'
+    );
+
+    // Far enough past the door opening to be a step out rather than the frame
+    // the class landed on: the door swings for 280ms and the pet is out over the
+    // 380ms after that, so this is it halfway across its own threshold.
+    await new Promise((r) => setTimeout(r, 480));
+    await capture(win.webContents, 'pet-arriving.png');
+
+    check(
+      await till(`!document.getElementById('stage').classList.contains('is-entering')`),
+      'the pet never steps out of the doorway'
+    );
+    check(
+      await till(`document.getElementById('house').hidden`),
+      'the house it came out of is still standing there'
+    );
+    check(
+      await till(`!document.getElementById('stage').classList.contains('is-leaving')`),
+      'the pet is left mid-arrival, so nothing it normally does works again'
+    );
+
+    // Back where it started, which is the whole contract: an arrival that puts
+    // the pet somewhere else has moved it behind the user's back.
+    check(
+      Math.abs((await js(`document.getElementById('pet').getBoundingClientRect().left`)) - left) < 2,
+      'the pet does not end up where it was left, so launching moves it'
+    );
+
+    // --- and then going back in ---
+
+    win.webContents.send('pet:leave');
+
+    // Mid-walk: the house is up, the door is open, and the pet is still outside.
+    check(
+      await till(`document.getElementById('house-door').classList.contains('is-open')`),
+      'the door never opened'
+    );
+    check(!(await js(`document.getElementById('house').hidden`)), 'quitting produced no house');
+    check(!(await js(`document.getElementById('house-back').hidden`)), 'the doorway has no inside');
+    check(
+      await js(`document.getElementById('stage').classList.contains('is-leaving')`),
+      'the walk home uses the wander transition, which takes 2.6s'
+    );
+    check(
+      !(await js(`document.getElementById('stage').classList.contains('is-entering')`)),
+      'the pet is through the door before the door is open'
+    );
+    // It has stepped in. Now the only two things that make it read as going
+    // inside rather than being deleted: it never touched the house until it went
+    // in, and once in it is standing in the doorway - inside the opening, not
+    // behind the wall beside it and not still full size in front of it.
+    check(await till(`document.getElementById('stage').classList.contains('is-entering')`), 'the pet never went in');
+    // The wall is behind the pet for the whole approach and comes forward only
+    // once it is in the opening. Painted in front the whole way, walking up to a
+    // centred door is a pet disappearing into masonry and reappearing - which is
+    // exactly what the previous version looked like.
+    check(
+      !(await js(`document.getElementById('house').classList.contains('is-close')`)),
+      'the wall is in front of the pet while it walks to the door, so the approach is a walk into a wall'
+    );
+
+    // The frame at the end of the step, before the door starts to close: the
+    // pet standing in the opening, dim, with the room dark behind it. That is
+    // the shot the whole sequence exists for, and a picture of it walking
+    // outside proves nothing about whether it ever gets in.
+    await new Promise((r) => setTimeout(r, 340));
+    await capture(win.webContents, 'pet-leaving.png');
+
+    await new Promise((r) => setTimeout(r, 400));
+    check(
+      await js(`document.getElementById('house').classList.contains('is-close')`),
+      'the wall never comes forward, so the pet is standing on the house rather than in it'
+    );
+    check(
+      await js(`(() => { const d = document.getElementById('house-back').getBoundingClientRect();
+        const p = document.getElementById('pet').getBoundingClientRect();
+        return p.left >= d.left - 2 && p.right <= d.right + 2 && p.bottom <= d.bottom + 2; })()`),
+      'the pet does not end up in the doorway, so nobody ever sees it go inside'
+    );
+
+    // Inside, door shut, light on. The house is still standing at this point:
+    // the pet is not gone, it is in there, and that is the whole shot.
+    check(await till(`document.getElementById('house').classList.contains('is-shut')`), 'nobody turned the light on');
+    check(
+      !(await js(`document.getElementById('house-door').classList.contains('is-open')`)),
+      'the door is left hanging open'
+    );
+
+    // The light is the ending. Without it the last thing anybody sees is a shut
+    // door on an empty house, which is a pet that got deleted outside. Long
+    // enough after for the window to have finished coming up, and comfortably
+    // before the house starts to sink.
+    await new Promise((r) => setTimeout(r, 450));
+    check(
+      (await js(`getComputedStyle(document.querySelector('.house-window')).boxShadow`)) !== 'none',
+      'the light never comes on, so the pet is shut out rather than home'
+    );
+    await capture(win.webContents, 'pet-home.png');
+
+    // And then the set goes away, before the process does. A last frame with a
+    // house standing on its own in it is a window closing, not a pet going home.
+    check(await till(`document.getElementById('house').classList.contains('is-going')`), 'the house never leaves');
+
+    // The last thing on screen is an empty patch of desktop. Everything up to
+    // here hides the pet by standing a wall in front of it, and a wall that
+    // sinks into the ground gives it straight back - so by the time the house
+    // is leaving the pet has to be gone rather than covered.
+    check(
+      (await js(`getComputedStyle(document.getElementById('pet')).visibility`)) === 'hidden',
+      'the house leaves and the pet is still standing there, because it was only ever hidden behind it'
+    );
+    for (let i = 0; i < 40 && !wentHome; i += 1) await new Promise((r) => setTimeout(r, 50));
+    check(wentHome > 0, 'the renderer never told the main process it had gone inside');
+
+    // Put the set away again; everything after this shares the window.
+    win.setBounds(framed);
+    await js(`(() => { for (const id of ['house', 'house-back']) {
+        const h = document.getElementById(id);
+        h.hidden = true; h.classList.remove('is-shut', 'is-going', 'is-close');
+      }
+      const s = document.getElementById('stage');
+      s.classList.remove('is-leaving', 'is-entering', 'is-inside'); })()`);
+    await settle();
+  }
   // --- settings window ----------------------------------------------------
   let saved = null;
   ipcMain.handle('config:get', async () => ({
@@ -1753,11 +1938,12 @@ app.whenReady().then(async () => {
   }
   console.log(
     'ok - speech, chirps, noises, moods, expressions, gaze, species, skins, wardrobe, bars,\n'
-    + '     hover, headpat, tickle, drag, chat, menu, settings and IPC all good.'
+    + '     hover, headpat, tickle, drag, chat, menu, settings, coming and going, IPC all good.'
   );
   console.log(
     'wrote pet-preview.png, pet-hungry.png, pet-menu.png, pet-love.png, pet-chat.png,\n'
-    + '      pet-faces.png, pet-species.png, pet-wardrobe.png, pet-settings.png'
+    + '      pet-faces.png, pet-species.png, pet-wardrobe.png, pet-settings.png,'
+      + '      pet-arriving.png, pet-leaving.png, pet-home.png'
   );
   app.exit(0);
 });
