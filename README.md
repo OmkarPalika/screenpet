@@ -848,3 +848,5 @@ and that is not the market this is built for.
   Ollama and the models, and the attribution the two free web services want.
 - [SECURITY.md](SECURITY.md) — how to report a hole, and the invariants worth
   attacking.
+- [CHANGELOG.md](CHANGELOG.md) — what changed in each version, including
+  anything that changed what leaves the machine.
