@@ -1301,6 +1301,90 @@ app.whenReady().then(async () => {
   win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', voice: false, sounds: false, mic: false });
   await settle();
 
+  // --- the blink track ------------------------------------------------------
+  // Blinking runs under everything else rather than beside it. Two things worth
+  // proving in a real window rather than in the source: that the rate is read
+  // off what the pet is doing, and that the blinks nobody scheduled - a phrase
+  // starting, eyes coming back open - actually fire.
+  //
+  // Silence first. A line still being said from the section above would take the
+  // mouth off on its own halfway through, and then the edges below are somebody
+  // else's.
+  await js(`hush();`);
+  await js(`(() => {
+    window.__blink = 0;
+    const eyes = document.querySelector('.eyes');
+    new MutationObserver(() => { if (eyes.classList.contains('is-blink')) window.__blink++; })
+      .observe(eyes, { attributeFilter: ['class'] });
+  })()`);
+
+  // Sampled rather than timed. The gap is deliberately random, so one draw
+  // proves nothing and four hundred prove the range it was drawn from.
+  const gapMean = (setup) => js(`(() => {
+    const p = document.getElementById('pet');
+    ${setup}
+    let t = 0;
+    for (let i = 0; i < 400; i++) t += blinkGap();
+    return t / 400;
+  })()`);
+
+  const restGap = await gapMean(`p.classList.remove('is-talking'); lastMoveAt = 0;`);
+  const talkGap = await gapMean(`p.classList.add('is-talking'); lastMoveAt = 0;`);
+  const watchGap = await gapMean(`p.classList.remove('is-talking'); lastMoveAt = performance.now();`);
+  await js(`lastMoveAt = 0;`);
+
+  check(
+    talkGap < restGap * 0.85,
+    `the pet blinks no faster while talking: ${Math.round(talkGap)}ms between blinks against ${Math.round(restGap)}ms at rest`
+  );
+  check(
+    watchGap > restGap * 1.1,
+    `the pet blinks just as often while watching the cursor: ${Math.round(watchGap)}ms against ${Math.round(restGap)}ms at rest`
+  );
+
+  // The scheduled chain is stopped before each of these, so the only blink that
+  // can land inside the window is the one the edge caused. Without that a stray
+  // scheduled blink lets a broken track pass, which is the wrong way round for a
+  // check to be wrong.
+  const edge = async (act) => js(`(async () => {
+    const p = document.getElementById('pet');
+    const rest = () => new Promise((r) => setTimeout(r, 40));
+    await rest();
+    clearTimeout(blinkTimer);
+    const start = window.__blink;
+    ${act}
+    await rest();
+    const n = window.__blink - start;
+    blink();
+    return n;
+  })()`);
+
+  check(
+    (await edge(`p.classList.add('is-talking');`)) > 0,
+    'the pet does not blink when it starts talking'
+  );
+  check(
+    (await edge(`p.classList.remove('is-talking');`)) > 0,
+    'the pet does not blink when it stops talking'
+  );
+  // Love hides .eyes and shows a pair of hearts instead. Coming back out of it
+  // is eyes that were shut being open again, and that does not happen without a
+  // blink on the way.
+  await js(`(() => {
+    const p = document.getElementById('pet');
+    p.classList.remove('is-meditating');
+    p.dataset.mood = 'happy';
+    p.dataset.expr = 'love';
+  })()`);
+  check(
+    (await js(`getComputedStyle(document.querySelector('.eyes')).display`)) === 'none',
+    'love no longer hides the eyes, so the check below is measuring nothing'
+  );
+  check(
+    (await edge(`delete p.dataset.expr;`)) > 0,
+    'the pet does not blink when its eyes come back open'
+  );
+
   // --- body movements -------------------------------------------------------
   // The face and the body are separate axes, and the point of separating them is
   // that both can run at once. If a movement ever lands on .pet instead of the
