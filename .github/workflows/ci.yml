@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Nothing here needs a token. Read-only is the whole job.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+
+      # No `npm ci` on purpose. test/test.js and everything it reaches - brain,
+      # ocr, pet-state, settings, skills, media - import nothing but node's own
+      # standard library, so installing 200MB of Electron to run a two-second
+      # check would be the slowest possible way to learn nothing extra. If a
+      # dependency ever appears in that import graph, this step starts failing
+      # with "Cannot find module", and that is the signal to add the install.
+      - run: node test/test.js
+
+      # Reports what the machine can do and exits 1 when something is absent.
+      # A runner has no Ollama, so it is here for its output, not its verdict.
+      - run: node test/doctor.js || true
+
+# Not here: npm run verify:ui. It launches real Electron windows and captures
+# them, so it needs a compositor that will hand back a frame - xvfb with a
+# software GL stack on a Linux runner, or a Windows runner's non-interactive
+# session. Neither has been tried, and a job that is red for reasons no one can
+# reproduce locally teaches people to ignore the red light. Add it the day
+# someone can watch a run and fix what it says, not before.
