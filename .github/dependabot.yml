@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # The app ships one runtime dependency and around a dozen build-time ones.
+  # Monthly rather than weekly: electron-builder and Electron both move often
+  # and neither is worth a pull request a week for a project this size.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      build:
+        patterns: ['electron', 'electron-builder', 'gifenc']
+
+  # The workflows pin major versions of third-party actions, which is how they
+  # end up two years stale without anyone noticing.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

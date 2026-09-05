@@ -3318,6 +3318,18 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       `CHANGELOG.md has no section for ${pkg.version}; write the release notes before tagging it`
     );
 
+    // Four documents state the licence and one of them is the licence. They
+    // disagreed silently for as long as LICENSE said "All rights reserved"
+    // while nothing else had been told, so the SPDX id in package.json is now
+    // checked against the opening of the file it names. Part by part rather
+    // than as one string, because the SPDX id drops the word "License" that
+    // the licence's own title carries.
+    const heading = fs.readFileSync('./LICENSE', 'utf8').slice(0, 80);
+    assert.ok(
+      pkg.license.split('-').every((part) => heading.includes(part)),
+      `LICENSE opens with "${heading}", which is not the licence package.json names (${pkg.license})`
+    );
+
     // The README's second paragraph counts what you get. It said four skins
     // for a long time while the code had ten, which undersells the app by more
     // than half and is the sort of thing nobody notices because nobody counts.
