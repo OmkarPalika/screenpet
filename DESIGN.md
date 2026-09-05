@@ -1410,6 +1410,57 @@ a face    -> "welcome back"
 a curtain -> "hm. nobody there"
 ```
 
+## A conversation
+
+Push to talk is one phrase: you click *Listen…*, it hears one thing, it
+answers, and you click again. **Keep listening after it answers** takes the
+clicking-again out, which is most of the difference between an assistant and a
+form with a microphone on it.
+
+It is off by default, it needs the microphone switch, and — unlike the wake word
+and bopping along — **it does not hold the microphone open**. It reopens it for
+each turn and closes it in between. Nothing carries across a turn but the
+intention to take another one.
+
+Four separate ways out, because the failure that matters here is a microphone
+nobody remembers leaving open:
+
+| | |
+| --- | --- |
+| **You stop talking** | The first turn where nothing is said ends it, which is also how conversations end between people. It says goodbye rather than "I did not catch that" — you were not trying to say anything. |
+| **Ten turns** | For the case where the first one never fires. |
+| **Three minutes** | Same, on the clock instead of the count. Both are checked, or one of them is decoration. |
+| **Anything else you do with it** | Feeding it or opening the chat box is not a lull in the conversation, it is the end of one. So is quitting, and so is switching either setting off mid-turn. |
+
+### Turns do not overlap, and that costs an IPC message
+
+The recorder asks for **raw capture** — echo cancellation, noise suppression and
+automatic gain all off — because that is the audio the dictation benchmark was
+run on. So a microphone opened while the pet is still speaking does not merely
+hear the pet: it hears it clearly and transcribes it, and the conversation
+starts answering itself.
+
+So the next turn waits for the mouth to stop. The renderer says when, off the
+same class-watching observer the blink track uses — watching the result rather
+than calling from each of the seven places that stop speech, so none of them can
+forget. Behind it is a timer, because a line that is never spoken out loud —
+voice off, muted, or chirped rather than said — never reports having stopped.
+Whichever arrives first wins.
+
+One guard is worth naming: not every silence is a cue. The label that goes up
+when the microphone opens is itself a line, and it finishes like any other. The
+turn is only taken when one was actually armed.
+
+### No barge-in
+
+Talking over it needs the microphone open while the pet speaks, which needs echo
+cancellation on, which is the one audio setting this app deliberately turns off.
+Clicking the bubble already stops a line, and the pet's lines are two sentences.
+
+The upgrade is a second capture stream with cancellation on, used for nothing
+but deciding whether you have started talking — a real amount of work for a
+three-second wait.
+
 ## Dancing
 
 Asking the pet to `dance` opens the microphone **for the length of the dance**

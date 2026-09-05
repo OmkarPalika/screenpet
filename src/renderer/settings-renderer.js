@@ -23,6 +23,7 @@ const dictationSel = el('dictation');
 const camera = el('camera');
 const wakeBox = el('wake');
 const bop = el('bop');
+const converse = el('converse');
 const faces = el('faces');
 const network = el('network');
 const weather = el('weather');
@@ -236,7 +237,7 @@ function showProvider() {
 
 function gateDevices() {
   for (const [box, need] of [
-    [wakeBox, mic], [bop, mic], [faces, camera], [cheek, memoryBox],
+    [wakeBox, mic], [bop, mic], [converse, mic], [faces, camera], [cheek, memoryBox],
     [weather, network], [web, network],
   ]) {
     box.disabled = !need.checked;
@@ -318,6 +319,7 @@ saveBtn.addEventListener('click', async () => {
     camera: camera.checked,
     wake: wakeBox.checked,
     bop: bop.checked,
+    converse: converse.checked,
     faces: faces.checked,
     network: network.checked,
     weather: weather.checked,
@@ -357,6 +359,7 @@ saveBtn.addEventListener('click', async () => {
   dictationSel.value = current.dictation;
   wakeBox.checked = current.wake;
   bop.checked = current.bop;
+  converse.checked = current.converse;
   faces.checked = current.faces;
   weather.checked = current.weather;
   city.value = current.city;

@@ -230,6 +230,7 @@ and quit it — the pet has no taskbar button by design.
 | Speak replies out loud | On by default. Mute from the tray without opening this window. |
 | Little noises | On by default. A woof, a meow, a chirp — synthesised, not played from a file. Muted separately from the voice. |
 | Let me talk to it | Off by default. Adds `Listen…` to the pet's menu. |
+| Keep listening after it answers | Off by default, needs the above. Turns `Listen…` into a conversation — it answers, then listens again. **Does not** hold the microphone open: it reopens it per turn and stops on the first turn where you say nothing. See [A conversation](DESIGN.md#a-conversation). |
 | Answer to “hey pet” | Off by default, needs the above. **Holds the microphone open.** See [The wake word](DESIGN.md#the-wake-word). |
 | Bop along to music | Off by default, needs the microphone. **Holds it open.** The pet moves on the beat — and dances and says something nice if the noise turns out to be you singing. See [Dancing](DESIGN.md#dancing). |
 | Notice when I am at the desk | Off by default. Motion only — see [Noticing you](DESIGN.md#noticing-you). |

@@ -25,6 +25,9 @@ What the app does is [README.md](README.md); why it behaves the way it does is
   answers to it, and says one line when you first choose it.
 - A house. The pet walks out of it when the app starts and back into it when
   you quit, rather than appearing and vanishing.
+- Talking to it can be a conversation rather than a click per sentence: it
+  answers, then listens again, and stops on the first turn where you say
+  nothing. Off by default, and it never holds the microphone open.
 - Timers, breaks, memory, skills, a voice, and dictation. The voice is a
   Windows one by default; drop a Piper binary and a voice model in a folder
   and the pet speaks with that instead, still entirely on your machine.
