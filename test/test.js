@@ -3318,6 +3318,20 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       `CHANGELOG.md has no section for ${pkg.version}; write the release notes before tagging it`
     );
 
+    // The README's second paragraph counts what you get. It said four skins
+    // for a long time while the code had ten, which undersells the app by more
+    // than half and is the sort of thing nobody notices because nobody counts.
+    // The three lists are the ones a person adding a pet or a hat touches.
+    const words = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven',
+      'eight', 'nine', 'ten', 'eleven', 'twelve'];
+    const settings = require('../src/core/settings.js');
+    const readme = fs.readFileSync('./README.md', 'utf8');
+    const counted = `${words[settings.PETS.length]} pets, ${words[settings.SKINS.length]} palettes and ${words[settings.WEAR.length]} things to wear`;
+    assert.ok(
+      readme.toLowerCase().includes(counted),
+      `README does not say "${counted}"; it counts pets, palettes and hats and the counts have changed`
+    );
+
     // The privacy policy prints a table of every file the app writes and then
     // says deleting that folder removes everything. A sixth file added without
     // a row makes both of those sentences false, and a privacy policy that

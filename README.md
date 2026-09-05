@@ -19,9 +19,10 @@ exactly what each of those sends and to whom.
 
 ![screenpet reading a quiz question and answering it](demo/screenpet-demo.gif)
 
-Phase 3. The pet has a care loop, lives in the tray, has a settings window, four
-skins and a wardrobe, uses a vision model when there is no text to read, and
-builds into a Windows installer.
+Ten pets, ten palettes and nine things to wear, all orthogonal — any species in
+any colour in any hat. It has a care loop, lives in the tray, has a settings
+window, falls back to a vision model when there is no text to read, and builds
+into a Windows installer.
 
 ## The one rule
 
