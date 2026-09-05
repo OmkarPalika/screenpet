@@ -1323,9 +1323,38 @@ const THOUGHT_MS = 45000;
 // The walk to the middle and back, matching the stage transition in style.css.
 const CROSS_MS = 2600;
 
+// How full the glass starts. Not 100: a glass filled to the brim has no rim
+// showing and reads as a blue rectangle rather than as a glass with water in it.
+const FULL = 82;
+
+// Raising the glass to the mouth, matching sip-raise in style.css. Everything
+// else in the drink is delayed by it, because a pet that starts sipping before
+// the glass arrives is drinking air.
+const RAISE_MS = 520;
+
+// Roughly how long one mouthful takes. The break is divided into a whole number
+// of these, so the glass runs out exactly as the break ends - the level is the
+// clock, and a clock that stops before the hour is a broken one.
+const GULP_MS = 3500;
+
+// Where inside the sip the swallow happens, as a fraction of one mouthful. The
+// glass is tipped from 34% to 52% in sip-tip, so the water goes down inside
+// that window rather than drifting down between drinks.
+const SWALLOW_AT = 0.4;
+const SWALLOW_FOR = 0.16;
+
+// ...and where the glass is upright again, from sip-tip. The last mouthful is
+// swallowed mid-tip like every other one, so lowering the glass has to wait for
+// the tip to finish - drop it the moment the water runs out and the glass snaps
+// from tilted to level in one frame, halfway through a drink.
+const UPRIGHT_AT = 0.72;
+
 let thoughtTimer = null;
 let breakTimer = null;
 let arriveTimer = null;
+let gulpTimer = null;
+let firstGulp = null;
+let emptyTimer = null;
 let breaking = false;
 let breakBack = null; // where it was standing before, as fractions
 
@@ -1374,13 +1403,21 @@ function startBreak(kind, seconds) {
 
   const total = Math.max(1, Math.round(Number(seconds) || 0));
   let left = total;
-  const show = () => {
-    counting.textContent = `${left}s`;
-    // The water level is the clock for a water break, which is a better one
-    // than the number because you can read it without reading it.
-    if (kind === 'water') water.style.height = `${Math.round((left / total) * 100)}%`;
-  };
+  const show = () => { counting.textContent = `${left}s`; };
   show();
+
+  // How many mouthfuls this break is worth, over the time there actually is to
+  // drink in: the pet spends the first CROSS_MS walking to the middle of the
+  // screen and RAISE_MS lifting the glass, and neither is drinking. Spread the
+  // gulps over the whole break instead and the glass is still half full when the
+  // break ends, which makes a liar of the one thing it is for.
+  //
+  // At least two - one gulp is not somebody drinking a glass of water, it is
+  // somebody knocking one back - and capped, so a long break is a slow drink
+  // rather than a stream of tiny sips.
+  const drinkMs = Math.max(1500, total * 1000 - CROSS_MS - RAISE_MS);
+  const gulps = Math.min(12, Math.max(2, Math.round(drinkMs / GULP_MS)));
+  const sipMs = drinkMs / gulps;
 
   // It starts once it gets there. Drinking on the way across looks like a pet
   // being dragged along by a glass.
@@ -1388,8 +1425,40 @@ function startBreak(kind, seconds) {
   arriveTimer = setTimeout(() => {
     if (!breaking) return;
     if (kind === 'water') {
+      // The stylesheet knows how a mouthful looks; this is how long this one
+      // lasts, and the level going down is the same clock rather than a second
+      // one running alongside it.
+      petEl.style.setProperty('--sip', `${Math.round(sipMs)}ms`);
+      petEl.style.setProperty('--raise', `${RAISE_MS}ms`);
+      petEl.style.setProperty('--gulp', `${Math.round(sipMs * SWALLOW_FOR)}ms`);
+      water.style.height = `${FULL}%`;
       glass.hidden = false;
       petEl.classList.add('is-drinking');
+
+      // Down a mouthful at a time, timed to land inside the tip. Nothing here
+      // reads the countdown: the glass empties because the pet drank it.
+      let gulp = 0;
+      const swallow = () => {
+        if (!breaking) return;
+        gulp += 1;
+        water.style.height = `${Math.max(0, ((gulps - gulp) / gulps) * FULL).toFixed(1)}%`;
+        if (gulp < gulps) return;
+
+        // Finished it. Everything stops and the glass comes back down - a pet
+        // still miming mouthfuls out of an empty glass is the thing this whole
+        // sequence was supposed to stop looking like. After the tip it was
+        // swallowed on, though, not during it.
+        clearInterval(gulpTimer);
+        emptyTimer = setTimeout(() => {
+          if (!breaking) return;
+          glass.classList.add('is-empty');
+          petEl.classList.remove('is-drinking');
+        }, sipMs * (UPRIGHT_AT - SWALLOW_AT));
+      };
+      firstGulp = setTimeout(() => {
+        swallow();
+        gulpTimer = setInterval(swallow, sipMs);
+      }, RAISE_MS + sipMs * SWALLOW_AT);
     } else {
       petEl.classList.add('is-meditating');
     }
@@ -1408,9 +1477,14 @@ function endBreak() {
   breaking = false;
   clearInterval(breakTimer);
   clearTimeout(arriveTimer);
+  clearTimeout(firstGulp);
+  clearTimeout(emptyTimer);
+  clearInterval(gulpTimer);
   petEl.classList.remove('is-drinking', 'is-meditating');
+  glass.classList.remove('is-empty');
   glass.hidden = true;
-  water.style.height = '100%';
+  water.style.height = `${FULL}%`;
+  for (const v of ['--sip', '--raise', '--gulp']) petEl.style.removeProperty(v);
   veil.hidden = true;
   counting.hidden = true;
   move(null);
