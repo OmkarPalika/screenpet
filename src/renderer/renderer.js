@@ -327,7 +327,16 @@ function follow() {
   aimLight(0); // back to the lamp on the left, wherever the animation stopped
 }
 
-function move(name) {
+/**
+ * Play a body movement.
+ *
+ * @param {string} name  one of MOVE_MS
+ * @param {number} [ms]  how long to run it for, when the thing it illustrates
+ *   is shorter than the movement itself - the walk home takes 900ms and a
+ *   walk is 2600, and footsteps still going after the pet is indoors are the
+ *   sound of a bug.
+ */
+function move(name, ms = MOVE_MS[name]) {
   clearTimeout(moveTimer);
   if (!MOVE_MS[name]) { delete petEl.dataset.move; return; }
   // Same restart trick the expressions use: asking for the movement it is
@@ -335,9 +344,9 @@ function move(name) {
   delete petEl.dataset.move;
   void petEl.offsetWidth;
   petEl.dataset.move = name;
-  if (name === 'walk') footsteps(MOVE_MS[name]);
+  if (name === 'walk') footsteps(ms);
   if (!turning) { turning = 1; requestAnimationFrame(follow); }
-  moveTimer = setTimeout(() => { delete petEl.dataset.move; }, MOVE_MS[name]);
+  moveTimer = setTimeout(() => { delete petEl.dataset.move; }, ms);
 }
 
 window.pet.onSay(({ text, kind, expr, move: movement, chatter: chatty, partial }) => {
@@ -1468,3 +1477,263 @@ setTimeout(wander, 12000);
 setTimeout(quirk, 5000);
 setTimeout(saccade, 1800);
 setTimeout(blink, 2400);
+
+// ---- coming and going -----------------------------------------------------
+
+// One house, used twice: the pet comes out of it when the app starts and goes
+// back into it when you quit. The second is the first played backwards, which
+// is most of why it reads as the same house rather than two animations that
+// happen to share a drawing.
+//
+// Each step waits for the one before it rather than all firing off one clock,
+// so a slow frame delays the sequence instead of desynchronising it.
+const WALK_MS = 900;
+const DOOR_MS = 280;
+const INSIDE_MS = 380;
+const LIGHT_MS = 700;
+const HOUSE_GONE_MS = 380;
+
+// LIGHT_MS is the only one of these that is a pause rather than a movement. The
+// window itself takes 300ms to come up, so anything near that is a house that
+// starts sinking while its light is still arriving - the ending is "the pet is
+// in there", and it needs a beat to be that.
+
+// The geometry of the drawing, which the walk has to agree with: a 240px house
+// holding a 200px body, with a 70px doorway centred in it - so 85px into the
+// house, and its middle exactly halfway. These have to stay in step with the
+// clip-path notch in style.css, because that notch is the hole this walk aims
+// at and a hole somewhere else is a pet stepping into a wall.
+const HOUSE_W = 240;
+const DOOR_X = 85;
+const DOOR_W = 70;
+const DOOR_MID = DOOR_X + DOOR_W / 2;
+
+// Where the pet stops walking, measured from the door: at it, not beside the
+// house. It is in front of the wall at this point rather than behind it, which
+// is what makes this the pet arriving at its own front door instead of walking
+// into the side of a building.
+//
+// Roughly half the pet clear of the opening, so the door has somewhere to swing
+// and the last movement is a step across rather than a shuffle on the spot.
+const PET_W = 120;
+const DOOR_STAND = 78;
+
+// How far the pet walks between its own spot and the door. Measured as the walk
+// rather than as the distance to the house, because the walk is the part
+// anybody sees.
+const HOUSE_WALK = 190;
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const frame = () => new Promise(requestAnimationFrame);
+
+const houseBack = document.getElementById('house-back');
+const house = document.getElementById('house');
+const houseDoor = document.getElementById('house-door');
+
+let leaving = false;
+
+/**
+ * Stand a house next to a pet whose middle is at `petMiddle`, and work out where
+ * that pet stands to use the door.
+ *
+ * Shared by both directions so they are the same house in the same place: the
+ * pet comes out of a house exactly where it will later walk back into one.
+ */
+function setHouse(petMiddle) {
+  const half = stage.offsetWidth / 2;
+  const want = petMiddle < window.innerWidth / 2 ? 1 : -1;
+
+  // Where the door goes, and the house is hung off it - not the other way round.
+  //
+  // setXY clamps the stage to the window and the pet stands in the middle of a
+  // 340px stage, so the pet can never get its own middle within half a stage of
+  // either edge. Place the house first and clamp that, and near an edge you get
+  // a house whose door is somewhere the pet is not allowed to stand: it walks as
+  // far as it is permitted, shrinks, and stops beside the house. Clamping the
+  // door instead means the spot the pet is aiming at is always reachable, and
+  // the house follows it inward.
+  const door = Math.min(
+    Math.max(
+      petMiddle + want * (HOUSE_WALK + DOOR_STAND),
+      half,           // as far left as the pet can stand
+      6 + DOOR_MID    // ...and as far left as the house fits
+    ),
+    window.innerWidth - half,
+    window.innerWidth - 6 - HOUSE_W + DOOR_MID
+  );
+  const houseX = door - DOOR_MID;
+
+  house.style.left = `${Math.round(houseX)}px`;
+  // The recess lines up with the hole in the facade rather than with the house.
+  houseBack.style.left = `${Math.round(houseX + DOOR_X)}px`;
+
+  // Which side of the door the pet uses, decided by where the door actually
+  // landed rather than which half of the screen the pet started in. Clamped
+  // against an edge the door can end up behind the pet, and then the side it was
+  // going to approach from is the wrong one - it walks through the house to
+  // stand on the far side, which looks like the pet arriving from round the back.
+  const side = door >= petMiddle ? 1 : -1;
+  const room = window.innerWidth - stage.offsetWidth;
+  const stand = (x) => Math.max(0, Math.min(room, x - half));
+
+  return { door: stand(door), beside: stand(door - side * DOOR_STAND) };
+}
+
+/**
+ * The app just started. The pet is already where you left it - put its house
+ * around the corner, open the door, and let it walk out to the spot it was
+ * going to be standing on anyway.
+ *
+ * Deliberately not its own animation: it is the goodbye backwards, so a session
+ * opens and closes on the same shot.
+ */
+async function arrive() {
+  // Where it goes back to, read off the screen rather than off stageX. At launch
+  // the two agree, but they part company the moment anything has moved the stage
+  // without going through setXY - and an arrival that ends somewhere other than
+  // where the pet was left has moved the pet behind the user's back.
+  snap(stage.getBoundingClientRect().left, stageTop);
+  await frame();
+  const back = { x: stageX, top: stageTop };
+  const { door, beside } = setHouse(stageX + stage.offsetWidth / 2);
+
+  busy = true;
+  stage.classList.add('is-leaving', 'is-stepping', 'is-entering', 'is-inside');
+
+  // Shut, lit, and in front of the pet: exactly the state the house was left in.
+  house.classList.add('is-shut', 'is-close');
+  for (const el of [houseBack, house]) el.hidden = false;
+
+  // Put the pet in the doorway without it travelling there. Nothing to see - the
+  // door is shut and the wall is in front of it - but it has to be standing in
+  // the right place before the door opens.
+  snap(door, roomY());
+  await frame();
+  await frame();
+  stage.classList.remove('is-inside', 'is-dragging');
+
+  // Let the house finish coming out of the ground before anything opens.
+  await wait(HOUSE_GONE_MS);
+  if (leaving) return;
+
+  house.classList.remove('is-shut');
+  houseDoor.classList.add('is-open');
+  await wait(DOOR_MS);
+  if (leaving) return;
+
+  // Out. The wall drops behind the pet first, while the pet is still centred in
+  // the opening and smaller than it, so nothing visibly jumps - the same frame
+  // the wall came forward on, in reverse.
+  house.classList.remove('is-close');
+  stage.classList.remove('is-entering');
+  setXY(beside, roomY());
+  move('walk', INSIDE_MS);
+  await wait(INSIDE_MS);
+  if (leaving) return;
+
+  // And away, while the house shuts up behind it.
+  stage.classList.remove('is-stepping');
+  setXY(back.x, back.top);
+  move('walk', WALK_MS);
+  houseDoor.classList.remove('is-open');
+  await wait(DOOR_MS);
+  if (leaving) return;
+
+  for (const el of [houseBack, house]) el.classList.add('is-going');
+  await wait(HOUSE_GONE_MS);
+  if (leaving) return;
+
+  for (const el of [houseBack, house]) {
+    el.hidden = true;
+    el.classList.remove('is-going');
+  }
+
+  // Not free until it has finished walking, or the wander schedule takes over
+  // mid-stride and the pet never reaches the spot it was left on.
+  await wait(Math.max(0, WALK_MS - DOOR_MS - HOUSE_GONE_MS));
+  if (leaving) return;
+
+  stage.classList.remove('is-leaving');
+  busy = false;
+}
+
+/**
+ * Quit was pressed. Walk to the house, step inside, shut the door, turn the
+ * light on, and take the house away again.
+ *
+ * The main process is holding a timer of its own the whole time, so nothing in
+ * here has to be reliable enough to quit on - the worst a thrown error can do is
+ * make the goodbye abrupt.
+ */
+async function leave() {
+  if (leaving) return;
+  leaving = true;
+  // Everything that would otherwise move it: the wander schedule reads busy, and
+  // the bubble, menu and chat go the moment is-leaving lands.
+  busy = true;
+
+  // Quit can land in the middle of a wander, and mid-wander stageX is where the
+  // pet is going rather than where it is - the transition is still running. Put
+  // it down where it actually is before measuring anything, or the house is
+  // placed around a pet that has not arrived yet, and can be built on top of the
+  // one on screen. One frame for the snap to take, then the walk.
+  snap(stage.getBoundingClientRect().left, stageTop);
+  await frame();
+  await frame();
+
+  const { door, beside } = setHouse(stageX + stage.offsetWidth / 2);
+  stage.classList.add('is-leaving');
+  stage.classList.remove('is-stepping', 'is-entering', 'is-inside');
+  for (const el of [houseBack, house]) {
+    el.hidden = false;
+    el.classList.remove('is-going');
+  }
+  house.classList.remove('is-shut', 'is-close');
+
+  // Up to the front door, on the floor whatever it was standing on when Quit was
+  // pressed.
+  setXY(beside, roomY());
+  move('walk', WALK_MS);
+
+  // Opened during the walk rather than on arrival. A door that opens once the
+  // pet is already standing at it makes the pet look like it is waiting to be
+  // let in; open as it arrives, it looks expected.
+  await wait(Math.max(0, WALK_MS - DOOR_MS));
+  houseDoor.classList.add('is-open');
+  await wait(DOOR_MS);
+
+  // In. A step sideways into the opening, shrinking as it goes because it is
+  // walking away from the viewer as well as across - and dimming, because the
+  // room it is stepping into has no light on yet.
+  stage.classList.add('is-stepping', 'is-entering');
+  setXY(door, roomY());
+  move('walk', INSIDE_MS);
+  await wait(INSIDE_MS);
+
+  // Only now does the wall come forward. The pet is centred in the opening and
+  // smaller than it at this exact moment, so nothing is overlapping the facade
+  // and the swap costs nothing visually - a frame earlier and the pet visibly
+  // disappears into brickwork on its way to the door.
+  house.classList.add('is-close');
+
+  houseDoor.classList.remove('is-open');
+  await wait(DOOR_MS);
+
+  house.classList.add('is-shut');
+
+  // And now it can go. Up to this point the pet is on screen and merely covered
+  // by the wall, which is what makes going in read as going in - but the house
+  // leaves in a moment, and an occluder that leaves gives the pet back. Taken
+  // off behind a shut door, so there is nothing to see happen.
+  stage.classList.add('is-inside');
+
+  await wait(LIGHT_MS);
+
+  for (const el of [houseBack, house]) el.classList.add('is-going');
+  await wait(HOUSE_GONE_MS);
+
+  window.pet.left();
+}
+
+window.pet.onEnter(arrive);
+window.pet.onLeave(leave);

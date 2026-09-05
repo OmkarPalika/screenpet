@@ -1153,3 +1153,221 @@ html, body {
   50%  { content: ".."; }
   75%  { content: "..."; }
 }
+
+/* ---- going home ----------------------------------------------------------
+
+   Quitting is the one moment the pet is guaranteed to be watched, because
+   somebody just decided to make it go away. It walks to its front door, steps
+   in, the door shuts, the light comes on, and the house goes back into the
+   ground.
+
+   Drawn in CSS rather than added to the sprite sheet: it is four rectangles and
+   a triangle, it is the same house for all ten species, and a tenth PNG for a
+   thing seen once per session is not worth the file.
+
+   Three layers, and the order of them is the whole illusion:
+
+     .house-back   the dark inside of the doorway, always behind the pet
+     .stage        the pet
+     .house        the facade, which starts behind the pet and comes forward
+                   the moment the pet is standing in the opening
+
+   Both earlier attempts got that last part wrong. The first painted one opaque
+   house over everything, so the pet walked behind the front wall and was never
+   seen again. The second cut a hole in the wall but left the wall in front the
+   whole time, so the walk up to a centred door was a pet walking into masonry
+   and reappearing in the doorway. The wall has to be behind the pet while it
+   approaches and in front of it once it is inside, and the moment to swap is
+   the one frame where the pet is centred in the opening and smaller than it -
+   nothing is overlapping the wall then, so nothing visibly jumps. */
+
+/* The inside of the doorway. Its own element rather than part of the house
+   because it is the one piece that is behind the pet at every moment, and it
+   comes before the stage in the document, so it paints under it without needing
+   a z-index at all. */
+.house-back {
+  position: absolute;
+  bottom: 4px;
+  width: 70px;
+  height: 112px;
+  background: #241d19;
+  border-radius: 8px 8px 0 0;
+  box-shadow: inset 0 5px 14px rgb(0 0 0 / 0.6);
+  transform-origin: 50% 100%;
+  animation: house-arrive 380ms cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+/* Twice the pet in both directions, which is the size a thing has to be before
+   walking into it is walking into it. The first version was 92x96 against a
+   120x110 pet and read as a doll's house being stood on; the second was 156
+   wide, which is a pet-sized porch. A door you can believe in is one the pet
+   does not fill. */
+.house {
+  position: absolute;
+  bottom: 4px;
+  width: 240px;
+  height: 252px;
+  transform-origin: 50% 100%;
+  animation: house-arrive 380ms cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+/* The wall coming forward. Added once, at the end of the step through the door,
+   and never taken off again - after this the pet is inside and everything the
+   house does happens in front of it. */
+.house.is-close { z-index: 3; }
+
+/* Grows out of the floor rather than fading in. A house that fades up is a
+   dialog; one that pushes out of the ground is a set being wheeled on.
+
+   The two layers run this separately and about their own centres, so for 380ms
+   they do not line up - which is invisible, because the door is shut over the
+   opening the whole time either animation is playing. */
+@keyframes house-arrive {
+  from { transform: scaleY(0.04) scaleX(0.6); opacity: 0; }
+  to   { transform: scaleY(1) scaleX(1); opacity: 1; }
+}
+
+/* And back down the way it came, once the light has been on long enough to
+   register. Quicker than it arrived: nobody needs to watch a house leave. */
+.house.is-going,
+.house-back.is-going {
+  animation: house-leave 380ms cubic-bezier(0.5, 0, 0.75, 0) forwards;
+}
+
+@keyframes house-leave {
+  from { transform: scaleY(1) scaleX(1); opacity: 1; }
+  to   { transform: scaleY(0.04) scaleX(0.6); opacity: 0; }
+}
+
+.house-roof {
+  width: 0;
+  height: 0;
+  margin: 0 auto;
+  border-left: 130px solid transparent;
+  border-right: 130px solid transparent;
+  border-bottom: 84px solid #c9705a;
+}
+
+/* The facade, with the doorway cut out of it. The notch is the bottom of the
+   polygon: out along the floor, up the near jamb, across the lintel, back down
+   the far jamb. Keep it in step with DOOR_X / DOOR_W in renderer.js - that
+   notch is the hole the walk aims at, and a hole somewhere else is a pet
+   stepping into a wall.
+
+   In body coordinates the 200px body carries the 70px doorway centred, 112px
+   tall, so the notch runs x 65..135 from y 56 to the floor. */
+.house-body {
+  position: relative;
+  width: 200px;
+  height: 168px;
+  margin: 0 auto;
+  background: #fffdf7;
+  border: 1.5px solid #e6ddc9;
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 8px 26px rgb(0 0 0 / 0.22);
+  clip-path: polygon(
+    0 0, 200px 0, 200px 168px,
+    135px 168px, 135px 56px, 65px 56px, 65px 168px,
+    0 168px
+  );
+}
+
+.house-window {
+  position: absolute;
+  top: 20px;
+  right: 22px;
+  width: 30px;
+  height: 30px;
+  border: 1.5px solid #e6ddc9;
+  border-radius: 4px;
+  background: #efe8d8;
+  transition: background 300ms ease-out, box-shadow 300ms ease-out;
+}
+
+/* The light goes on after the door shuts. It is the whole point of the shot:
+   the pet is not gone, it is in there. */
+.house.is-shut .house-window {
+  background: #ffd88a;
+  box-shadow: 0 0 16px 4px rgb(255 216 138 / 0.8);
+}
+
+/* The door frame, over the hole. A sibling of the body rather than a child of
+   it, because the body's clip-path would take the door with it. */
+.house-doorway {
+  position: absolute;
+  bottom: 0;
+  left: 85px;
+  width: 70px;
+  height: 112px;
+  /* The door swings inward, so the frame is what hides the part of it that is
+     no longer in the opening. Without this it projects out across the wall. */
+  overflow: hidden;
+}
+
+.house-door {
+  position: absolute;
+  /* Deliberately larger than the opening, and clipped back to it by the frame.
+     A door sized exactly to its hole leaves a hairline of the dark inside
+     showing along the top and hinge edge once the compositor has rounded a
+     transformed layer to device pixels, which reads as a door that did not
+     quite shut. */
+  inset: -2px;
+  background: #a8724f;
+  border-radius: 8px 8px 0 0;
+  border-right: 1.5px solid #8a5c3e;
+  /* Hinged on the left and swinging inward, away from the viewer. */
+  transform-origin: 0% 50%;
+  transform: perspective(260px) rotateY(0deg);
+  transition: transform 280ms cubic-bezier(0.3, 0, 0.4, 1);
+}
+
+.house-door.is-open { transform: perspective(260px) rotateY(-78deg); }
+
+/* The walk home is not a wander. Two and a half seconds is right for a pet
+   crossing the screen on its own time and far too long for one you have just
+   asked to go away. */
+.stage.is-leaving { transition: transform 900ms cubic-bezier(0.3, 0, 0.35, 1); }
+
+/* The idle bob has to stop, and not for the look of it: an animation beats a
+   declared transform outright, so while bob is running the scale below is
+   parsed, applied and thrown away every frame. An earlier version shrank by
+   exactly nothing for this reason. */
+.stage.is-leaving .pet {
+  animation: none;
+  transform-origin: 50% 100%;
+  transition: transform 380ms cubic-bezier(0.4, 0, 0.7, 0.6),
+              filter 380ms ease-in;
+}
+
+/* A step through the doorway rather than a walk across the room: the one
+   movement in this sequence that is measured in inches. Used in both
+   directions, which is why it is not the class that makes the pet small. */
+.stage.is-stepping { transition: transform 380ms cubic-bezier(0.4, 0, 0.7, 0.6); }
+
+/* How the pet looks while it is in the doorway: smaller, because it is that far
+   away from you, and dimmer, because the room behind it has no light on. Scaled
+   about the feet so it stays on the floor - scaled about the centre it sinks,
+   which reads as falling through the ground.
+
+   The transition for it lives on is-leaving rather than here, so taking this
+   class off animates the pet back out to full size instead of snapping. That is
+   the whole of the difference between going in and coming out. */
+.stage.is-entering .pet {
+  transform: scale(0.45);
+  filter: brightness(0.5);
+}
+
+/* Once the door is shut, the pet stops being drawn at all. Everything before
+   this hides it by putting a wall in front of it, which is the whole effect -
+   but the house sinks into the ground a moment later, and a pet that was only
+   ever covered up comes back with it. Visibility rather than display, so the
+   stage does not reflow on its way out. */
+.stage.is-inside { visibility: hidden; }
+
+/* Nothing but the pet goes in. A speech bubble following it through the door is
+   a bug that looks like a joke. */
+.stage.is-leaving .bubble,
+.stage.is-leaving .menu,
+.stage.is-leaving .chat,
+.stage.is-leaving .thought { display: none; }
