@@ -613,6 +613,27 @@ function talk(kind, { event = null, text = null, tone = 'chat', move = null } = 
 }
 
 /**
+ * You asked for something while the last thing you asked for is still being
+ * written.
+ *
+ * The bubble already says "thinking", so the pet is not silent - but the click
+ * itself goes unanswered, and a menu item that does nothing when you press it
+ * is indistinguishable from a broken one. The chat box is worse than that: it
+ * clears as you press enter, so a message dropped here is a sentence you have
+ * to type again with nothing on screen to say why.
+ *
+ * One door for all three, so the hotkey, the chat box and the microphone cannot
+ * drift apart on it.
+ *
+ * @returns {boolean} whether the caller should stop.
+ */
+function tooBusy() {
+  if (!busy) return false;
+  talk('later', { event: 'later' });
+  return true;
+}
+
+/**
  * You did something. Clears the ignored count wherever it is called from, and
  * says whether the pet had noticed being ignored - which is the one thing worth
  * reacting to, and only ever once.
@@ -861,7 +882,12 @@ function streamer() {
  * being no question.
  */
 async function readScreen({ unprompted = false } = {}) {
-  if (busy) return;
+  // The timer reading on its own is nobody knocking, so it waits for the next
+  // one rather than announcing itself over an answer being written.
+  if (busy) {
+    if (!unprompted) tooBusy();
+    return;
+  }
   // A read nobody asked for never leaves this machine. settings.js already
   // refuses the combination; this is the second lock on the same door, and the
   // one that holds if a settings file is edited by hand.
@@ -1221,7 +1247,8 @@ function runSkill(text) {
 
 async function replyTo(message) {
   const text = String(message || '').trim();
-  if (!text || busy) return;
+  if (!text) return;
+  if (tooBusy()) return;
   // Before the skills, not after: "set a timer" is still you talking to it, and a
   // habit built only from the messages a small model happened to answer would be
   // a habit about the model rather than about you.
@@ -1324,7 +1351,7 @@ ipcMain.on('pet:audio', (_e, buf) => {
  * pet that is always listening is a microphone with a face on it.
  */
 async function listenAndReply() {
-  if (busy || listening || !settings.mic) return;
+  if (tooBusy() || listening || !settings.mic) return;
   const engine = recogniser();
   if (engine === 'missing') {
     return send('pet:say', {
@@ -1571,11 +1598,20 @@ app.whenReady().then(async () => {
   });
 });
 
-// What the pet says about each action, and about turning one down. A cooldown
-// ('not yet') says nothing at all - the pet ignoring a fourth headpat in a row
-// is better manners than complaining about it.
+// What the pet says about each action, and about turning one down.
+//
+// A cooldown ('not yet') on something you did by touching the pet says nothing
+// at all: ignoring a fourth headpat in a row is better manners than complaining
+// about it. Feed and Play are buttons in a menu, and that is a different thing
+// entirely - the menu greys them out when they are blocked, so one that is not
+// greyed out and does nothing when you click it reads as broken rather than as
+// patient. Those two answer for their own cooldown.
+//
+// Tickle is in the menu as well and never reaches here: the poke ladder below
+// talks whether or not the action itself went through.
 const SAID = { feed: 'fed', pet: 'patted', play: 'played', tickle: 'tickled' };
 const REFUSED = { feed: 'full', play: 'tired' };
+const SOON = { feed: 'justfed', play: 'justplayed' };
 
 // How far up the poke ladder this bout has climbed. In memory only and on
 // purpose: a tantrum should not survive a restart, and forgiveness on relaunch
@@ -1623,7 +1659,9 @@ ipcMain.on('pet:act', (_e, name) => {
     // Said once, because the count is cleared: the pet is pleased, not owed.
     if (missed && !reached) talk('relieved', { event: 'relieved' });
     else talk(SAID[name], { event: reached ? 'milestone' : name, text: reached });
-  } else if (REFUSED[name] && result.reason !== 'not yet') {
+  } else if (result.reason === 'not yet') {
+    if (SOON[name]) talk(SOON[name], { event: 'soon' });
+  } else if (REFUSED[name]) {
     talk(REFUSED[name], { event: 'refuse', tone: 'nag' });
   }
   savePet();
