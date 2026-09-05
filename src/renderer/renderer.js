@@ -542,6 +542,14 @@ new MutationObserver(() => {
   const eyes = getComputedStyle(eyesEl).display !== 'none';
 
   if (talking !== wasTalking || (eyes && !hadEyes)) blink(false);
+  // And main is told the moment the mouth stops, because a conversation cannot
+  // take its next turn until this one is over: a microphone opened while the pet
+  // is still speaking hears the pet, and the recorder asks for raw capture with
+  // echo cancellation off, so it would hear it clearly.
+  //
+  // Said from here rather than from the seven places that stop speech, for the
+  // same reason the blink is: watching the result cannot forget.
+  if (wasTalking && !talking) window.pet.spoke();
   wasTalking = talking;
   hadEyes = eyes;
 }).observe(petEl, { attributeFilter: ['class', 'data-mood', 'data-expr'] });

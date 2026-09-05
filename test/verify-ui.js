@@ -51,7 +51,7 @@ app.whenReady().then(async () => {
   const errors = [];
   const ipc = {
     act: [], interactive: [], react: [], chat: [], chatOpen: [], photo: [], place: [],
-    ask: 0, listen: 0, take: 0, done: 0,
+    ask: 0, listen: 0, take: 0, done: 0, spoke: 0,
   };
   // The renderer saying the door is shut. Counted rather than flagged so it
   // reads the same as every other tally in here.
@@ -66,6 +66,7 @@ app.whenReady().then(async () => {
   ipcMain.on('pet:chat', (_e, v) => ipc.chat.push(v));
   ipcMain.on('pet:chat-open', (_e, v) => ipc.chatOpen.push(v));
   ipcMain.on('pet:ask', () => { ipc.ask += 1; });
+  ipcMain.on('pet:spoke', () => { ipc.spoke += 1; });
   ipcMain.on('break:take', () => { ipc.take += 1; });
   ipcMain.on('break:done', () => { ipc.done += 1; });
 
@@ -1444,6 +1445,32 @@ app.whenReady().then(async () => {
     'the pet does not blink when its eyes come back open'
   );
 
+  // --- the pet saying when it has finished ----------------------------------
+  // A conversation cannot take its next turn until this one is over. The
+  // recorder asks for raw capture with echo cancellation off, so a microphone
+  // opened while the pet is still speaking does not merely hear the pet - it
+  // transcribes it, and the conversation answers itself.
+  //
+  // Only on the way down, and only once. Watched off the class rather than
+  // called from the seven places that stop speech, which is the same observer
+  // the blink track uses and the same reason.
+  await js(`document.getElementById('pet').classList.remove('is-talking');`);
+  await settle();
+  {
+    const before = ipc.spoke;
+    await js(`document.getElementById('pet').classList.add('is-talking');`);
+    await settle();
+    check(ipc.spoke === before, 'the pet says it has finished at the moment it starts');
+    await js(`document.getElementById('pet').classList.remove('is-talking');`);
+    await settle();
+    check(ipc.spoke === before + 1, `stopping said so ${ipc.spoke - before} times rather than once`);
+    // A class change that is not about speech must not be mistaken for one.
+    await js(`document.getElementById('pet').classList.add('is-hovered');
+              document.getElementById('pet').classList.remove('is-hovered');`);
+    await settle();
+    check(ipc.spoke === before + 1, 'anything happening to the pet counts as it finishing a sentence');
+  }
+
   // --- singing at it --------------------------------------------------------
   // The detector is its own classic script, and the failure this whole file was
   // written for is a top level const in one of those colliding with another and
@@ -2275,6 +2302,7 @@ app.whenReady().then(async () => {
     set('dictation', 'sapi');
     set('wake', false);
     set('bop', true);
+    set('converse', false);
     set('faces', false);
     set('weather', true);
     set('city', 'Kochi');
@@ -2288,7 +2316,7 @@ app.whenReady().then(async () => {
     voice: false, sounds: true, focus: false,
     watch: true, watchEvery: 120,
     breaks: false, breakEvery: 25, breakFor: 45, mischief: true,
-    mic: true, dictation: 'sapi', camera: true, wake: false, bop: true, faces: false,
+    mic: true, dictation: 'sapi', camera: true, wake: false, bop: true, converse: false, faces: false,
     network: true, weather: true, city: 'Kochi', web: false,
     provider: 'ollama', providerModel: '',
     memory: true, cheek: false,
@@ -2320,7 +2348,7 @@ app.whenReady().then(async () => {
     memory: false, cheek: false,
     // The microphone goes off and the camera stays on, so the two master
     // switches do not carry the same answer in both rounds either.
-    mic: false, wake: false, bop: false,
+    mic: false, wake: false, bop: false, converse: false,
     camera: true, faces: true,
     voice: true, sounds: false, focus: true, breaks: true,
     weather: false, web: true,

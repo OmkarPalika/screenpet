@@ -572,6 +572,9 @@ function farewell() {
   // exit behind the first.
   if (quitting) return;
   quitting = true;
+  // ...and the conversation, if one was running. A pet that walks into its house
+  // with the microphone still open is exactly the failure this must never have.
+  endTalk(false);
   // Nothing anyone could watch: no window, hidden in the tray, hidden by a game,
   // or the smoke check, which exits the moment it has its answer.
   const seen = win && !win.isDestroyed() && win.isVisible();
@@ -1347,13 +1350,119 @@ ipcMain.on('pet:audio', (_e, buf) => {
   pendingAudio(buf && buf.byteLength ? Buffer.from(buf) : null);
 });
 
+// ---- a conversation ---------------------------------------------------------
+//
+// Push to talk is one phrase: you ask, it hears one thing, it answers, and you
+// ask again. A conversation is that with the asking again taken out, which is
+// most of the difference between an assistant and a form with a microphone on
+// it.
+//
+// It is not always-on listening and it must not be allowed to drift into being
+// it. The microphone opens because you opened it and closes between every turn;
+// nothing carries over but the intention to take another one. Four separate
+// ways out, because the failure that matters here is a microphone nobody
+// remembers leaving open:
+//
+//   * you stop talking. The first turn where nothing is said ends it, which is
+//     also how conversations end between people.
+//   * a ceiling of turns, and a ceiling on the clock. Both exist for the case
+//     where the first one never fires - a fan, a television, a room the
+//     recorder keeps mistaking for a voice.
+//   * anything else you do with the pet. Feeding it or opening the chat box is
+//     not a lull in the conversation, it is the end of one.
+//
+// Turns never overlap, and that is the part that needs the renderer's help. The
+// recorder asks for raw capture with echo cancellation off, so a microphone
+// opened while the pet is still speaking does not merely hear the pet, it hears
+// it clearly and transcribes it. So the next turn waits for the mouth to stop,
+// which the renderer says out loud - with a timer behind it for the lines that
+// are never spoken at all: voice off, muted, or chirped rather than said.
+//
+// ponytail: no barge-in. Talking over it needs the microphone open while the
+// pet speaks, which needs echo cancellation on, which is the one audio setting
+// this app deliberately turns off because the dictation benchmark was run
+// without it. Clicking the bubble already stops a line, and the pet's lines are
+// two sentences. The upgrade is a second capture stream with cancellation on,
+// used for nothing but deciding whether you have started talking.
+
+const TALK_TURNS = 10;
+const TALK_FOR_MS = 3 * 60000;
+// How long to wait for the renderer to say the mouth has stopped, before taking
+// the next turn regardless. Longer than any line the pet says out loud, short
+// enough that a conversation with the voice switched off does not simply stall.
+const TALK_BACKSTOP_MS = 12000;
+// A beat between the answer ending and the microphone opening. Without it the
+// pet is listening before you have registered that it stopped, and the first
+// half of what you say is missing.
+const TALK_GAP_MS = 350;
+
+let talkTurns = 0;
+let talkUntil = 0;
+let talkTimer = null;
+
+const conversing = () => talkTurns > 0 && Date.now() < talkUntil;
+
 /**
- * Push to talk. The microphone opens when you ask it to and shuts as soon as
- * you stop speaking - there is no wake word and no listening loop, because a
- * pet that is always listening is a microphone with a face on it.
+ * Stop taking turns. Safe to call when no conversation is running, which is
+ * what lets every other thing you can do to the pet end one without checking.
+ *
+ * @param {boolean} say  whether to see it off out loud. Ending because you
+ *   stopped talking deserves a line; ending because you started feeding it does
+ *   not, and would talk over what the feeding is about to say.
  */
-async function listenAndReply() {
-  if (tooBusy() || listening || !settings.mic) return;
+function endTalk(say = false) {
+  clearTimeout(talkTimer);
+  talkTimer = null;
+  const was = talkTurns > 0;
+  talkTurns = 0;
+  talkUntil = 0;
+  if (was && say) talk('enough', { event: 'enough' });
+}
+
+/**
+ * The answer is out. Wait for the mouth to stop, then go round again.
+ *
+ * The timer is the backstop and `pet:spoke` is the ordinary path; whichever
+ * arrives first wins, and the other finds talkTimer already cleared.
+ */
+function armTurn() {
+  if (!conversing()) return endTalk(true);
+  clearTimeout(talkTimer);
+  talkTimer = setTimeout(takeTurn, TALK_BACKSTOP_MS);
+}
+
+function takeTurn() {
+  // Nothing is armed, so this is the mouth stopping on a line that was not the
+  // end of a turn - the label that goes up when the microphone opens, most
+  // often. Not every silence is a cue.
+  if (!talkTimer) return;
+  clearTimeout(talkTimer);
+  talkTimer = null;
+  if (!conversing()) return endTalk(true);
+  talkTurns -= 1;
+  setTimeout(() => {
+    if (conversing()) listenAndReply({ turn: true });
+  }, TALK_GAP_MS);
+}
+
+// The mouth stopped moving. Nothing else crosses with it.
+ipcMain.on('pet:spoke', takeTurn);
+
+/**
+ * Push to talk, and - with "keep listening" on - the first turn of a
+ * conversation. The microphone opens when you ask it to and shuts as soon as
+ * you stop speaking; there is no wake word here and no listening loop, because
+ * a pet that is always listening is a microphone with a face on it.
+ *
+ * @param {{turn?: boolean}} opts  turn:true is a later turn of a conversation,
+ *   which is the same thing without the announcement.
+ */
+async function listenAndReply(opts = {}) {
+  const turn = opts.turn === true;
+  // A half-written answer ends a conversation rather than queueing behind one:
+  // you asked for something else, and tooBusy says so.
+  if (tooBusy()) return endTalk(false);
+  if (listening || !settings.mic) return endTalk(false);
   const engine = recogniser();
   if (engine === 'missing') {
     return send('pet:say', {
@@ -1363,14 +1472,25 @@ async function listenAndReply() {
     });
   }
   listening = true;
+  if (!turn && settings.converse) {
+    talkTurns = TALK_TURNS;
+    talkUntil = Date.now() + TALK_FOR_MS;
+  }
   // Said directly rather than through talk(): the user needs to see that the
   // microphone is open, and the smoke check silences talk().
-  send('pet:say', {
-    text: pets.line('listening', lineIndex++, settings.pet),
-    kind: 'chat',
-    expr: pets.expressionFor('listen'),
-    chatter: true,
-  });
+  //
+  // Once per conversation rather than once per turn. Ten of "I am all ears" in
+  // a row is a pet that has stopped listening and started announcing, and the
+  // green dot is already on screen saying the same thing more quietly.
+  if (!turn) {
+    const label = settings.converse ? 'chatting' : 'listening';
+    send('pet:say', {
+      text: pets.line(label, lineIndex++, settings.pet),
+      kind: 'chat',
+      expr: pets.expressionFor(settings.converse ? 'chatting' : 'listen'),
+      chatter: true,
+    });
+  }
   try {
     // Two engines, one contract: a string, empty if nothing was said. Whisper
     // needs the audio handed to it; System.Speech opens the microphone itself.
@@ -1382,6 +1502,10 @@ async function listenAndReply() {
       ? (wav ? await dictate.transcribe(wav, { userData: app.getPath('userData') }) : '')
       : await listen();
     if (!heard) {
+      // In a conversation, saying nothing is not something that was missed - it
+      // is how you end one. "I did not catch that" is the wrong answer to
+      // somebody who was not talking.
+      if (conversing()) return endTalk(true);
       return send('pet:say', {
         text: pets.line('deaf', lineIndex++, settings.pet),
         kind: 'chat',
@@ -1390,6 +1514,8 @@ async function listenAndReply() {
       });
     }
     await replyTo(heard);
+    // And round again, once the answer has finished being said.
+    if (conversing()) armTurn();
   } catch (err) {
     send('pet:say', { text: err.message, kind: 'error', expr: pets.expressionFor('error') });
   } finally {
@@ -1467,6 +1593,11 @@ function sendLook() {
 }
 
 async function applySettings() {
+  // Switching the microphone or "keep listening" off has to stop a conversation
+  // that is already running, rather than letting it finish its ten turns on a
+  // setting that is no longer true. Called on every save, so it covers turning
+  // it off mid-turn as well.
+  if (!settings.converse || !settings.mic) endTalk(false);
   applyHotkey();
   applyAutostart();
   applyWake();
@@ -1622,6 +1753,9 @@ let pokes = 0;
 let lastPokeAt = 0;
 
 ipcMain.on('pet:act', (_e, name) => {
+  // Playing with it is not a lull in the conversation. Silently, because the
+  // action is about to say something of its own.
+  endTalk(false);
   const now = Date.now();
   const before = state.bond;
   // Touching it counts as answering it, even if you say nothing. Read before
@@ -1684,6 +1818,8 @@ ipcMain.on('pet:place', (_e, at) => {
 });
 
 ipcMain.on('pet:chat-open', (_e, open) => {
+  // You would rather type. Same reasoning as feeding it.
+  if (open) endTalk(false);
   if (!win || win.isDestroyed()) return;
   // Normally focusable:false so the pet can never steal focus from real work.
   // Typing needs focus, so it is granted for exactly as long as the box is open.

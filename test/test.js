@@ -1815,6 +1815,98 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(path.basename(whisper.DIR), whisper.DIR, 'the install folder names a path');
 }
 
+// ===== a conversation ======================================================
+//
+// Listening in turns rather than one phrase per click. Every check here is
+// about how it stops, because the only way this feature is dangerous is by
+// quietly becoming always-on listening - which is the thing the whole app is
+// written not to be.
+
+{
+  const fs = require('fs');
+  const cfg = require('../src/core/settings');
+  const mjs = fs.readFileSync('./src/main.js', 'utf8');
+
+  // Off by default, and needs the microphone the same way the wake word and
+  // bopping do. A setting that holds a microphone open on a fresh install is
+  // the one default this app cannot get wrong.
+  assert.strictEqual(cfg.load({}).converse, false, 'the pet ships listening in turns');
+  assert.strictEqual(
+    cfg.load({ converse: true }).converse, false,
+    'keeping the microphone listening does not need the microphone'
+  );
+  assert.strictEqual(cfg.load({ converse: true, mic: true }).converse, true);
+  assert.strictEqual(cfg.load({ converse: 'yes', mic: true }).converse, false, 'a truthy string switched it on');
+
+  const talk = mjs.slice(mjs.indexOf('// ---- a conversation'), mjs.indexOf('// ---- settings application'));
+  assert.ok(talk.length > 500, 'the conversation section moved or went away');
+
+  // The ceilings. Both exist for the case where "you stopped talking" never
+  // fires - a fan, a television, a room the recorder keeps hearing a voice in.
+  const num = (name) => {
+    const at = talk.indexOf(`const ${name} = `);
+    assert.notStrictEqual(at, -1, `${name} is gone`);
+    return Number(talk.slice(at + `const ${name} = `.length).split(';')[0].split('*').map(Number)
+      .reduce((a, b) => a * b, 1));
+  };
+  const turns = num('TALK_TURNS');
+  const forMs = num('TALK_FOR_MS');
+  assert.ok(turns > 1 && turns <= 20, `${turns} turns is not a conversation, it is a policy`);
+  assert.ok(forMs > 30000 && forMs <= 10 * 60000, `${forMs}ms is the wrong size of ceiling`);
+  // Both are checked, and both have to be, or one of them is decoration.
+  assert.ok(
+    /talkTurns > 0 && Date\.now\(\) < talkUntil/.test(talk),
+    'only one of the two ceilings is actually consulted'
+  );
+
+  // Saying nothing ends it, and does not get told it was misheard - you were
+  // not talking, so there was nothing to catch.
+  const listen = mjs.slice(mjs.indexOf('async function listenAndReply('), mjs.indexOf('async function applySettings'));
+  // Present first, then in front of the other one. indexOf answers -1 for a
+  // line that is gone, and -1 is less than everything - so the order test alone
+  // passes most loudly at the moment the line is deleted.
+  const ends = listen.indexOf('if (conversing()) return endTalk(true);');
+  assert.notStrictEqual(ends, -1, 'a silent turn no longer ends the conversation');
+  assert.ok(
+    ends < listen.indexOf("pets.line('deaf'"),
+    'a silent turn is answered with "I did not catch that" rather than ending the conversation'
+  );
+
+  // The next turn waits for the mouth to stop. The recorder asks for raw
+  // capture with echo cancellation off, so a microphone opened while the pet is
+  // still speaking transcribes the pet.
+  assert.ok(mjs.includes("ipcMain.on('pet:spoke', takeTurn)"), 'nothing waits for the pet to stop speaking');
+  assert.ok(
+    /if \(!talkTimer\) return;/.test(talk),
+    'any line the pet finishes takes a turn, including the one that says it is listening'
+  );
+  // ...with a timer behind it, because a line that is never spoken out loud -
+  // voice off, muted, chirped - never reports having stopped.
+  assert.ok(/talkTimer = setTimeout\(takeTurn, TALK_BACKSTOP_MS\)/.test(talk), 'the conversation stalls with the voice off');
+  assert.ok(num('TALK_BACKSTOP_MS') > 5000, 'the backstop fires while the pet is still talking');
+  assert.ok(num('TALK_GAP_MS') > 0, 'the microphone opens in the same breath the pet stops speaking');
+
+  // Everything else you do with the pet ends it. Silently: the thing you did is
+  // about to say something of its own, and two lines at once is neither.
+  for (const [name, from, to] of [
+    ['feeding it', "ipcMain.on('pet:act'", "ipcMain.on('pet:react'"],
+    ['opening the chat box', "ipcMain.on('pet:chat-open'", "ipcMain.on('pet:chat'"],
+    ['quitting', 'function farewell()', 'ipcMain.on('],
+    ['switching it off', 'async function applySettings()', 'async function saveSettings'],
+  ]) {
+    const body = mjs.slice(mjs.indexOf(from), mjs.indexOf(to, mjs.indexOf(from)));
+    assert.ok(body.includes('endTalk('), `${name} leaves the conversation running`);
+  }
+
+  // The label goes up once, not once per turn.
+  assert.ok(/if \(!turn\) \{/.test(listen), 'the pet announces that it is listening before every turn');
+  assert.ok(pets.line('chatting', 0).length > 0, 'no line for the start of a conversation');
+  assert.ok(pets.line('enough', 0).length > 0, 'no line for the end of one');
+  for (const event of ['chatting', 'enough']) {
+    assert.ok(pets.expressionFor(event), `"${event}" has no face`);
+  }
+}
+
 // ===== quiet hours =========================================================
 
 {

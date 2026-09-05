@@ -380,6 +380,14 @@ const LINES = {
   // The microphone is open. A label, not a speech - it is on screen for as long
   // as it takes you to say one sentence.
   listening: ['I am all ears', '*ears up*', 'go on then', 'listening'],
+  // ...and the same thing when it is going to keep listening after it answers.
+  // Said once at the start of a conversation rather than before every turn: ten
+  // of "I am all ears" in a row is a pet that has stopped listening and started
+  // announcing.
+  chatting: ['go on, I am listening', 'talk to me', 'I am here, keep going'],
+  // The conversation ended because you stopped talking, which is how a
+  // conversation ends. Never "I did not catch that" - you were not trying.
+  enough: ['*settles down*', 'any time', 'I will be here'],
   // The camera noticed the room. Vague on purpose - it detects movement, not
   // people, and a pet that greets you by name off a motion threshold would be
   // claiming something it cannot know.
@@ -681,6 +689,9 @@ const EXPRESSIONS = {
   think: 'hmm',
   chat: 'smile',
   greet: 'grin',
+  // Listening for as long as you want to talk, rather than for one sentence.
+  chatting: 'curious',
+  enough: 'smile',
   // Delighted rather than proud - proud is the face for something the pet did.
   sung: 'joy',
   wake: 'oh',

@@ -104,6 +104,12 @@ const DEFAULTS = {
   // cost as the wake word and the same rule: needs `mic`, ships off. Without it
   // the pet still dances when asked, opening the microphone only for the dance.
   bop: false,
+  // Keep listening after it answers, so talking to it is a conversation rather
+  // than a click per sentence. Needs `mic`, ships off, and unlike the two above
+  // it does not hold the microphone open at all - it reopens it for each turn
+  // and stops on the first turn where you say nothing. See "A conversation" in
+  // DESIGN.md for the three separate ways it ends.
+  converse: false,
   // The master switch for everything that leaves this machine. Off - the
   // default, and the point of the app - means the pet is sealed in: a local
   // model, and every networked skill answers honestly that it cannot go out.
@@ -271,6 +277,7 @@ function load(raw) {
     // silently does nothing, and a face check without a camera is the same.
     wake: s.wake === true && s.mic === true,
     bop: s.bop === true && s.mic === true,
+    converse: s.converse === true && s.mic === true,
     // The master switch, and the three things it gates. Each still needs its own
     // literal true, so switching the network on does not switch anything on -
     // and switching it off takes all three down in one pass, here, rather than
