@@ -27,11 +27,12 @@ const providers = require('./core/providers');
 const keys = require('./system/keys');
 const update = require('./system/update');
 const {
-  ask, askVision, chat, detectVisionModel, listModels, hasEnoughText, redact,
+  ask, askVision, chat, detectVisionModel, listModels, surveyModels, hasEnoughText, redact,
 } = require('./core/brain');
 const pets = require('./core/pet-state');
 const skills = require('./core/skills');
 const config = require('./core/settings');
+const { advise } = require('./core/advise');
 
 // One pet. Launching it again - from the Start menu, or the installer's "run
 // when finished" landing on top of a copy already in the tray - shows the one
@@ -1791,12 +1792,22 @@ ipcMain.on('pet:quit', farewell);
 // still running underneath and app.quit() twice is harmless.
 ipcMain.on('pet:left', () => { if (quitting) app.quit(); });
 
-ipcMain.handle('config:get', async () => ({
+ipcMain.handle('config:get', async () => {
+  // One survey, used twice: the names fill the dropdown and the whole rows are
+  // what a recommendation can be made out of. Asking Ollama the same question
+  // twice to get two shapes of the same answer is a round trip for nothing.
+  const survey = await surveyModels({ endpoint: endpoint() });
+  return {
   settings,
   skins: config.SKINS,
   pets: config.PETS,
   wear: config.WEAR,
-  models: await listModels({ endpoint: endpoint() }),
+  models: survey.map((m) => m.name),
+  // Which of them the pet would pick, and why. A recommendation rather than a
+  // change: a model is a taste as well as a measurement, and an app that
+  // quietly repoints your pet at a different one is worse than one that says
+  // what it thinks and leaves the select alone.
+  advice: advise(survey),
   visionModel,
   packaged: app.isPackaged,
   version: app.getVersion(),
@@ -1818,7 +1829,8 @@ ipcMain.handle('config:get', async () => ({
   // Booleans. There is no channel that returns a key, and this is the only thing
   // the settings window is ever told about them.
   keys: keys.present(keyStore),
-}));
+  };
+});
 
 /**
  * Store an API key. One way: it goes in, it is wrapped, and nothing hands it

@@ -217,7 +217,7 @@ and quit it — the pet has no taskbar button by design.
 
 | Setting | Notes |
 | --- | --- |
-| Model | Picked from what Ollama actually has installed. |
+| Model | Picked from what Ollama actually has installed, with the one the pet would choose marked `— suggested` and the reason under the list. It is a suggestion and nothing else: nothing changes the setting for you, because a model is a taste as well as a measurement. See [Which model, and why that one](#which-model-and-why-that-one). |
 | Diagrams and images | `Auto` uses a vision model if one exists, `Off` forces text-only. |
 | Hotkey | Validated before saving; a malformed accelerator would crash the app on launch. |
 | Name | What you call it, up to 24 characters, any script. Empty means unnamed, which is the default — a name the app picked for you is not a name you gave it. It answers to it and says it when asked, and never opens a reply with it. |
