@@ -1,5 +1,12 @@
 # screenpet
 
+[![ci](https://github.com/OmkarPalika/screenpet/actions/workflows/ci.yml/badge.svg)](https://github.com/OmkarPalika/screenpet/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/OmkarPalika/screenpet?sort=semver)](https://github.com/OmkarPalika/screenpet/releases)
+[![offline by default](https://img.shields.io/badge/network-off%20by%20default-2ea44f)](#verify-the-privacy-claim)
+[![platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4)](#which-machines-it-runs-on)
+[![node](https://img.shields.io/badge/node-18%2B-339933)](#install)
+[![licence](https://img.shields.io/badge/licence-all%20rights%20reserved-lightgrey)](LICENSE)
+
 A desktop pet that lives in your tray and, when you want it to, reads your
 screen and answers the question on it. **On the default settings nothing leaves
 your machine at all** — the model runs here, the OCR runs here, the speech runs
@@ -23,6 +30,49 @@ Ten pets, ten palettes and nine things to wear, all orthogonal — any species i
 any colour in any hat. It has a care loop, lives in the tray, has a settings
 window, falls back to a vision model when there is no text to read, and builds
 into a Windows installer.
+
+## Install
+
+```bash
+npm install
+```
+
+```bash
+npm start
+```
+
+That is the whole of it — a pet appears and the care loop, the skills, the
+breaks and the faces all work.
+
+To have it read your screen, install Ollama and pull the default model:
+
+```bash
+ollama pull deepseek-r1:8b
+```
+
+Skip it and nothing is broken: the pet says it cannot read yet and what to
+install, once, when you ask it to read. Ollama running but without that model
+is a different sentence, which repeats the exact `pull` command back to you
+rather than claiming Ollama is down.
+
+### What it needs
+
+- Windows 10/11, or macOS (see [BUILDING.md](BUILDING.md))
+- Node 18+
+- [Ollama](https://ollama.com) running locally, **only** to read the screen and
+  to hold a conversation. Everything else the pet does works without it, and the
+  app looks for it again every time you ask — install it mid-session and the
+  next press of the hotkey reads the screen.
+- A microphone and a Windows speech recogniser, **only** if you switch on
+  `Let me talk to it`. Check what you have:
+
+  ```powershell
+  Add-Type -AssemblyName System.Speech
+  [System.Speech.Recognition.SpeechRecognitionEngine]::InstalledRecognizers()
+  ```
+
+  An empty list means no recogniser is installed and the pet says so rather than
+  failing silently. Add one under Settings ▸ Time & language ▸ Speech.
 
 ## The one rule
 
@@ -100,7 +150,6 @@ it stands and why it stands there — is in **[DESIGN.md](DESIGN.md)**, together
 with the measurements behind the choices that look arbitrary from the outside.
 
 This file is the half you need to install it, run it, and know what it sends.
-
 
 ## Settings
 
@@ -271,48 +320,7 @@ Linux, Android and iOS: see the end of [BUILDING.md](BUILDING.md). The first is
 unimplemented, the second is a different application, and the third cannot do
 the central feature at all.
 
-## Requirements
-
-- Windows 10/11, or macOS (see [BUILDING.md](BUILDING.md))
-- Node 18+
-- [Ollama](https://ollama.com) running locally, **only** to read the screen and
-  to hold a conversation. Everything else the pet does works without it, and the
-  app looks for it again every time you ask — install it mid-session and the
-  next press of the hotkey reads the screen.
-- A microphone and a Windows speech recogniser, **only** if you switch on
-  `Let me talk to it`. Check what you have:
-
-  ```powershell
-  Add-Type -AssemblyName System.Speech
-  [System.Speech.Recognition.SpeechRecognitionEngine]::InstalledRecognizers()
-  ```
-
-  An empty list means no recogniser is installed and the pet says so rather than
-  failing silently. Add one under Settings ▸ Time & language ▸ Speech.
-
-## Run
-
-```bash
-npm install
-```
-
-```bash
-npm start
-```
-
-That is the whole of it — a pet appears and the care loop, the skills, the
-breaks and the faces all work.
-
-To have it read your screen, install Ollama and pull the default model:
-
-```bash
-ollama pull deepseek-r1:8b
-```
-
-Skip it and nothing is broken: the pet says it cannot read yet and what to
-install, once, when you ask it to read. Ollama running but without that model
-is a different sentence, which repeats the exact `pull` command back to you
-rather than claiming Ollama is down.
+## Which model, and why that one
 
 **Bigger is not better here, and reasoning beats size.** Eight models were given
 the same screenshot of a `map`/`filter` chain and asked what it prints, twice
