@@ -940,9 +940,24 @@ Click it and the pet takes the break, and you watch it:
 - everything behind it **dims**
 - it walks into the **middle of the screen**
 - and then it either **sits and breathes**, eyes shut, a ring of calm going out
-  from it — or it **drinks a glass of water**, tipping it up twice, and the
-  water level in the glass falls as the time runs down. The glass is the clock;
-  the number underneath is only there for people who want a number.
+  from it — or it **drinks a glass of water**, and the glass is the clock: the
+  number underneath is only there for people who want a number.
+
+The drink is the fussiest thing in the app, because a glass of water is a thing
+everybody has held and nobody has to think about to know is wrong. Three details
+carry it, and each one was added after watching the version without it:
+
+- **The level goes down because the pet drank, not because time passed.** The
+  break is divided into a whole number of mouthfuls and the water drops during
+  the tip, held steady between drinks. Draining it smoothly against the clock is
+  a progress bar with a cup drawn on it, and reads as one.
+- **The water does not tip with the glass.** It cancels the glass's rotation
+  about the same corner and is clipped by it, so the surface stays horizontal
+  and the water runs down into the lip — which is what water does, and what the
+  first version did not do.
+- **The glass goes up once and comes down when it is empty**, rather than
+  shuttling back to the pet's side between mouthfuls and going on miming drinks
+  out of nothing until the timer runs out.
 
 Click anywhere on the dimmed screen to stop it early. The pet stays pattable
 throughout, which is the entire reason the dimmed layer is *underneath* it.

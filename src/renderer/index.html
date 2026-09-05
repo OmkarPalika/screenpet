@@ -78,8 +78,20 @@
         <!-- The glass, for a water break. Drawn beside the pet rather than in
              the SVG so it is the same glass whichever species is holding it -
              and the water level in it is the countdown, which is a better clock
-             than a number because you can see it without reading it. -->
-        <div id="glass" class="glass" hidden><i id="water"></i></div>
+             than a number because you can see it without reading it.
+
+             Four elements because the glass and the water in it have to move
+             independently: .glass carries it up to the mouth, .glass-body is the
+             glass and tips about its own lip, and .glass-level cancels that tip
+             so the water stays level while the glass rotates around it. Clipped
+             by the glass, so tipping runs the water down to the lip the way it
+             actually goes. -->
+        <div id="glass" class="glass" hidden>
+          <div class="glass-body">
+            <div class="glass-level"><i id="water"></i></div>
+            <b class="glass-shine"></b>
+          </div>
+        </div>
         <!-- Lit only while the camera stream is actually open. -->
         <div id="cam" class="cam" hidden title="camera on"></div>
         <!-- ...and this one for as long as the pet is reading the screen on a

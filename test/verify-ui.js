@@ -737,7 +737,43 @@ app.whenReady().then(async () => {
 
   // The break itself: dim, walk to the middle, drink, and the glass is the clock.
   const parked = await js(`JSON.stringify(where)`);
-  win.webContents.send('break:show', { kind: 'water', seconds: 12 });
+  win.webContents.send('break:show', { kind: 'water', seconds: 20 });
+
+  // Watch the drink rather than glance at it. Two things make it a drink rather
+  // than a countdown with a cup drawn on it, and neither shows in a still: the
+  // water stays level while the glass turns around it, and the level only moves
+  // while the glass is at the pet's mouth.
+  await js(`(() => {
+    window.__sip = { tips: 0, drift: 0, steps: 0, upright: 0 };
+    const deg = (el) => {
+      const m = new DOMMatrix(getComputedStyle(el).transform);
+      return (Math.atan2(m.b, m.a) * 180) / Math.PI;
+    };
+    let was = false;
+    let level = null;
+    const tick = () => {
+      requestAnimationFrame(tick);
+      const g = document.getElementById('glass');
+      if (g.hidden) return;
+      const body = deg(document.querySelector('.glass-body'));
+      const tipped = Math.abs(body) > 20;
+      if (tipped) {
+        window.__sip.drift = Math.max(
+          window.__sip.drift,
+          Math.abs(body + deg(document.querySelector('.glass-level')))
+        );
+      }
+      if (tipped && !was) window.__sip.tips += 1;
+      was = tipped;
+      const h = document.getElementById('water').style.height;
+      if (level !== null && h !== level) {
+        window.__sip.steps += 1;
+        if (!tipped) window.__sip.upright += 1;
+      }
+      level = h;
+    };
+    requestAnimationFrame(tick);
+  })()`);
   await new Promise((r) => setTimeout(r, 3200)); // the walk across, from style.css
   const drinking = await js(`(() => {
     const p = document.getElementById('pet').getBoundingClientRect();
@@ -757,6 +793,53 @@ app.whenReady().then(async () => {
   check(
     drinking.water > 0 && drinking.water < 100,
     `the glass is at ${drinking.water}% three seconds in, so it is not the clock`
+  );
+
+  // Mid-mouthful, which is the only frame that shows any of this: the glass
+  // over at an angle with the water in it still level.
+  for (let i = 0; i < 60; i += 1) {
+    const tipped = await js(
+      `Math.abs(new DOMMatrix(getComputedStyle(document.querySelector('.glass-body')).transform).b) > 0.4`
+    );
+    if (tipped) break;
+    await new Promise((r) => setTimeout(r, 40));
+  }
+  await capture(win.webContents, 'pet-water.png');
+
+  // Let it finish the glass. Waited for rather than slept through: the number
+  // of mouthfuls comes out of the break length, so a fixed sleep here is a check
+  // that breaks the day anybody changes how long a gulp takes.
+  let emptied = false;
+  for (let i = 0; i < 200 && !emptied; i += 1) {
+    emptied = await js(`document.getElementById('glass').classList.contains('is-empty')`);
+    if (!emptied) await new Promise((r) => setTimeout(r, 100));
+  }
+  const sip = await js(`JSON.stringify(window.__sip)`).then(JSON.parse);
+  check(sip.tips >= 2, `the glass was tipped ${sip.tips} times in a twelve second drink`);
+  check(
+    sip.drift < 2,
+    `the water tilts ${sip.drift.toFixed(0)} degrees with the glass, so it is painted on rather than in it`
+  );
+  check(
+    sip.steps >= 2 && sip.upright === 0,
+    `the level moved ${sip.steps} times and ${sip.upright} of those were with the glass nowhere near the pet, so it is draining on a clock rather than being drunk`
+  );
+  check(emptied, 'the glass never empties, so the pet is still sipping at nothing when the break ends');
+  check(
+    parseFloat(await js(`document.getElementById('water').style.height`)) === 0,
+    'the glass came down with water still in it'
+  );
+  check(
+    !(await js(`document.getElementById('pet').classList.contains('is-drinking')`)),
+    'the pet goes on taking mouthfuls out of an empty glass'
+  );
+
+  // And it got there with time to spare, which is the whole reason the mouthfuls
+  // are counted out of the drinking window rather than the break: spread over
+  // the break instead and the glass is still half full when the break ends.
+  check(
+    await js(`breaking`),
+    'the drink outran the break it belongs to, so the glass empties after the pet has walked away'
   );
 
   // Clicking the dimmed screen stops it, and the pet goes back where it was.
@@ -1942,7 +2025,8 @@ app.whenReady().then(async () => {
   );
   console.log(
     'wrote pet-preview.png, pet-hungry.png, pet-menu.png, pet-love.png, pet-chat.png,\n'
-    + '      pet-faces.png, pet-species.png, pet-wardrobe.png, pet-settings.png,'
+    + '      pet-faces.png, pet-species.png, pet-wardrobe.png, pet-water.png,'
+      + '      pet-settings.png,'
       + '      pet-arriving.png, pet-leaving.png, pet-home.png'
   );
   app.exit(0);
