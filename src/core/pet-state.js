@@ -581,6 +581,51 @@ const LINES = {
   raging: ['THAT IS IT', 'you are doing this ON PURPOSE', 'I am extremely cross', 'RUDE'],
   crying: ['*sniffles*', 'you were mean to me', 'I need a minute', '*small sad noise*'],
 
+  // ---- playdates -----------------------------------------------------------
+  // Another pet on the same network. Every one of these is about the other pet
+  // rather than about the person at the other keyboard, because the pet has
+  // never been told there is one: what crosses the wire is a species, a palette
+  // and a mood, and a line that guessed at anything else would be the app
+  // claiming to know something it does not.
+
+  // The first time these two have ever met. Once per friend, ever - the confetti
+  // is on the same latch, and a party every reconnection is not a party.
+  metfirst: [
+    'oh! oh! a whole other one of me',
+    'I have never seen another one. hello!',
+    'we are two now. this is enormous',
+    '*vibrating* a FRIEND',
+  ],
+  // ...and every time after that.
+  metagain: [
+    'look who it is',
+    'you came back!',
+    'my friend is here',
+    '*waves furiously*',
+  ],
+  // They went away. Wistful rather than sad: they were here, which is nicer than
+  // them never having been.
+  parted: [
+    'bye then. that was lovely',
+    'come back soon',
+    '*watches them go*',
+    'same time tomorrow?',
+  ],
+
+  // One bank per thing two pets can do together. The verb is on the wire; the
+  // words are not, so both pets say something of their own about the same act
+  // and neither one is quoting the other.
+  wave: ['hi hi hi', 'hello over there!', '*enormous wave*', 'I see you!'],
+  bounce: ['boing', 'up! up!', 'cannot keep still', '*bouncing on the spot*'],
+  dance: ['this is my favourite bit', 'watch this move', 'we are so good at this', '*spinning happily*'],
+  cheer: ['yes! do it again!', 'incredible', 'best one I have ever seen', '*applauding wildly*'],
+  hug: ['come here you', '*squeeze*', 'oh this is nice', 'never letting go'],
+  spin: ['look look look', 'round and round', 'dizzy but worth it', '*whirls*'],
+  nap: ['shhh. we are resting', 'a companionable silence', '*curls up nearby*', 'this counts as an activity'],
+  snack: ['I brought enough for two', 'half each', '*shares crumbs*', 'friendship is snacks'],
+  sing: ['you take the high bit', 'la la LAAA', 'we sound incredible, do not check', '*harmonising, loosely*'],
+  party: ['CONFETTI', 'this is the best day', '*throws everything in the air*', 'we are having a party now'],
+
   idle: [
     'poke me if you need an answer',
     'I am watching the screen, not judging it',
@@ -712,6 +757,24 @@ const EXPRESSIONS = {
   demand: 'pleading',
   rushed: 'eyeroll',
   forgiven: 'melt',
+  // Another pet turned up. Starstruck once, ever - the first time is the one
+  // worth a face nobody has seen before - and pleased every time after.
+  metfirst: 'starstruck',
+  metagain: 'grin',
+  parted: 'wistful',
+  // The shared vocabulary, one face each. Same names as playdate.js's ACTS,
+  // checked by the test suite: a verb that can cross the wire and has no face
+  // here would arrive as a pet doing something with no expression at all.
+  wave: 'grin',
+  bounce: 'joy',
+  dance: 'joy',
+  cheer: 'proud',
+  hug: 'hug',
+  spin: 'giggle',
+  nap: 'doze',
+  snack: 'yum',
+  sing: 'joy',
+  party: 'joy',
   // Being ignored, in four beats: quietly sad, then cross, then nothing, then
   // very pleased with you the moment you say anything.
   wistful: 'wistful',

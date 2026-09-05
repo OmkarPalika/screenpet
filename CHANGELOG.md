@@ -8,6 +8,44 @@ credited in them. Those notes are here.
 Versions are [semantic](https://semver.org/spec/v2.0.0.html). Dates are the day
 the version was tagged.
 
+## [Unreleased]
+
+### Added
+
+- **Playdates.** Two copies of screenpet on the same network find each other and
+  the two pets meet: confetti the first time, and after that they wave, bounce,
+  dance, cheer, hug, spin, share a snack, sing and sit about together. Off by
+  default, with its own switch in Settings.
+
+  This is the first thing in the app that opens a socket nobody asked a question
+  through, so, as [PRIVACY.md](PRIVACY.md#pets-on-your-own-network) now says at
+  length: **the pets talk, the people do not.** A message is a species, a
+  palette, a hat, the name you gave your pet, a mood word, a bond number and one
+  verb from a list of ten. There is no free-text field and nowhere to put one.
+  Every message is rebuilt field by field from a fixed table on the way out and
+  on the way in, so a field that is not in the table cannot survive the trip in
+  either direction.
+
+  There is no server, no relay, no account and no pairing code. It is a UDP
+  multicast group sent with a hop limit of one, which the first router drops —
+  so it cannot leave the network segment your machine is on. Two things this
+  widens, said plainly rather than buried: the name you gave your pet is
+  readable by anyone on that network running the app, and anyone on that network
+  can join in, because there is nothing worth guarding in a message that can
+  only be a mood.
+
+- `friends.json`: a random id for this install and the ids of up to 24 pets it
+  has met, so the confetti happens once per friend rather than every time. No
+  names, no addresses, no record of when anyone was online. Only written while
+  playdates are on.
+
+### Changed
+
+- The pet's species, palette and outfit moved from the `<html>` element to the
+  pet element itself, and the nineteen `[data-pet="…"] .pet.is-idling` rules in
+  `pets.css` became `.pet[data-pet="…"].is-idling`. Two pets in one document
+  cannot both read their look off the root. No visible change on its own.
+
 ## [0.1.0] — 2026-09-05
 
 The first release. Everything in the repository is part of it, so there is no

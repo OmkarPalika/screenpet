@@ -100,6 +100,7 @@ on macOS. The one exception is the update download, below.
 | `pet.json` | The pet's own state — mood, hunger, how long you have known each other, and where on the screen you put it |
 | `memory.json` | Only what you explicitly said "remember ..." about, plus counters. See below |
 | `timers.json` | Timers and reminders you set |
+| `friends.json` | Only if you switch playdates on: a random eight-character id for this install, and the ids of up to 24 other pets you have met, with a date and a count each. No names, no addresses, no record of when you were online |
 | `keys.json` | API keys for a hosted provider, if you chose one — wrapped with Windows DPAPI on Windows, or a Keychain-held key on macOS, either way under your user account |
 
 If you press `Download and install`, the installer is written outside that
@@ -162,6 +163,51 @@ Notes that matter:
   point, not this one. It requires three deliberate acts: the master switch, the
   provider, and a stored key.
 - Screenshots are never sent to a hosted provider under any setting.
+
+### Pets on your own network
+
+**Playdates** are off by default and have their own switch, which is deliberately
+*not* under `Let it out on the internet` — because this feature cannot reach the
+internet, and putting it behind the master switch would suggest it might.
+
+With it on, the app joins a UDP multicast group on your local network and says
+what your pet is, a few times a minute. Another copy of the app on the same
+network hears it, and the two pets meet.
+
+There is no server. There is no relay, no account, no pairing code, nobody's
+infrastructure in the middle, and nothing to switch off later. The packets are
+sent with a **TTL of 1**, which means the first router they reach decrements it
+to zero and drops them. They do not leave the network segment your machine is on.
+That is a property of the packets, not a promise about a policy.
+
+| What leaves | Who receives it |
+| --- | --- |
+| Your pet's species, palette and hat; the name you gave it, if you gave it one; one word for its mood; a bond number; and one verb from a fixed list of ten (`wave`, `dance`, `hug`, …) | Anything on your local network that is listening on that group — in practice, another copy of this app |
+
+What cannot leave, because there is nowhere in the message to put it:
+
+- Anything read off your screen, ever
+- Anything you typed, said, or were answered
+- Your name, your computer's name, your username, your IP beyond the fact that a
+  packet came from it, or anything else about the machine
+
+That is enforced by an allowlist in `src/core/playdate.js` rather than by
+review. Every message is rebuilt field by field from a fixed table on the way
+out **and** on the way in, so a field that is not in that table cannot survive
+the trip in either direction, and the test suite asserts it by trying.
+
+Two things worth saying plainly:
+
+- **The pet's name is a name a person typed.** If you named yours something you
+  would not want a colleague to read, anyone on that network running this app
+  will read it. It is capped at 24 characters and stripped of anything that is
+  not a letter, mark, digit, space, apostrophe, hyphen or full stop — but it is
+  still yours, and it is the one thing here that a person wrote.
+- **Anyone on that network can join in.** There is no pairing, because there is
+  nothing worth stealing in a message that can only be a mood. A stranger on the
+  same café Wi-Fi can make their pet appear next to yours and ask it to dance.
+  If that is not something you want, the switch is off by default and belongs
+  off.
 
 ### Checking for updates
 

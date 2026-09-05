@@ -183,9 +183,9 @@ app.whenReady().then(async () => {
     win.webContents.send('pet:look', { pet: species, skin: 'butter' });
     await settle();
     const got = await js(
-      `(() => ({ pet: document.documentElement.dataset.pet,
-                 shown: getComputedStyle(document.querySelector('${part}')).display,
-                 d: getComputedStyle(document.querySelector('${part}')).d }))()`
+      `(() => ({ pet: document.getElementById('pet').dataset.pet,
+                 shown: getComputedStyle(document.querySelector('#pet ${part}')).display,
+                 d: getComputedStyle(document.querySelector('#pet ${part}')).d }))()`
     );
     check(got.pet === species, `species not applied: wanted ${species}, got ${got.pet}`);
     check(got.shown !== 'none', `${species} did not show ${part}`);
@@ -210,9 +210,9 @@ app.whenReady().then(async () => {
     win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', wear: outfit });
     await settle();
     const got = await js(
-      `(() => { const d = (sel) => getComputedStyle(document.querySelector(sel)).display;
+      `(() => { const d = (sel) => getComputedStyle(document.querySelector("#pet " + sel)).display;
          return { on: d('${WORN[outfit]}'), mask: d('.mask'), eyes: d('.eyes'),
-                  worn: document.documentElement.dataset.wear }; })()`
+                  worn: document.getElementById('pet').dataset.wear }; })()`
     );
     check(got.worn === outfit, `wearing ${outfit} but the root says ${got.worn}`);
     check(got.on !== 'none', `${outfit} is on and ${WORN[outfit]} is not drawn`);
@@ -1931,6 +1931,138 @@ app.whenReady().then(async () => {
       s.classList.remove('is-leaving', 'is-entering', 'is-inside'); })()`);
     await settle();
   }
+  // --- a friend, on this network --------------------------------------------
+  //
+  // Everything about what may cross between two machines is checked in
+  // test/test.js, which does not need a window. This is the other half: that a
+  // validated pet card actually turns into a second pet on screen, wearing its
+  // own species and palette rather than yours, and that the confetti goes off
+  // once rather than every time.
+  {
+    const friendState = () => js(`(() => {
+      const f = document.getElementById('friend');
+      const s = getComputedStyle(f);
+      const box = f.getBoundingClientRect();
+      const petBox = document.getElementById('pet').getBoundingClientRect();
+      return {
+        hidden: f.hidden,
+        display: s.display,
+        pet: f.dataset.pet, skin: f.dataset.skin, wear: f.dataset.wear, mood: f.dataset.mood,
+        move: f.dataset.move || null, expr: f.dataset.expr || null,
+        name: document.getElementById('friend-name').textContent,
+        nameHidden: document.getElementById('friend-name').hidden,
+        svgs: f.querySelectorAll('svg').length,
+        drops: document.getElementById('friend-fx').children.length,
+        confetti: document.querySelectorAll('.confetti i').length,
+        left: Math.round(box.left - petBox.left),
+        overlaps: box.left < petBox.right - 4,
+        onFloor: Math.abs(box.bottom - petBox.bottom) < 3,
+        together: document.querySelector('[data-together]').hidden,
+        body: getComputedStyle(f.querySelector('.body')).fill,
+      };
+    })()`);
+
+    // Nobody there yet.
+    let f = await friendState();
+    check(f.hidden, 'a friend is on screen before anyone turned up');
+    check(f.svgs === 1, `the friend has ${f.svgs} bodies - the clone did not happen exactly once`);
+    check(f.together, 'the "Play together" button is offered with nobody to play with');
+
+    // The pet's own look, so the friend can be checked for being different
+    // rather than for being a particular colour.
+    win.webContents.send('pet:look', { pet: 'blob', skin: 'butter', wear: 'none' });
+    await settle();
+    const mineBody = await js("getComputedStyle(document.querySelector('#pet .body')).fill");
+
+    // Somebody turns up, for the very first time.
+    win.webContents.send('pet:friend', {
+      kind: 'party',
+      card: { v: 1, id: 'a1b2c3d4', t: 'hi', pet: 'dragon', skin: 'plum', wear: 'crown', name: 'Bella', mood: 'happy', bond: 30 },
+    });
+    await settle();
+    f = await friendState();
+    check(!f.hidden && f.display !== 'none', 'a friend arrived and nothing appeared');
+    check(f.pet === 'dragon' && f.skin === 'plum' && f.wear === 'crown',
+      `the friend is wearing ${f.pet}/${f.skin}/${f.wear} rather than its own`);
+    check(f.mood === 'happy', `the friend's mood is ${f.mood}`);
+    check(f.name === 'Bella' && !f.nameHidden, `the name tag says ${JSON.stringify(f.name)}`);
+    // The load-bearing one for the whole two-pets-in-one-document rearrangement:
+    // if the species and palette still lived on the root element, these two
+    // would be the same colour and nobody would notice until two people tried it.
+    check(f.body !== mineBody, `both pets are ${f.body} - the friend inherited the root's palette`);
+    check(!f.overlaps, `the friend is standing on top of your pet (${f.left}px apart)`);
+    check(f.onFloor, 'the two pets are not standing on the same floor');
+    check(!f.together, 'a friend is here and the "Play together" button is still hidden');
+    check(f.confetti > 20, `only ${f.confetti} pieces of confetti for a first meeting`);
+    await shot('pet-friend.png');
+
+    // A shared activity. The movement and the face arrive with the verb rather
+    // than being looked up in the renderer, so both have to land.
+    win.webContents.send('pet:friend', { kind: 'do', id: 'a1b2c3d4', act: 'dance', move: 'dance', expr: 'joy' });
+    await settle();
+    f = await friendState();
+    check(f.move === 'dance', `the friend was asked to dance and is doing ${f.move}`);
+    check(f.expr === 'joy', `the friend danced with the face ${f.expr}`);
+    check(f.drops > 0, 'nothing fell out of the sky when the two of them danced');
+    await shot('pet-together.png');
+
+    // ...and ours joins in through the ordinary speech channel, which is what
+    // makes do not disturb silence its half along with everything else.
+    win.webContents.send('pet:say', { text: 'this is my favourite bit', kind: 'chat', expr: 'joy', move: 'dance', chatter: true });
+    await settle();
+    check(
+      (await js("document.getElementById('pet').dataset.move")) === 'dance',
+      'the friend danced and our pet stood there'
+    );
+
+    // Confetti is for the first meeting only. A second arrival is a wave, not a
+    // party - the latch is in the main process, and this is the renderer half.
+    await new Promise((r) => setTimeout(r, 3400)); // the pieces clear themselves up
+    win.webContents.send('pet:friend', { kind: 'gone', id: 'a1b2c3d4' });
+    await new Promise((r) => setTimeout(r, 900));
+    check((await friendState()).hidden, 'a friend left and is still standing there');
+    check((await friendState()).together, 'a friend left and the button is still offered');
+
+    win.webContents.send('pet:friend', {
+      kind: 'here',
+      card: { v: 1, id: 'a1b2c3d4', t: 'hi', pet: 'dragon', skin: 'plum', wear: 'crown', name: 'Bella', mood: 'happy', bond: 30 },
+    });
+    await settle();
+    f = await friendState();
+    check(!f.hidden, 'a friend came back and nothing appeared');
+    check(f.confetti === 0, `${f.confetti} pieces of confetti for a friend you have already met`);
+
+    // The name is a string a person typed on another machine. It is set as text,
+    // never as markup, and an unnamed pet gets no tag rather than an empty one.
+    win.webContents.send('pet:friend', {
+      kind: 'here',
+      card: { v: 1, id: 'ffffffff', t: 'hi', pet: 'cat', skin: 'sky', wear: 'none', name: '<img src=x onerror=alert(1)>', mood: 'sad', bond: 0 },
+    });
+    await settle();
+    check(
+      (await js("document.getElementById('friend-name').querySelectorAll('*').length")) === 0,
+      'a name from the network became markup'
+    );
+    win.webContents.send('pet:friend', {
+      kind: 'here',
+      card: { v: 1, id: 'ffffffff', t: 'hi', pet: 'cat', skin: 'sky', wear: 'none', name: '', mood: 'sad', bond: 0 },
+    });
+    await settle();
+    check((await friendState()).nameHidden, 'an unnamed pet gets an empty name tag');
+
+    // Junk over the bridge changes nothing rather than throwing, same as every
+    // other channel here.
+    for (const junk of [null, 'hello', 42, {}, { kind: 'do' }, { kind: 'here' }]) {
+      win.webContents.send('pet:friend', junk);
+    }
+    await settle();
+    check(!(await friendState()).hidden, 'junk on the friend channel took the friend off screen');
+    check(errors.length === 0, `the renderer threw on the friend channel: ${errors.join(', ')}`);
+
+    win.webContents.send('pet:friend', { kind: 'gone', id: 'ffffffff' });
+    await new Promise((r) => setTimeout(r, 900));
+  }
+
   // --- settings window ----------------------------------------------------
   let saved = null;
   ipcMain.handle('config:get', async () => ({
@@ -2368,6 +2500,90 @@ app.whenReady().then(async () => {
   // forced off while the switch above it is off - so the static check above is
   // what covers a setting going missing, and this covers it going astray.
 
+  // --- where an unplaced pet starts -----------------------------------------
+  //
+  // Two copies of the app on one machine used to start in the same corner and
+  // draw four pets in two piles: each one puts its friend beside its own pet,
+  // and if both pets are in the same place so are both friends. The starting
+  // fraction comes from the install id - playdate.js owns that half - and this
+  // is the half that has to apply it once, only to a pet nobody has placed, and
+  // then leave the pet alone.
+  //
+  // In a window of its own, because by this point in the file the pet above has
+  // been dragged and placed, and a placed pet is exactly the one this must not
+  // move. Reusing that window made the first check pass for the wrong reason:
+  // the pet had simply wandered past the mark on its own.
+  {
+    const fresh = new BrowserWindow({
+      width: 520, height: 300, show: true, backgroundColor: '#1b1b1f',
+      webPreferences: { preload: path.join(SRC, 'preload.js'), backgroundThrottling: false },
+    });
+    fresh.setIgnoreMouseEvents(true);
+    fresh.webContents.on('console-message', (e) => { if (e.level === 'error') errors.push(e.message); });
+    await fresh.loadFile(path.join(SRC, 'renderer', 'index.html'));
+
+    const fjs = (src) => fresh.webContents.executeJavaScript(src);
+    // It only wanders while it is idle, and a wander between two reads of its
+    // position is a flake that reads exactly like the latch below failing.
+    fresh.webContents.send('pet:say', { text: 'thinking', kind: 'thinking' });
+    const stageX = () => fjs(
+      '(() => new DOMMatrixReadOnly(getComputedStyle(document.getElementById("stage")).transform).m41)()'
+    );
+    const room = await fjs(
+      '(() => Math.max(0, window.innerWidth - document.getElementById("stage").offsetWidth))()'
+    );
+    const stats = (extra) => fresh.webContents.send('pet:stats', {
+      fullness: 60, happiness: 60, energy: 60, bond: 0, mood: 'neutral', place: null, ...extra,
+    });
+
+    check((await stageX()) < 4, `the pet did not start at the left edge (${await stageX()}px)`);
+
+    stats({ start: 0.5 });
+    await settle();
+    const moved = Math.round(await stageX());
+    check(
+      Math.abs(moved - room * 0.5) < 6,
+      `an unplaced pet started at ${moved}px rather than ${Math.round(room * 0.5)}px`
+    );
+
+    // Once, and then never again: a stats push arrives every few seconds, and a
+    // pet that gets re-placed by each of them can never be walked anywhere.
+    stats({ start: 0.05 });
+    await settle();
+    check(
+      Math.abs(Math.round(await stageX()) - moved) < 6,
+      'the pet was re-placed by a later stats push'
+    );
+
+    fresh.destroy();
+
+    // A pet you put somewhere by hand wins outright, whatever the id says - and
+    // that needs a window of its own too. Asking the one above would prove
+    // nothing: its latch has already been thrown by the pushes before this, so
+    // deleting the check on `home` entirely would still leave every assertion
+    // passing. The place has to arrive on the very first push, which is also
+    // what actually happens on a launch.
+    const placed = new BrowserWindow({
+      width: 520, height: 300, show: true, backgroundColor: '#1b1b1f',
+      webPreferences: { preload: path.join(SRC, 'preload.js'), backgroundThrottling: false },
+    });
+    placed.setIgnoreMouseEvents(true);
+    placed.webContents.on('console-message', (e) => { if (e.level === 'error') errors.push(e.message); });
+    await placed.loadFile(path.join(SRC, 'renderer', 'index.html'));
+    placed.webContents.send('pet:say', { text: 'thinking', kind: 'thinking' });
+    placed.webContents.send('pet:stats', {
+      fullness: 60, happiness: 60, energy: 60, bond: 0, mood: 'neutral',
+      place: { x: 0.9, y: 1 }, start: 0.05,
+    });
+    await settle();
+    const [at, span] = await placed.webContents.executeJavaScript(`(() => [
+      new DOMMatrixReadOnly(getComputedStyle(document.getElementById('stage')).transform).m41,
+      Math.max(0, window.innerWidth - document.getElementById('stage').offsetWidth),
+    ])()`);
+    check(at > span * 0.8, `a hand-placed pet was overruled by its starting position (${Math.round(at)}px)`);
+    placed.destroy();
+  }
+
   // --- report -------------------------------------------------------------
   const all = [...errors, ...problems];
   if (all.length) {
@@ -2382,7 +2598,8 @@ app.whenReady().then(async () => {
     'wrote pet-preview.png, pet-hungry.png, pet-menu.png, pet-love.png, pet-chat.png,\n'
     + '      pet-faces.png, pet-species.png, pet-wardrobe.png, pet-water.png,'
       + '      pet-settings.png,'
-      + '      pet-arriving.png, pet-leaving.png, pet-home.png'
+      + '      pet-arriving.png, pet-leaving.png, pet-home.png,'
+      + '      pet-friend.png, pet-together.png'
   );
   app.exit(0);
 });

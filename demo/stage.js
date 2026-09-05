@@ -41,7 +41,9 @@ window.demo = {
     else delete petEl.dataset.expr;
   },
 
-  pet(name) { document.documentElement.dataset.pet = name; },
+  // On the pet rather than on <html>, which is where the app sets it now that
+  // two pets can share one document. pets.css reads it off the element.
+  pet(name) { petEl.dataset.pet = name; },
 
   // The same class the renderer toggles; which movement it produces is the
   // stylesheet's business here exactly as it is in the app.

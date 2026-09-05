@@ -153,6 +153,19 @@ const DEFAULTS = {
   breaks: true,
   breakEvery: breaks.EVERY_MIN.def, // minutes between breaks
   breakFor: breaks.FOR_S.def, // seconds the screen stays covered
+  // Letting the pet meet other pets on the same network. Off by default like
+  // everything else that opens a socket, and it is genuinely its own switch
+  // rather than one under `network`: `network` gates the things that reach a
+  // server on the internet, and this reaches no server at all. It is a UDP
+  // multicast group with a TTL of 1, which is a packet the first router drops -
+  // see system/lan.js. Turning the internet on for a feature that cannot use it
+  // would make the master switch mean less, not more.
+  //
+  // What crosses is a pet card: species, palette, hat, the name you gave it, a
+  // mood word and a bond number - the allowlist is core/playdate.js and there is
+  // no free-text field in it. Nothing you type, say or have on screen is
+  // representable.
+  playdate: false,
   // Roaming further than the taskbar, and sitting on top of the window you are
   // working in. Movement only: it cannot touch your windows, and the section in
   // PRIVACY.md on why says exactly what it never gets told about them.
@@ -304,6 +317,9 @@ function load(raw) {
     breakEvery: breaks.clampEvery(s.breakEvery),
     breakFor: breaks.clampFor(s.breakFor),
     mischief: s.mischief !== false,
+    // A literal true, like the microphone and the camera. This one opens a
+    // socket, so a hand-edited "playdate": 1 must not be what does it.
+    playdate: s.playdate === true,
     autostart: typeof s.autostart === 'boolean' ? s.autostart : DEFAULTS.autostart,
     ollama: validEndpoint(s.ollama) ? s.ollama : DEFAULTS.ollama,
   };
