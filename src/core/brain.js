@@ -585,13 +585,35 @@ async function detectVisionModel(opts = {}) {
 
 /** Model names installed locally, for the settings dropdown. */
 async function listModels(opts = {}) {
+  return (await surveyModels(opts)).map((m) => m.name);
+}
+
+/**
+ * Everything Ollama will say about what is installed, rather than just the
+ * names. advise.js turns this into a recommendation; nothing else needs it.
+ *
+ * One request, not the per-model /api/show that detectVisionModel makes: the
+ * tags endpoint has carried capabilities and sizes for a while now, and on an
+ * older Ollama the fields it does not have come back undefined rather than
+ * wrong - which advise.js reads as "unknown" and scores around.
+ *
+ * @returns {Promise<Array<{name: string, capabilities?: string[], params?: string,
+ *   ctx?: number, size?: number}>>}
+ */
+async function surveyModels(opts = {}) {
   const fetchImpl = opts.fetch || globalThis.fetch;
   const endpoint = opts.endpoint || OLLAMA;
   try {
     const res = await fetchImpl(`${endpoint}/api/tags`);
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.models || []).map((m) => m.name || m.model).filter(Boolean);
+    return (data.models || []).map((m) => ({
+      name: m.name || m.model,
+      capabilities: Array.isArray(m.capabilities) ? m.capabilities : undefined,
+      params: (m.details || {}).parameter_size,
+      ctx: (m.details || {}).context_length,
+      size: m.size,
+    })).filter((m) => m.name);
   } catch {
     return [];
   }
@@ -600,6 +622,6 @@ async function listModels(opts = {}) {
 module.exports = {
   redact, stripThinking, stripEcho, unquote, stripMarkup, cleanOcr, hasEnoughText,
   buildPrompt, buildVisionPrompt, buildChatPrompt, buildWatchPrompt, isSilent,
-  ask, askVision, chat, detectVisionModel, listModels,
+  ask, askVision, chat, detectVisionModel, listModels, surveyModels,
   MODEL, EMPTY_SCREEN, MIN_SCREEN_TEXT, SILENT,
 };

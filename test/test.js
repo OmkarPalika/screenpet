@@ -3841,6 +3841,133 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.ok(body.trimEnd().endsWith('palikaomkar@gmail.com'), 'the licence page is cut short');
   }
 
+  // ===== which of your models ================================================
+  //
+  // The settings window used to list nine names and leave you to it, which is
+  // fair to somebody who chose them on purpose and no help to anybody else. The
+  // ranking is heuristics; the one measurement in the app outranks all of it.
+
+  {
+    const { advise, billions, BENCHMARKED } = require('../src/core/advise');
+    const { surveyModels } = require('../src/core/brain');
+
+    // A real machine's models, as Ollama actually reports them. Copied from one
+    // rather than invented, because the shape of the answer - "12.2B", a context
+    // of a million, two quantisations of the same model - is most of what this
+    // has to survive.
+    const REAL = [
+      { name: 'deepseek-r1:8b', params: '8.2B', ctx: 131072, capabilities: ['completion', 'thinking'] },
+      { name: 'llama3.1:8b', params: '8.0B', ctx: 131072, capabilities: ['completion', 'tools'] },
+      { name: 'qwen3:8b', params: '8.2B', ctx: 40960, capabilities: ['completion', 'tools', 'thinking'] },
+      { name: 'mistral:7b-instruct-v0.3-q4_K_M', params: '7.2B', ctx: 32768, capabilities: ['completion', 'tools'] },
+      { name: 'mistral-nemo:12b-instruct-2407-q5_K_M', params: '12.2B', ctx: 1024000, capabilities: ['completion', 'tools'] },
+      { name: 'moondream:latest', params: '1B', ctx: 2048, capabilities: ['completion', 'vision'] },
+      { name: 'phi4-mini-reasoning:3.8b', params: '3.8B', ctx: 131072, capabilities: ['completion'] },
+      { name: 'ultra-horror:latest', params: '15.9B', ctx: 8192, capabilities: ['completion'] },
+    ];
+
+    const full = advise(REAL);
+
+    // The benchmark beats the heuristics. Without this rule the file recommends
+    // its way straight past the one number anybody measured, on the strength of a
+    // tool-calling flag for tools the pet does not call.
+    assert.strictEqual(full.text.name, BENCHMARKED, `suggested ${full.text.name} over the benchmarked default`);
+    assert.ok(/eight/.test(full.text.why), 'the reason given is no longer the measurement');
+    assert.strictEqual(full.vision.name, 'moondream:latest', 'the only model that can see was not offered for diagrams');
+    assert.deepStrictEqual(full.notes, [], 'a complete set of models still had something to complain about');
+
+    // Take it away and the ranking has to stand on its own. Reasoning first, then
+    // the size that answers while you are still looking at the bubble.
+    const without = advise(REAL.filter((m) => m.name !== BENCHMARKED));
+    assert.strictEqual(without.text.name, 'qwen3:8b', `fell back to ${without.text.name}`);
+
+    // Everything the rules are supposed to rule out, one at a time.
+    const only = (name) => advise(REAL.filter((m) => m.name === name)).text;
+    assert.strictEqual(only('moondream:latest'), null, 'a 1B vision model was offered for reading a screen');
+    assert.strictEqual(only('phi4-mini-reasoning:3.8b'), null, '3.8B was offered, and it answers confidently and wrongly');
+    assert.strictEqual(only('ultra-horror:latest'), null, '15.9B was offered, and you would wait for it');
+    assert.ok(only('llama3.1:8b'), 'nothing at all is acceptable, so no advice can ever be given');
+
+    // A model with room for a screen and one without.
+    assert.strictEqual(
+      advise([{ name: 'tiny-ctx', params: '8B', ctx: 4096, capabilities: ['completion'] }]).text, null,
+      'a model that cannot hold a screen of OCR was offered for reading one'
+    );
+
+    // Nothing installed says nothing rather than guessing, and both gaps are
+    // named - "no recommendation" reads as the feature being broken.
+    const nothing = advise([]);
+    assert.strictEqual(nothing.text, null);
+    assert.strictEqual(nothing.vision, null);
+    assert.deepStrictEqual(nothing.notes, [], 'an empty Ollama was lectured about vision models');
+    const blind = advise([REAL[0]]);
+    assert.ok(blind.notes.some((n) => /moondream/.test(n)), 'no vision model installed and nothing said about it');
+    assert.ok(
+      advise([REAL[5]]).notes.some((n) => /billion parameters/.test(n)),
+      'nothing that can read a screen, and no reason given'
+    );
+
+    // Junk in has to come back as an answer rather than an exception: this runs
+    // on whatever an Ollama of any age reports.
+    for (const junk of [null, undefined, 'models', 42, [null], [{}]]) {
+      const out = advise(junk);
+      assert.ok(out && Array.isArray(out.notes), `advise(${JSON.stringify(junk)}) did not answer`);
+    }
+    // An older Ollama reports no capabilities at all. Size and context still rank.
+    assert.strictEqual(
+      advise([{ name: 'llama3.1:8b', params: '8.0B', ctx: 131072 }]).text.name, 'llama3.1:8b',
+      'an Ollama too old to report capabilities gets no advice at all'
+    );
+
+    assert.strictEqual(billions('8.2B'), 8.2);
+    assert.strictEqual(billions('700M'), 0.7);
+    assert.strictEqual(billions('1B'), 1);
+    for (const bad of ['', null, undefined, 'huge', '8', {}]) {
+      assert.strictEqual(billions(bad), 0, `${JSON.stringify(bad)} parsed as a size`);
+    }
+
+    // And the survey it is fed. One request, and every field optional, because
+    // which of them an Ollama reports depends on how old it is.
+    const tags = async (url) => (url.endsWith('/api/tags')
+      ? {
+        ok: true,
+        json: async () => ({
+          models: [
+            { name: 'a', size: 5, capabilities: ['completion', 'vision'], details: { parameter_size: '8B', context_length: 4096 } },
+            { model: 'b' },
+            { size: 9 },
+          ],
+        }),
+      }
+      : { ok: false });
+    const rows = await surveyModels({ fetch: tags });
+    assert.deepStrictEqual(
+      rows,
+      [
+        { name: 'a', capabilities: ['completion', 'vision'], params: '8B', ctx: 4096, size: 5 },
+        { name: 'b', capabilities: undefined, params: undefined, ctx: undefined, size: undefined },
+      ],
+      'the survey lost a field, or kept a model with no name'
+    );
+    // Same failure shape as everything else that talks to Ollama: an empty list,
+    // never a throw. This runs while the settings window is opening.
+    assert.deepStrictEqual(await surveyModels({ fetch: async () => { throw new Error('down'); } }), []);
+    assert.deepStrictEqual(await surveyModels({ fetch: async () => ({ ok: false }) }), []);
+
+    // The window is told, and told once: the names and the advice come out of one
+    // survey rather than two round trips for two shapes of the same answer.
+    const mjs = require('fs').readFileSync('./src/main.js', 'utf8');
+    assert.ok(mjs.includes('advice: advise(survey)'), 'the settings window is never told which model to use');
+    assert.ok(mjs.includes('models: survey.map((m) => m.name)'), 'the model list is fetched a second time');
+    const sjs = require('fs').readFileSync('./src/renderer/settings-renderer.js', 'utf8');
+    assert.ok(sjs.includes('suggested'), 'nothing in the list says which one is suggested');
+    // Advice, not action. A model is a taste as well as a measurement.
+    assert.ok(
+      !/modelSel\.value = (advice|pick)/.test(sjs),
+      'the settings window repoints the pet at a different model on its own'
+    );
+  }
+
   // The rejections parked by the synchronous sections above. Awaited before the
   // success line, so a failure cannot arrive after it.
   await Promise.all(globalThis.pendingRejections || []);

@@ -79,13 +79,17 @@ function paintPreviews() {
   el('pets').dataset.skin = skin;
 }
 
-function fillModels(models, selected, brain) {
+function fillModels(models, selected, brain, advice) {
   modelSel.replaceChildren();
   const names = models.length ? models : [selected];
+  const pick = advice && advice.text ? advice.text.name : null;
   for (const name of names) {
     const opt = document.createElement('option');
     opt.value = name;
-    opt.textContent = name;
+    // Marked in the list as well as explained under it. A recommendation you
+    // have to read a paragraph to act on is one you scroll past, and the whole
+    // problem this solves is nine names that all look equally plausible.
+    opt.textContent = name === pick ? `${name} — suggested` : name;
     modelSel.append(opt);
   }
   modelSel.value = selected;
@@ -94,7 +98,7 @@ function fillModels(models, selected, brain) {
   // switches on. Calling that an error is what makes people uninstall the app
   // rather than install Ollama.
   el('model-hint').textContent = models.length
-    ? 'Used for reading text off the screen.'
+    ? modelAdvice(advice, selected)
     : brain
       ? 'Could not list what is installed, so this may be incomplete.'
       : 'Nothing installed yet, so the pet cannot read your screen — everything else '
@@ -102,6 +106,26 @@ function fillModels(models, selected, brain) {
         + 'switches itself on.';
   el('model-hint').classList.remove('warn');
   clampHint(el('model-hint'));
+}
+
+/**
+ * What to say under the model list.
+ *
+ * Says nothing about the choice when the chosen one is already the suggestion -
+ * a panel that congratulates you on a setting you did not change is noise, and
+ * this window has enough to read.
+ */
+function modelAdvice(advice, selected) {
+  const said = ['Used for reading text off the screen.'];
+  const pick = advice && advice.text;
+  if (pick && pick.name !== selected) {
+    said.push(`${pick.name} would suit the pet better: ${pick.why}.`);
+  }
+  if (advice && advice.vision) {
+    said.push(`Diagrams go to ${advice.vision.name}.`);
+  }
+  for (const note of (advice && advice.notes) || []) said.push(note);
+  return said.join(' ');
 }
 
 function fillSkins(skins) {
@@ -489,7 +513,7 @@ el('close').addEventListener('click', () => window.config.close());
   keysPresent = data.keys || {};
   fillProviders(data.providers || [{ name: 'ollama', label: 'Ollama — on this machine', local: true }],
     current.provider);
-  fillModels(data.models, current.model, data.brain);
+  fillModels(data.models, current.model, data.brain, data.advice);
   fillPets(data.pets);
   fillSkins(data.skins);
   fillWear(data.wear || ['none'], current.wear);

@@ -26,7 +26,9 @@ What the app does is [README.md](README.md); why it behaves the way it does is
 - Timers, breaks, memory, skills, a voice, and dictation. The voice is a
   Windows one by default; drop a Piper binary and a voice model in a folder
   and the pet speaks with that instead, still entirely on your machine.
-- Two answering tiers, a settings window, and a Windows installer.
+- Two answering tiers, a settings window, and a Windows installer. The settings
+  window ranks the models you already have and says which one it would use, and
+  why, rather than listing nine names and leaving you to guess.
 - A `Download and install` button that replaces the app without the setup
   wizard.
 

@@ -890,6 +890,37 @@ camera OFF   stream:false 0x0       "take a photo" -> my eyes are shut! switch t
                                     wrote nothing
 ```
 
+## Which of your models
+
+Nine installed models is an ordinary state, and eight of them are the wrong
+answer — one is a vision model too small to read a page of text, one is a
+fine-tune somebody made for writing fiction, and two are the same 12B at
+different quantisations. Listing the names and leaving you to it is fair to
+somebody who chose them on purpose and no help at all to anybody else.
+
+So `advise.js` ranks them. The rules are about what the pet actually asks a
+model to do:
+
+| Rule | Because |
+| --- | --- |
+| at least 8k of context | A screen of OCR is a lot of prompt. Under that it is truncated before the model sees the bottom of the screen, which looks exactly like the model being stupid. |
+| roughly 6.5B to 14B | Under it the answers are confident and wrong, which is worse than none on a tool whose whole job is answering about something you can see. Over it you wait, and you are waiting at the bubble. |
+| reasoning preferred | It is what catches a screen that was only half read. The pet already switches thinking off for small talk and for timed reads, so the wait is charged only to the question you asked. |
+| a vision model is not a candidate | Different job. It gets its own line. |
+
+**And the measurement outranks all of it.** The model this app ships as its
+default was picked by running eight of them against real screens, and it was
+the only one that said so when OCR had mangled what it was asked about.
+Everything in the table above is reasoning about a name and a size. Without an
+explicit rule putting the benchmark first, the ranking cheerfully recommends
+its way past the one number anybody actually took — on the strength of a
+tool-calling flag for tools the pet does not call.
+
+It suggests and stops there. The list marks one entry, a sentence under it says
+why, and the setting does not move: a model is a taste as well as a
+measurement, and an app that quietly repoints your pet at a different one is
+worse than one that says what it thinks and leaves it alone.
+
 ## The voice it was given
 
 `robot.js` is written about Microsoft David, and the first line of it says so.
