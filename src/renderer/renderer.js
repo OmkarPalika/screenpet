@@ -489,6 +489,23 @@ const eyesEl = document.querySelector('.eyes');
 // fluttering.
 let blinkTimer = null;
 
+/**
+ * How long until the next one.
+ *
+ * Read fresh at every reschedule rather than settled once, because the rate is
+ * the whole point: people blink about twice as often while they are speaking,
+ * and noticeably less while they are watching something move. One random range
+ * covering all three is a slower metronome, not a face.
+ */
+function blinkGap() {
+  if (petEl.classList.contains('is-talking')) return rand(1200, 3400);
+  // The cursor moved a moment ago, so the pet is following it. Eyes tracking
+  // something hold open - blinking straight through it is what a screensaver
+  // does, and it is why an idle loop reads as an idle loop.
+  if (performance.now() - lastMoveAt < IDLE_GAZE_MS) return rand(3400, 9000);
+  return rand(2600, 7400);
+}
+
 function blink(again = Math.random() < 0.28) {
   clearTimeout(blinkTimer);
   eyesEl.classList.remove('is-blink');
@@ -497,8 +514,34 @@ function blink(again = Math.random() < 0.28) {
   setTimeout(() => eyesEl.classList.remove('is-blink'), 200);
   // A double blink lands close enough to read as one gesture rather than two.
   if (again) blinkTimer = setTimeout(() => blink(false), 320);
-  else blinkTimer = setTimeout(() => blink(), rand(2600, 7400));
+  else blinkTimer = setTimeout(() => blink(), blinkGap());
 }
+
+// The other half of the track: the blinks that are caused by something rather
+// than scheduled. Both triggers are edges on the pet's own attributes, watched
+// in one place instead of being called from each of the sites that cause them -
+// seven of which start or stop speech, and thirteen of which hide the eyes.
+//
+// Watching the result rather than the causes is also what keeps it honest. A
+// new expression that shuts the eyes gets its blink on the way out for free,
+// and has no way to forget to ask for one.
+let wasTalking = false;
+let hadEyes = true;
+
+new MutationObserver(() => {
+  // The mouth opening and closing. People blink on phrase boundaries, and it is
+  // the most missed one there is: a mouth that starts moving under a perfectly
+  // still face is a puppet with a hand in it.
+  const talking = petEl.classList.contains('is-talking');
+  // And the eyes opening. Waking up, letting go of a hug, coming out of a sit -
+  // every one of those ends with eyes that were shut being open again, and eyes
+  // do not come back open without passing through a blink on the way.
+  const eyes = getComputedStyle(eyesEl).display !== 'none';
+
+  if (talking !== wasTalking || (eyes && !hadEyes)) blink(false);
+  wasTalking = talking;
+  hadEyes = eyes;
+}).observe(petEl, { attributeFilter: ['class', 'data-mood', 'data-expr'] });
 
 // You changed windows. The pet looks over at whatever lit up, and now and then
 // leans across to see it properly. It stays looking there until the cursor

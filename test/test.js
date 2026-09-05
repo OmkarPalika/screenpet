@@ -3495,6 +3495,36 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     );
     assert.ok(/\.eyes\.is-blink\s*\{[^}]*animation:\s*blink/.test(css), 'nothing renders a blink at all');
     assert.ok(/is-blink/.test(rjs), 'the renderer never blinks the pet');
+    // Rate rather than constant. The gap is read at every reschedule so it can
+    // follow what the pet is doing - faster while it talks, slower while it is
+    // watching something move. One range covering all three is the metronome
+    // again, only quieter.
+    assert.ok(
+      rjs.includes('setTimeout(() => blink(), blinkGap())'),
+      'the blink gap is a fixed range again rather than read from what the pet is doing'
+    );
+    const gap = rjs.slice(rjs.indexOf('function blinkGap()'), rjs.indexOf('function blink(again'));
+    const mids = gap.split('rand(').slice(1).map((s) => {
+      const [lo, hi] = s.slice(0, s.indexOf(')')).split(',').map(Number);
+      return (lo + hi) / 2;
+    });
+    assert.equal(mids.length, 3, 'the blink rate no longer has three states');
+    const [talkGap, watchGap, restGap] = mids;
+    assert.ok(talkGap < restGap, 'the pet blinks no faster while it is speaking');
+    assert.ok(watchGap > restGap, 'the pet blinks just as often while it is watching something move');
+
+    // And the two blinks that are caused rather than scheduled. Both are read
+    // off the pet's own attributes rather than called from the twenty-odd places
+    // that cause them, so a new expression that shuts the eyes cannot forget to
+    // ask for the blink that opens them again.
+    const track = rjs.slice(rjs.indexOf('new MutationObserver('), rjs.indexOf('// You changed windows'));
+    assert.ok(track.includes('is-talking'), 'the pet no longer blinks when a phrase starts or ends');
+    assert.ok(track.includes('!hadEyes'), 'the pet no longer blinks when its eyes come back open');
+    assert.ok(
+      track.includes("attributeFilter: ['class', 'data-mood', 'data-expr']"),
+      'the blink track has stopped watching the attributes that hide the eyes'
+    );
+
 
     // Overshoot: the eye goes a little past where it was going and comes back.
     // That is the whole difference between a glance and a servo, and in a
