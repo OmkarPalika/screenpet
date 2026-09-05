@@ -1,0 +1,80 @@
+name: Bug report
+description: Something the pet does that it should not, or does not do that it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not paste anything private.** Screenshots of this app show your
+        screen. Redact before attaching, and never include an API key — the app
+        strips secrets before they reach a model, but an issue tracker strips
+        nothing.
+
+        Security bugs do not belong here. See
+        [SECURITY.md](https://github.com/OmkarPalika/screenpet/blob/main/SECURITY.md).
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce it
+      description: |
+        Numbered steps someone else can follow. "It sometimes does this" is
+        still worth filing — say how often, and what you were doing.
+      placeholder: |
+        1. Start the app with ...
+        2. Press ...
+        3. The pet ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `npm run doctor`
+      description: >
+        Reports what your machine can and cannot do. This is usually the answer,
+        so it is worth pasting even when the bug looks unrelated.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: screenpet version
+      description: Settings shows it, or the installer filename.
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How you installed it
+      options:
+        - Installer (setup.exe)
+        - Portable build
+        - From source (npm start)
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: Which Ollama model, if the bug involves reading or talking.
+      placeholder: deepseek-r1:8b
+
+  - type: textarea
+    id: anything
+    attributes:
+      label: Anything else
+      description: Console output, screenshots with the private parts removed.

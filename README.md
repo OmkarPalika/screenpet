@@ -5,7 +5,7 @@
 [![offline by default](https://img.shields.io/badge/network-off%20by%20default-2ea44f)](#verify-the-privacy-claim)
 [![platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4)](#which-machines-it-runs-on)
 [![node](https://img.shields.io/badge/node-18%2B-339933)](#install)
-[![licence](https://img.shields.io/badge/licence-all%20rights%20reserved-lightgrey)](LICENSE)
+[![licence](https://img.shields.io/badge/licence-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE)
 
 A desktop pet that lives in your tray and, when you want it to, reads your
 screen and answers the question on it. **On the default settings nothing leaves
@@ -852,7 +852,11 @@ and that is not the market this is built for.
 - [TERMS.md](TERMS.md) — the licence agreement, and the three things it asks of
   you: do not point it at material you have no right to, do not use it in an
   exam, and check an answer before you act on it.
-- [LICENSE](LICENSE) — copyright, and the short form of the above.
+- [LICENSE](LICENSE) — PolyForm Noncommercial 1.0.0. Free for anything that is
+  not a business; commercial licences by arrangement.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to file a bug, what a good pull
+  request looks like, and the licence terms your contribution comes under.
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — be decent to people, at length.
 - [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) — Electron, the Windows APIs,
   Ollama and the models, and the attribution the two free web services want.
 - [SECURITY.md](SECURITY.md) — how to report a hole, and the invariants worth

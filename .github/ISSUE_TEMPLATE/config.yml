@@ -1,0 +1,17 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/OmkarPalika/screenpet/blob/main/SECURITY.md
+    about: >
+      Do not file these publicly. Email instead - reporters are credited in the
+      release notes.
+  - name: Commercial licence
+    url: https://github.com/OmkarPalika/screenpet/blob/main/LICENSE
+    about: >
+      screenpet is free for any noncommercial use. Using it in or for a business
+      needs a separate licence; the LICENSE file says how to ask.
+  - name: Question about running it
+    url: https://github.com/OmkarPalika/screenpet/discussions
+    about: >
+      Not sure if it is a bug? Ask here. Run `npm run doctor` first - it answers
+      most of them.
