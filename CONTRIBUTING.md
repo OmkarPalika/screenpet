@@ -74,25 +74,26 @@ model; an issue tracker does not redact anything.
 See [SECURITY.md](SECURITY.md). Email instead, and you will be credited in the
 release notes.
 
-## Licence, and why this section is longer than you expect
+## Licence
 
-screenpet is **source-available, not open source**. The
-[licence](LICENSE) is PolyForm Noncommercial 1.0.0: anyone may use, change and
-redistribute it for any noncommercial purpose, and commercial use needs a
-separate licence from the author.
+screenpet is [MIT](LICENSE). Use it, change it, redistribute it, sell something
+built on it — keep the copyright notice and you are fine.
 
-By opening a pull request you agree that:
+By opening a pull request you agree that you wrote the contribution or have the
+right to submit it, and that you licence it under the same MIT terms. That is
+the whole agreement; there is no separate copyright assignment and no
+contributor licence agreement to sign.
 
-1. You wrote the contribution, or you have the right to submit it.
-2. You licence it to the project under the same PolyForm Noncommercial terms.
-3. You **also** grant Omkar Palika a perpetual, worldwide, irrevocable,
-   royalty-free right to use, modify and relicense your contribution, including
-   under commercial terms.
+It used to be PolyForm Noncommercial with a commercial tier. That was dropped in
+favour of MIT so the project could qualify for free code signing from the
+[SignPath Foundation](https://signpath.org/terms), which requires an
+OSI-approved licence with no commercial dual-licensing. An unsigned Windows
+download is a SmartScreen warning, and a warning costs more users than a
+commercial tier would ever have earned.
 
-Point 3 is there because commercial licences are sold for this software. Without
-it, one accepted patch would make the whole project impossible to license
-commercially — including the parts you did not write. Every project with a
-commercial tier needs this and most bury it; this one does not.
+The licences of the things screenpet talks to are a different question, and some
+of them are stricter — see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)
+before you ship anything built on this.
 
 If that is not acceptable to you, say so in the pull request rather than
 withdrawing it. A description of the bug and how to fix it is still worth having

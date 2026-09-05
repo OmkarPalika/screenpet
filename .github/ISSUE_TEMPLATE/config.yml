@@ -8,7 +8,7 @@ contact_links:
   - name: Commercial licence
     url: https://github.com/OmkarPalika/screenpet/blob/main/LICENSE
     about: >
-      screenpet is free for any noncommercial use. Using it in or for a business
+      screenpet is MIT licensed and free for any use, including in a business.
       needs a separate licence; the LICENSE file says how to ask.
   - name: Question about running it
     url: https://github.com/OmkarPalika/screenpet/discussions

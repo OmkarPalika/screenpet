@@ -96,6 +96,6 @@ Two obligations worth naming explicitly:
 
 ## screenpet itself
 
-Copyright © 2026 Omkar Palika. Licensed under the PolyForm Noncommercial
-License 1.0.0 — free for any noncommercial purpose, commercial use by
+Copyright © 2026 Omkar Palika. Licensed under the MIT License — free for any
+purpose including commercial use, provided the copyright notice travels with
 arrangement. See [LICENSE](LICENSE) and [TERMS.md](TERMS.md).

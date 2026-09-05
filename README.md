@@ -5,7 +5,7 @@
 [![offline by default](https://img.shields.io/badge/network-off%20by%20default-2ea44f)](#verify-the-privacy-claim)
 [![platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4)](#which-machines-it-runs-on)
 [![node](https://img.shields.io/badge/node-18%2B-339933)](#install)
-[![licence](https://img.shields.io/badge/licence-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE)
+[![licence](https://img.shields.io/badge/licence-MIT-blue)](LICENSE)
 
 A desktop pet that lives in your tray and, when you want it to, reads your
 screen and answers the question on it. **On the default settings nothing leaves
@@ -201,7 +201,7 @@ read sentence is worse than one that squeaks.
 
 | | Licence | Matters because |
 | --- | --- | --- |
-| `piper1-gpl` (current engine) | GPL-3.0 | screenpet spawns it as a separate process and does not link it, bundle it or ship it. That is what keeps GPL off this project's own [PolyForm Noncommercial](LICENSE) terms — and it stays true only while it is a binary **you** went and got, in a folder of your own. |
+| `piper1-gpl` (current engine) | GPL-3.0 | screenpet spawns it as a separate process and does not link it, bundle it or ship it. That is what keeps GPL off this project's own [MIT](LICENSE) terms — and it stays true only while it is a binary **you** went and got, in a folder of your own. |
 | `rhasspy/piper` (the older standalone build) | MIT | The Windows `.exe` most people will use. |
 | `en_US-kristin-medium` | MIT | Trained on public-domain LibriVox recordings. |
 | Other Piper voices | **Varies — check each one** | Many are CC BY 4.0, which is fine but wants attribution. Some, `lessac` among them, carry Blizzard Challenge terms that are not free for every use. Each voice ships a `MODEL_CARD` next to it saying which. |
@@ -913,8 +913,10 @@ and that is not the market this is built for.
 - [TERMS.md](TERMS.md) — the licence agreement, and the three things it asks of
   you: do not point it at material you have no right to, do not use it in an
   exam, and check an answer before you act on it.
-- [LICENSE](LICENSE) — PolyForm Noncommercial 1.0.0. Free for anything that is
-  not a business; commercial licences by arrangement.
+- [LICENSE](LICENSE) — MIT. Do what you like with it, including commercially;
+  keep the copyright notice. The things it does **not** cover are in
+  [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), and some of those are
+  stricter.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to file a bug, what a good pull
   request looks like, and the licence terms your contribution comes under.
 - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — be decent to people, at length.

@@ -4,7 +4,7 @@
   "private": true,
   "description": "Desktop pet that answers what is on your screen. Fully offline.",
   "author": "Omkar Palika",
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/OmkarPalika/screenpet.git"

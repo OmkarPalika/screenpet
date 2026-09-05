@@ -12,31 +12,29 @@ app does with your data and forms part of this agreement.
 
 ## 1. Licence
 
-The app and its source are licensed under the **PolyForm Noncommercial License
-1.0.0**, which is reproduced in full in [LICENSE](LICENSE). That document is the
-grant of rights; this one covers how you may use what it gives you. Where the
-two disagree about what you are permitted to do with the software itself,
-[LICENSE](LICENSE) wins.
+The app and its source are licensed under the **MIT License**, which is
+reproduced in full in [LICENSE](LICENSE). That document is the grant of rights;
+this one covers how you may use what it gives you. Where the two disagree about
+what you are permitted to do with the software itself, [LICENSE](LICENSE) wins,
+and it is deliberately permissive.
 
-In short: you may use, change and redistribute the app for any noncommercial
-purpose, which expressly includes personal use, study, research, hobby projects,
-charities, schools and government. **Using it in or for a business is not
-covered.** Commercial licences are granted case by case — the end of
-[LICENSE](LICENSE) says how to ask.
+In short: use it, change it, redistribute it, build a business on it. The one
+condition is that the copyright notice and the licence travel with any copy you
+pass on.
 
-The app is licensed, not sold. We retain all copyright and other rights in it
-that the licence does not grant you. Nothing here transfers ownership of
-anything.
+That covers the app. It does **not** cover the things the app talks to — the
+speech engine you install for it, the models you run, the services the optional
+network features contact — and some of those are stricter. See
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) before you ship something built
+on this.
 
 ## 2. What you may not do
 
 You may not:
 
-- use the app, or anything derived from it, for a commercial purpose without a
-  separate licence from us;
-- sublicense it, or transfer your licence to anyone else;
-- remove or alter any copyright, licence or attribution notice — if you pass a
-  copy on, [LICENSE](LICENSE) and its `Required Notice:` line go with it;
+- remove or alter the copyright notice or the licence text — if you pass a copy
+  on, [LICENSE](LICENSE) goes with it. That is the only thing the licence itself
+  asks of you;
 - use the app to break the law, to infringe anyone's rights, or to access
   material you are not permitted to see;
 - use the app to capture, read or process another person's screen, likeness or
@@ -48,8 +46,8 @@ You may not:
   employer, publisher or client require otherwise.
 
 Reading, modifying and building on the source is expressly permitted for any
-noncommercial purpose — see [CONTRIBUTING.md](CONTRIBUTING.md) if you would
-rather send the change back than keep it.
+purpose at all — see [CONTRIBUTING.md](CONTRIBUTING.md) if you would rather send
+the change back than keep it.
 
 ## 3. What you point it at
 
