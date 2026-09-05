@@ -765,7 +765,7 @@ app.whenReady().then(async () => {
       }
       if (tipped && !was) window.__sip.tips += 1;
       was = tipped;
-      const h = document.getElementById('water').style.height;
+      const h = document.getElementById('water').style.top;
       if (level !== null && h !== level) {
         window.__sip.steps += 1;
         if (!tipped) window.__sip.upright += 1;
@@ -782,7 +782,8 @@ app.whenReady().then(async () => {
       counting: document.getElementById('counting').textContent,
       drinking: document.getElementById('pet').classList.contains('is-drinking'),
       glass: !document.getElementById('glass').hidden,
-      water: parseFloat(document.getElementById('water').style.height),
+      // How full, out of a surface measured from the top of the glass down.
+      water: 100 - parseFloat(document.getElementById('water').style.top),
       off: Math.abs((p.left + p.width / 2) - window.innerWidth / 2),
     };
   })()`);
@@ -820,13 +821,30 @@ app.whenReady().then(async () => {
     sip.drift < 2,
     `the water tilts ${sip.drift.toFixed(0)} degrees with the glass, so it is painted on rather than in it`
   );
+  // Level is not enough on its own: the water also has to be bigger than the
+  // glass in every direction, because the glass is what gives it its shape. A
+  // water box the size of the glass only lines up with it while it is upright -
+  // tipped, the two overlap across a wedge, the low corner stays dry and what
+  // is left reads as a band hanging across the middle rather than as water.
+  // Measured off the layout rather than the painted box, so it holds whatever
+  // part of the tip this lands in.
+  const spill = await js(`(() => {
+    const w = document.getElementById('water');
+    const b = document.querySelector('.glass-body');
+    return { w: w.offsetWidth / b.offsetWidth, h: w.offsetHeight / b.offsetHeight };
+  })()`);
+  check(
+    spill.w > 1.5 && spill.h > 1.5,
+    `the water is ${spill.w.toFixed(1)} by ${spill.h.toFixed(1)} times the glass, so a tipped glass has a dry corner`
+  );
+
   check(
     sip.steps >= 2 && sip.upright === 0,
     `the level moved ${sip.steps} times and ${sip.upright} of those were with the glass nowhere near the pet, so it is draining on a clock rather than being drunk`
   );
   check(emptied, 'the glass never empties, so the pet is still sipping at nothing when the break ends');
   check(
-    parseFloat(await js(`document.getElementById('water').style.height`)) === 0,
+    parseFloat(await js(`document.getElementById('water').style.top`)) === 100,
     'the glass came down with water still in it'
   );
   check(

@@ -1370,6 +1370,14 @@ const CROSS_MS = 2600;
 // showing and reads as a blue rectangle rather than as a glass with water in it.
 const FULL = 82;
 
+// How full the glass is, as the top edge of a half plane rather than the height
+// of a block: see .glass i in style.css. Empty is a surface at the bottom of the
+// glass, not a block of no height, and those are the same picture only while the
+// glass is upright.
+const level = (fill) => {
+  water.style.top = `${(100 - fill).toFixed(1)}%`;
+};
+
 // Raising the glass to the mouth, matching sip-raise in style.css. Everything
 // else in the drink is delayed by it, because a pet that starts sipping before
 // the glass arrives is drinking air.
@@ -1474,7 +1482,7 @@ function startBreak(kind, seconds) {
       petEl.style.setProperty('--sip', `${Math.round(sipMs)}ms`);
       petEl.style.setProperty('--raise', `${RAISE_MS}ms`);
       petEl.style.setProperty('--gulp', `${Math.round(sipMs * SWALLOW_FOR)}ms`);
-      water.style.height = `${FULL}%`;
+      level(FULL);
       glass.hidden = false;
       petEl.classList.add('is-drinking');
 
@@ -1484,7 +1492,7 @@ function startBreak(kind, seconds) {
       const swallow = () => {
         if (!breaking) return;
         gulp += 1;
-        water.style.height = `${Math.max(0, ((gulps - gulp) / gulps) * FULL).toFixed(1)}%`;
+        level(Math.max(0, ((gulps - gulp) / gulps) * FULL));
         if (gulp < gulps) return;
 
         // Finished it. Everything stops and the glass comes back down - a pet
@@ -1526,7 +1534,7 @@ function endBreak() {
   petEl.classList.remove('is-drinking', 'is-meditating');
   glass.classList.remove('is-empty');
   glass.hidden = true;
-  water.style.height = `${FULL}%`;
+  level(FULL);
   for (const v of ['--sip', '--raise', '--gulp']) petEl.style.removeProperty(v);
   veil.hidden = true;
   counting.hidden = true;

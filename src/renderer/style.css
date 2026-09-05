@@ -1176,8 +1176,6 @@ html, body {
 .glass-level {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: flex-end;
   transform-origin: 0% 0%;
   animation: sip-level var(--sip, 3800ms) ease-in-out var(--raise, 520ms) infinite;
 }
@@ -1190,13 +1188,29 @@ html, body {
 
 /* The level, set from JS a mouthful at a time. The transition is short and
    lands inside the tip, so the water goes down while the glass is at the pet's
-   mouth rather than drifting down on its own between drinks. */
+   mouth rather than drifting down on its own between drinks.
+
+   A half plane rather than a box the size of the glass, and that is the whole
+   trick. The frame above is counter rotated back to level while the glass turns
+   away from it, so the two only ever overlap across part of the tipped
+   interior: water shaped like the upright glass leaves the low corner dry and
+   hangs across the middle as a band, which is what it was doing. Wider and
+   deeper than the glass can reach in any position, so the water decides only
+   where its own surface is and the glass decides everything else about the
+   shape. Which is also the physics: a surface is a line, and the container is
+   what turns it into a shape.
+
+   The gradient is pinned in pixels for the same reason - a percentage over a
+   box three times the height of the glass is a flat wash. */
 .glass i {
-  display: block;
-  width: 100%;
-  background: linear-gradient(#7ecdea, #4fb0d8);
+  position: absolute;
+  left: -100%;
+  right: -100%;
+  bottom: -200%;
+  top: var(--level, 18%);
+  background: linear-gradient(#7ecdea 0, #4fb0d8 44px);
   border-top: 1.5px solid rgb(226 248 255 / 0.85);
-  transition: height var(--gulp, 600ms) cubic-bezier(0.4, 0, 0.5, 1);
+  transition: top var(--gulp, 600ms) cubic-bezier(0.4, 0, 0.5, 1);
 }
 
 /* One streak down the near side. Cheap, and it is the whole difference between
