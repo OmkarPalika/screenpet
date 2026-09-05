@@ -13,7 +13,7 @@ const path = require('path');
 const fs = require('fs');
 
 // This file lives in test/, the UI it loads lives in src/, and the PNGs it
-// writes belong at the top of the repository, which is where the README looks.
+// writes belong at the top of the repository, which is where the docs look.
 const SRC = path.join(__dirname, '..', 'src');
 const ROOT = path.join(__dirname, '..');
 

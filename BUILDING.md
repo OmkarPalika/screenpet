@@ -146,7 +146,8 @@ The two in bold that are missing rather than different are both a recogniser
 holding the microphone open. macOS has `SFSpeechRecognizer`, but it goes to
 Apple's servers unless asked very specifically not to, and this app does not
 ship a maybe on that question. whisper.cpp and Parakeet run locally on macOS
-exactly as they do on Windows, so dictation still works — see the README.
+exactly as they do on Windows, so dictation still works — see
+[Out loud, and back](DESIGN.md#out-loud-and-back).
 
 ## Linux and everything else
 

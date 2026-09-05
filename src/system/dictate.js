@@ -5,7 +5,7 @@
 // that goes down a pipe and is never written anywhere.
 //
 // Why this exists at all, measured on fourteen phrases spoken into the actual
-// microphone (see the benchmark in the README):
+// microphone (see the benchmark in DESIGN.md):
 //
 //   System.Speech        88% word error rate, and 14 of 14 results scored under
 //                        listen.ps1's own 0.30 confidence floor - so the feature
