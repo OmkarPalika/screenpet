@@ -1495,7 +1495,6 @@ app.whenReady().then(async () => {
       fired,
     };
   } catch (e) { return { loaded: false, why: String(e && e.message || e) }; } })()`);
-  console.error("DBG", JSON.stringify(sang));
   check(sang.loaded, 'singing.js did not survive being loaded beside the other scripts');
   check(sang.vowel, 'a held vowel is not heard as singing in the real renderer');
   check(!sang.hiss, 'a flat hiss is heard as singing in the real renderer');
