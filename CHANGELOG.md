@@ -68,6 +68,13 @@ the version was tagged.
   twice. Identical payloads arriving within a tenth of a second are now collapsed
   to one.
 
+- Sending was refused whenever no interface would join the multicast group,
+  which meant a named address did nothing on a network that blocks multicast —
+  guest Wi-Fi, plenty of corporate ones, and precisely the networks somebody
+  reaches for the address list on. Whether the socket is usable and whether the
+  group accepted us are now two separate facts, and only the group send depends
+  on the second.
+
 - The playdate socket binds `0.0.0.0` and so received unicast as well as its
   multicast group, which meant anything that could reach the port had its message
   parsed. A source address must now be on one of this machine's own networks or

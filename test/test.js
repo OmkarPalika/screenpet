@@ -4753,6 +4753,33 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       'the interface cache never records when it was filled, so it never hits'
     );
 
+    // Sending must not be gated on the multicast group having been joined.
+    //
+    // Guest Wi-Fi and plenty of corporate networks block multicast, and that is
+    // the exact network somebody reaches for the address list on - so a socket
+    // that refuses to send because no interface would join the group would fail
+    // precisely the case the list exists for. `live` is "the socket is usable",
+    // `joined` is "the group accepted us", and only the group send may depend on
+    // the second.
+    assert.ok(
+      lanjs.includes("if (!live || typeof text !== 'string') return false;"),
+      'sending is refused when the multicast group could not be joined'
+    );
+    assert.ok(
+      /if \(joined\) \{\s*\n(?:.*\n)?\s*try \{\s*\n\s*sock\.send\(text, PORT, GROUP\);/.test(lanjs),
+      'the group send is attempted on a group that was never joined'
+    );
+    assert.ok(
+      lanjs.includes('if (!joined && !far.length) fail('),
+      'a machine that cannot do multicast is told it failed even with a friend named'
+    );
+    // And `live` has to actually be set, or nothing sends at all.
+    assert.ok(lanjs.includes('live = true;'), 'the socket is never marked usable');
+    assert.ok(
+      /live = false;\s*\n\s*seen\.clear\(\);/.test(lanjs),
+      'the socket is still marked usable after being closed'
+    );
+
     // main.js has to hand the list over, or the box in settings does nothing.
     assert.ok(
       mjs.includes('peers: settings.playdateWith'),

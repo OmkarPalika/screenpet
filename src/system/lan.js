@@ -91,7 +91,16 @@ const MAX_SEEN = 32;
  */
 function open({ onMessage, onError = () => {}, maxBytes = 512, peers = [] } = {}) {
   let sock = null;
+  // Two separate facts that used to be one, which was a bug.
+  //
+  // `joined` is whether any interface accepted the multicast group. `live` is
+  // whether the socket is bound and usable at all. Sending was gated on the
+  // first, so on a network that blocks multicast - guest Wi-Fi, plenty of
+  // corporate ones - a named address would have been refused as well, even
+  // though nothing about reaching it needs a group membership. That is the
+  // exact network somebody reaches for the address list on.
   let joined = false;
+  let live = false;
   // Validated once, here, rather than trusted from settings. Everything below
   // compares against this list and never against what was passed in.
   const far = peerRules.list(peers);
@@ -127,6 +136,7 @@ function open({ onMessage, onError = () => {}, maxBytes = 512, peers = [] } = {}
     fail(err);
     try { sock.close(); } catch { /* already gone */ }
     joined = false;
+    live = false;
   });
 
   sock.on('message', (buf, rinfo) => {
@@ -211,7 +221,11 @@ function open({ onMessage, onError = () => {}, maxBytes = 512, peers = [] } = {}
     // being heard back. setMulticastInterface per send would fix it, at the cost
     // of a send loop and a socket option on the hot path; worth doing only if
     // somebody reports it.
-    if (!joined) fail(new Error('no interface would join the group'));
+    // Usable from here whatever the group did. A machine that could not join is
+    // one that will not meet the pet in the next room; it can still reach the
+    // one you named.
+    live = true;
+    if (!joined && !far.length) fail(new Error('no interface would join the group'));
   });
 
   try {
@@ -221,15 +235,19 @@ function open({ onMessage, onError = () => {}, maxBytes = 512, peers = [] } = {}
   }
 
   return {
-    ready: () => joined,
+    ready: () => live,
     send(text) {
-      if (!joined || typeof text !== 'string') return false;
+      if (!live || typeof text !== 'string') return false;
       let sent = false;
-      try {
-        sock.send(text, PORT, GROUP);
-        sent = true;
-      } catch (err) {
-        fail(err);
+      // Only when the group was actually joined. Sending to a group nobody
+      // joined is a packet onto a network that already refused to carry it.
+      if (joined) {
+        try {
+          sock.send(text, PORT, GROUP);
+          sent = true;
+        } catch (err) {
+          fail(err);
+        }
       }
       // One send each rather than anything cleverer. Eight is the ceiling on the
       // list and a beacon is one small packet every three seconds, so the whole
@@ -249,6 +267,7 @@ function open({ onMessage, onError = () => {}, maxBytes = 512, peers = [] } = {}
     },
     close() {
       joined = false;
+      live = false;
       seen.clear();
       echoes.clear();
       try { sock.dropMembership(GROUP); } catch { /* never joined */ }
