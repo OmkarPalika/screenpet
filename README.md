@@ -217,6 +217,19 @@ put the names of everyone you play with into a DNS query, and that would be the
 one part of this feature that leaves your machine without you choosing to send
 it.
 
+**No account, if you would rather not have one.** Tailscale is a suggestion, not
+a dependency. Anything that gives you an address works: a hand-rolled WireGuard
+config, a forwarded UDP port on your router, or nothing at all if the two
+machines are on one network and you would simply rather name each other than
+rely on multicast. The pet replies to whichever port a friend's packets actually
+arrive from, so **one** end forwarding a port is enough for both directions.
+
+The case none of this solves is both ends behind carrier-grade NAT, where
+neither can be reached first — if your router's external address starts
+`100.64.`–`100.127.`, that is you. Getting through that needs a third party both
+ends can reach, which is what the mesh services are and why they ask for an
+account.
+
 Two things worth knowing before you switch it on:
 
 - **The name you gave your pet crosses.** Anyone on that network running the app

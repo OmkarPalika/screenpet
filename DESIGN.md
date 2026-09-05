@@ -1705,6 +1705,37 @@ reason and the same shape of one: `0177.0.0.1` is 127.0.0.1 to a parser that
 reads octal and something else to one that does not, and an allowlist entry that
 means two things depending on who reads it is not an allowlist entry.
 
+### Answering where they actually are
+
+Sending to a fixed port is the obvious thing and it is wrong for exactly the
+people this feature is for. A machine behind a router is not reachable on port
+41234; its router rewrote the source port on the way out, and that rewritten
+port is the only way back in, for as long as the mapping lasts.
+
+So the first version needed *both* ends to forward a port, which is two router
+configurations to get two cartoon animals to wave. Noting which port a friend's
+packets actually came from cuts that to one: their packet opens a mapping, we
+notice the port it came out of, and we aim at that. The far end never has to be
+reachable first.
+
+Thirty seconds, because a router closes an idle UDP mapping in about a minute
+and a beacon every three seconds holds one open - so the window only has to
+outlast an ordinary gap, and then lapse rather than keep aiming at a hole that
+has closed.
+
+The thing to check in a mechanism like this is what it lets a peer redirect. The
+answer is nothing: the port is stored against the address it arrived from, and
+only ever used to talk to that same address. The most a friend can do is move
+which port on their own machine the pet talks to. It is learned only for
+addresses already in the list, and only after the source check, so nobody
+unlisted can put an entry in the table at all.
+
+What it does not fix is both ends behind carrier-grade NAT, where neither can be
+reached first and there is no mapping to notice. That genuinely needs a third
+party both ends can reach, which is what the mesh services are and why they want
+an account. Naming the limit is the honest version; pretending a port trick
+solves NAT is how this feature would acquire a server six months from now.
+
 ### One message, two routes
 
 The first thing anybody will do is add the address of a machine on their own

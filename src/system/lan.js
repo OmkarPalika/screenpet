@@ -108,6 +108,10 @@ function open({ onMessage, onError = () => {}, maxBytes = 512, peers = [] } = {}
   const seen = new Map();
   // payload -> last accepted, for the duplicate check in onMessage.
   const echoes = new Map();
+  // far address -> { port, at }: which port that friend's packets actually came
+  // out of. Kept in memory only and never written anywhere - see the note on
+  // backPort in core/peers.js for why it exists and what it cannot do.
+  const backTo = new Map();
   // This machine's own networks, cached for IFACE_TTL_MS. See the note there.
   let ifaces = [];
   let ifacesAt = 0;
@@ -169,6 +173,21 @@ function open({ onMessage, onError = () => {}, maxBytes = 512, peers = [] } = {}
     // Keyed on the payload for that reason, and windowed rather than remembered:
     // two copies of one packet land milliseconds apart, while a real repeat is
     // a beacon three seconds later or a button press held off for two.
+    // Where this friend is actually reachable.
+    //
+    // A machine behind a router is not on the port we send to; it is on whatever
+    // port the router rewrote its outgoing packet to, and only while that
+    // mapping lasts. Noting it means one end forwarding a port is enough for
+    // both directions, where before both ends had to.
+    //
+    // Only for addresses in the list - a neighbour on this network is reached
+    // through the group and has no mapping to learn - and only after `allows`
+    // above, so nothing unlisted can put an entry here.
+    if (far.includes(from)) {
+      const port = peerRules.cleanPort(rinfo && rinfo.port);
+      if (port !== null) backTo.set(from, { port, at: now });
+    }
+
     const text = buf.toString('utf8');
     if (now - (echoes.get(text) || 0) < MIN_GAP_MS) return;
     if (echoes.size >= MAX_SEEN) echoes.clear();
@@ -255,9 +274,10 @@ function open({ onMessage, onError = () => {}, maxBytes = 512, peers = [] } = {}
       //
       // A failure here is per-address and does not stop the rest: a friend whose
       // machine is off is the ordinary case, not an error.
+      const now = Date.now();
       for (const addr of far) {
         try {
-          sock.send(text, PORT, addr);
+          sock.send(text, peerRules.backPort(backTo.get(addr), now, PORT), addr);
           sent = true;
         } catch (err) {
           fail(err);
@@ -270,6 +290,7 @@ function open({ onMessage, onError = () => {}, maxBytes = 512, peers = [] } = {}
       live = false;
       seen.clear();
       echoes.clear();
+      backTo.clear();
       try { sock.dropMembership(GROUP); } catch { /* never joined */ }
       try { sock.close(); } catch { /* already closed */ }
     },

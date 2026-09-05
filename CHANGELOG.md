@@ -56,6 +56,15 @@ the version was tagged.
   of them. Hostnames are refused on purpose: resolving one would put the names of
   everyone you play with into a DNS query.
 
+- Replies now go to the port a friend's packets actually arrived from, held for
+  thirty seconds, rather than always to the well-known one. A machine behind a
+  router is reachable only on the port that router rewrote its packet to, so
+  before this both ends had to forward a port for anything to work in both
+  directions; one end is now enough. Kept in memory only, learned only for
+  addresses already in your list, and used only for the address it was learned
+  from. Both ends behind carrier-grade NAT is still not solvable without a third
+  party, which is what a mesh service is.
+
 - `friends.json`: a random id for this install and the ids of up to 24 pets it
   has met, so the confetti happens once per friend rather than every time. No
   names, no addresses, no record of when anyone was online. Only written while
