@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**screenpet** · version 0.1.0 · effective 14 August 2026
+**screenpet** · version 0.1.0 · effective 5 September 2026
 
 ## The short version
 
@@ -90,9 +90,9 @@ asking the pet to take a photo saves a JPEG to your Pictures folder, in a
 
 ## What is stored on your computer
 
-All of it in one folder, readable and deletable by you at any time:
+Almost all of it in one folder, readable and deletable by you at any time:
 `%APPDATA%\screenpet\` on Windows, `~/Library/Application Support/screenpet/`
-on macOS.
+on macOS. The one exception is the update download, below.
 
 | File | What is in it |
 | --- | --- |
@@ -101,6 +101,14 @@ on macOS.
 | `memory.json` | Only what you explicitly said "remember ..." about, plus counters. See below |
 | `timers.json` | Timers and reminders you set |
 | `keys.json` | API keys for a hosted provider, if you chose one — wrapped with Windows DPAPI on Windows, or a Keychain-held key on macOS, either way under your user account |
+
+If you press `Download and install`, the installer is written outside that
+folder, because the updater that fetches it keeps its own cache:
+`%LOCALAPPDATA%\screenpet-updater\` on Windows. It holds the downloaded
+installer and a small file recording which version it is — no settings, no
+screen text, nothing about you — and it is a copy of a file published on the
+releases page, not anything this machine produced. Nothing is written there
+unless you press that button.
 
 The text of the **last** screen read is kept in the app's memory so that a
 follow-up question about it can be answered. It is the redacted copy, capped,
@@ -117,8 +125,9 @@ way in by the same patterns that guard the model prompt, capped at 40 notes,
 emptied by "forget everything", and deleted outright if you switch the memory
 setting off.
 
-To remove everything screenpet has ever stored: uninstall it and delete that
-folder.
+To remove everything screenpet has ever stored: uninstall it, delete that
+folder, and delete `%LOCALAPPDATA%\screenpet-updater\` if you ever used the
+update button.
 
 ## What can leave this computer
 
