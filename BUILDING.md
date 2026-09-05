@@ -25,6 +25,13 @@ things have to be true for it to find anything:
    what electron-updater reads, and it holds the SHA-512 the download is checked
    against. `npm run dist` does not produce it; publishing does.
 
+Write the release notes first. Move the `Unreleased` section of
+[CHANGELOG.md](CHANGELOG.md) under the version you are about to tag - `npm test`
+fails if `package.json` names a version the changelog has no section for, so
+this is checked rather than remembered. The privacy policy undertakes to
+announce anything that widens what leaves the machine in the notes for the
+version that introduces it; that promise is kept here or not at all.
+
 ```bash
 npm version patch
 ```

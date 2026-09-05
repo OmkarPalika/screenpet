@@ -3307,6 +3307,17 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       assert.ok(fs.existsSync(`./${f}`), `${f} is listed in the build but is not in the repository`);
     }
 
+    // The privacy policy undertakes to announce anything that widens what leaves
+    // the machine "in the release notes for the version that introduces it", and
+    // the security policy credits reporters in them. A version bumped without
+    // its section is a promise nobody kept, and `npm version` is one command -
+    // easy to run and walk away from.
+    const log = fs.readFileSync('./CHANGELOG.md', 'utf8');
+    assert.ok(
+      log.includes(`## [${pkg.version}]`),
+      `CHANGELOG.md has no section for ${pkg.version}; write the release notes before tagging it`
+    );
+
     // The privacy policy prints a table of every file the app writes and then
     // says deleting that folder removes everything. A sixth file added without
     // a row makes both of those sentences false, and a privacy policy that
