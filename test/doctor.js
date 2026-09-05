@@ -47,7 +47,7 @@ const reachable = (url) => new Promise((resolve) => {
 (async () => {
   const ollama = await reachable('http://127.0.0.1:11434/api/tags');
   console.log(`ollama          ${tick(ollama)}          http://127.0.0.1:11434`);
-  if (!ollama) console.log('                       not answering - the pet cannot think without it');
+  if (!ollama) console.log('                       not answering - so the pet cannot read screens');
 
   console.log('');
   const problems = missing + (ollama ? 0 : 1);
@@ -55,7 +55,10 @@ const reachable = (url) => new Promise((resolve) => {
     console.log('everything this app needs is here.');
   } else {
     if (missing) console.log(`${missing} capability(s) this host does not have; the pet says so when asked.`);
-    if (!ollama) console.log('ollama is not running, which stops the pet answering anything at all.');
+    if (!ollama) {
+      console.log('ollama is not running, so the pet cannot read your screen. It still eats,');
+      console.log('sleeps, wanders, chats and takes breaks - reading is the only part gated on it.');
+    }
   }
   process.exitCode = problems ? 1 : 0;
 })();
