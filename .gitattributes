@@ -1,0 +1,15 @@
+# Committed as LF and checked out as LF, on every platform. Without this a
+# contributor whose core.autocrlf is unset commits CRLF and the next person's
+# diff is the whole file rather than the line that changed. The index is
+# already uniformly LF, so this pins what is true rather than changing it.
+#
+# The .ps1 scripts are LF as well. Windows PowerShell has never minded, and
+# splitting line endings by extension is how a repository ends up with exactly
+# one machine that can produce a clean diff.
+* text=auto eol=lf
+
+# Not text. Diffing or converting these corrupts them.
+*.png  binary
+*.gif  binary
+*.ico  binary
+*.icns binary
