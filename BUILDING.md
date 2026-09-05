@@ -58,6 +58,13 @@ Bump the version before every release. electron-updater compares semver, so a
 release that reuses a version number is invisible to everyone already running
 it.
 
+None of that has to happen on your machine. `.github/workflows/release.yml`
+runs the same `npm run release` on a Windows runner whenever a `v*` tag is
+pushed, with `GITHUB_TOKEN` supplied by Actions, so `git push --tags` is the
+whole release once the repository exists. It refuses to build when the tag and
+`package.json` disagree, because electron-builder names the release after
+`package.json` and a mismatch produces a release the update button cannot see.
+
 ## Signing the Windows build
 
 Unsigned, SmartScreen warns on first install, and electron-updater skips its
