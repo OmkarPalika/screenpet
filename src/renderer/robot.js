@@ -28,6 +28,14 @@
 // It is all AudioNodes. No library, no impulse response file, nothing to load
 // before the pet can talk.
 
+// A voice the pet was given rather than one it was stuck with, played back a
+// little quick. Not the slow-then-fast trick below - piper has its own speed
+// knob and the two builds spell it differently, so this is done here where it
+// works on both. About two semitones up and a tenth shorter: enough that a
+// small creature is talking rather than an adult standing in the room, little
+// enough that it is still the voice you chose.
+const PET_SPEED = 1.12;
+
 // SAPI's rate scale, and the playback rate that undoes it. -2 and 1.22 rather
 // than -6 and 1.9: past about a quarter, slow synthesis stops being the same
 // voice slowed down and starts being a different, mushier reading of the line,
@@ -65,6 +73,32 @@ function grit(amount = 2.2) {
 }
 
 /**
+ * The two chains, by the engine that produced the audio.
+ *
+ * Everything above is written about Microsoft David, and it is a rescue rather
+ * than a taste: a pet that sounds like a robot on purpose beats one that sounds
+ * like a kiosk by accident. Hand it a voice that already has a throat and most
+ * of it becomes vandalism - so the ring modulator, which is the one effect that
+ * is unmistakably not a throat, comes off entirely, and the grit and the case
+ * come most of the way down.
+ *
+ * What is left is the part that was never about the robot: the small body. A
+ * lift so it is a small creature, and a band and a 13ms case so it is coming
+ * out of something the size of a mug. That is the pet - the robot was only ever
+ * how it was reached with the voice Windows gives you.
+ */
+const VOICE = {
+  sapi: {
+    speed: SPEED, ring: RING_MIX, lowCut: LOW_CUT, highCut: HIGH_CUT,
+    grit: 2.2, box: BOX_FEEDBACK, gain: 0.5,
+  },
+  piper: {
+    speed: PET_SPEED, ring: 0, lowCut: 140, highCut: 7600,
+    grit: 1.15, box: 0.1, gain: 0.85,
+  },
+};
+
+/**
  * Play one line of speech, robot and all.
  *
  * @param {BaseAudioContext} ctx
@@ -75,26 +109,32 @@ function grit(amount = 2.2) {
  *   an event, because a mouth still moving after the sound stopped is the one
  *   failure anybody notices.
  */
-function robot(ctx, buffer, dest = ctx.destination) {
+function robot(ctx, buffer, dest = ctx.destination, chain = VOICE.sapi) {
   const source = ctx.createBufferSource();
   source.buffer = buffer;
-  source.playbackRate.value = SPEED;
+  source.playbackRate.value = chain.speed;
 
   // Ring modulation: the oscillator drives a gain stage whose own gain is zero,
   // so what comes out is the product of the two rather than a sum. A gain
   // AudioParam adds its inputs to its value, which is exactly the multiplication
   // wanted here and the reason this needs no custom node.
-  const ring = ctx.createGain();
-  ring.gain.value = 0;
-  const osc = ctx.createOscillator();
-  osc.type = 'sine';
-  osc.frequency.value = RING_HZ;
-  osc.connect(ring.gain);
+  // Built at all only when it is going to be heard. An oscillator at zero mix
+  // is still an oscillator running for the length of every sentence, and the
+  // chain it feeds is what the band limit at the end exists to clean up after.
+  const ringing = chain.ring > 0;
+  const ring = ringing ? ctx.createGain() : null;
+  const osc = ringing ? ctx.createOscillator() : null;
+  if (ringing) {
+    ring.gain.value = 0;
+    osc.type = 'sine';
+    osc.frequency.value = RING_HZ;
+    osc.connect(ring.gain);
+  }
 
-  const wet = ctx.createGain();
-  wet.gain.value = RING_MIX;
+  const wet = ringing ? ctx.createGain() : null;
+  if (ringing) wet.gain.value = chain.ring;
   const dry = ctx.createGain();
-  dry.gain.value = 1 - RING_MIX;
+  dry.gain.value = ringing ? 1 - chain.ring : 1;
 
   // Two of them in series. One biquad is 12dB an octave, which measured as
   // *more* energy under the cut than the untouched voice had - everything after
@@ -103,27 +143,27 @@ function robot(ctx, buffer, dest = ctx.destination) {
   // actually does to bass anyway.
   const low = ctx.createBiquadFilter();
   low.type = 'highpass';
-  low.frequency.value = LOW_CUT;
+  low.frequency.value = chain.lowCut;
   const low2 = ctx.createBiquadFilter();
   low2.type = 'highpass';
-  low2.frequency.value = LOW_CUT;
+  low2.frequency.value = chain.lowCut;
   const high = ctx.createBiquadFilter();
   high.type = 'lowpass';
-  high.frequency.value = HIGH_CUT;
+  high.frequency.value = chain.highCut;
 
   const shaper = ctx.createWaveShaper();
-  shaper.curve = grit();
+  shaper.curve = grit(chain.grit);
 
   const box = ctx.createDelay(1);
   box.delayTime.value = BOX_S;
   const back = ctx.createGain();
-  back.gain.value = BOX_FEEDBACK;
+  back.gain.value = chain.box;
 
   const out = ctx.createGain();
   // The chain adds up to more than it started with - the soft clip alone lifts
   // everything quiet. Without this the pet is louder than it was and clips on
   // its own consonants.
-  out.gain.value = 0.5;
+  out.gain.value = chain.gain;
 
   // The band limit goes last, which is both what a small speaker physically is
   // and the only place it can be trusted. Put in the middle it measured as
@@ -131,10 +171,12 @@ function robot(ctx, buffer, dest = ctx.destination) {
   // below every frequency it touches, a soft clip makes intermodulation
   // products out of them, and a 13ms comb resonates at 77Hz and its multiples.
   // All three of those arrive after the filter and walk straight past it.
-  source.connect(ring);
+  if (ringing) {
+    source.connect(ring);
+    ring.connect(wet);
+    wet.connect(shaper);
+  }
   source.connect(dry);
-  ring.connect(wet);
-  wet.connect(shaper);
   dry.connect(shaper);
   shaper.connect(box);
   box.connect(back);
@@ -146,10 +188,10 @@ function robot(ctx, buffer, dest = ctx.destination) {
   high.connect(out);
   out.connect(dest);
 
-  osc.start();
+  if (osc) osc.start();
   source.start();
 
-  const seconds = buffer.duration / SPEED;
+  const seconds = buffer.duration / chain.speed;
   let stopped = false;
   const stop = () => {
     if (stopped) return;
@@ -158,11 +200,13 @@ function robot(ctx, buffer, dest = ctx.destination) {
     // same rule the chirps follow.
     out.gain.setTargetAtTime(0, ctx.currentTime, 0.008);
     try { source.stop(ctx.currentTime + 0.05); } catch { /* already finished */ }
-    try { osc.stop(ctx.currentTime + 0.05); } catch { /* already finished */ }
+    if (osc) try { osc.stop(ctx.currentTime + 0.05); } catch { /* already finished */ }
   };
-  source.onended = () => { try { osc.stop(); } catch { /* already stopped */ } };
+  source.onended = () => { if (osc) try { osc.stop(); } catch { /* already stopped */ } };
 
   return { stop, seconds };
 }
 
-if (typeof module !== 'undefined') module.exports = { robot, SLOW, SPEED, RING_HZ, RING_MIX };
+if (typeof module !== 'undefined') {
+  module.exports = { robot, VOICE, SLOW, SPEED, PET_SPEED, RING_HZ, RING_MIX };
+}

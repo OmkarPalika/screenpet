@@ -1174,6 +1174,129 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   assert.strictEqual(pets.act(state, 'tickle', t + 1000).ok, false, 'no cooldown on tickle');
 }
 
+// ===== the voice you give it ===============================================
+//
+// A neural voice on this machine, when one is installed. Same shape as
+// dictation and checked the same way: half an install has to count as none,
+// because the alternative is a feature that fails at the moment the pet tries
+// to speak rather than at the moment you go looking for it.
+
+{
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const piper = require('../src/system/piper');
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'screenpet-piper-'));
+  const folder = path.join(dir, piper.DIR);
+  fs.mkdirSync(folder);
+  const touch = (name) => fs.writeFileSync(path.join(folder, name), 'x');
+
+  assert.strictEqual(piper.installed(dir), false, 'an empty folder counts as a voice');
+  assert.strictEqual(piper.installedName(dir), null, 'an empty folder is named');
+
+  touch(piper.EXE);
+  assert.strictEqual(piper.installed(dir), false, 'a binary with nothing to read counts as a voice');
+
+  // The json is not optional and not a detail: piper reads the sample rate and
+  // the phoneme map out of it and refuses the model without one. A voice that
+  // was half copied is the exact case this exists to fail on.
+  touch('en_US-kristin-medium.onnx');
+  assert.strictEqual(piper.installed(dir), false, 'a model with no config counts as a voice');
+
+  touch('en_US-kristin-medium.onnx.json');
+  assert.strictEqual(piper.installed(dir), true, 'a complete install was not found');
+  assert.strictEqual(
+    piper.installedName(dir), 'en_US-kristin-medium',
+    'the voice is not named after its own file'
+  );
+
+  // Two voices in the folder has to pick the same one every launch, or the pet
+  // sounds like a different animal depending on nothing.
+  touch('en_GB-alba-medium.onnx');
+  touch('en_GB-alba-medium.onnx.json');
+  assert.strictEqual(
+    piper.installedName(dir), 'en_GB-alba-medium',
+    'two voices installed and the choice is not stable'
+  );
+
+  // A missing folder is an answer rather than a crash: this is read on every
+  // line the pet says, on machines that will never have one.
+  assert.strictEqual(piper.installed(path.join(dir, 'nowhere')), false);
+  assert.strictEqual(piper.voiceFor(undefined), null, 'no userData at all threw instead of answering');
+
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  // The same fixed-folder rule dictation follows. Nothing user-supplied reaches
+  // the path, and neither name may climb out of it.
+  for (const name of [piper.EXE, piper.DIR]) {
+    assert.strictEqual(path.basename(name), name, `${name} names a path, not a file`);
+    assert.ok(!/[\\/]|\.\./.test(name), `${name} can be climbed out of`);
+  }
+
+  // Parked for the async section at the end, the same way dictation's are: this
+  // block is synchronous and an unwaited rejection lands after the success line.
+  globalThis.pendingRejections = [
+    ...(globalThis.pendingRejections || []),
+    assert.rejects(() => piper.say('', { userData: dir }), /nothing to say/,
+      'an empty line was handed to the voice'),
+    assert.rejects(() => piper.say('hello', { userData: dir }), /no voice installed/,
+      'a voice that is not installed synthesised something'),
+  ];
+}
+
+// --- and the two chains it is played through ---
+//
+// robot.js is a rescue written for Microsoft David. Running a neural voice
+// through the same ring modulator would undo the only reason for installing
+// one, so the engine that made the audio picks the chain.
+{
+  const { VOICE, SPEED } = require('../src/renderer/robot');
+  const rjs = require('fs').readFileSync('./src/system/voice.js', 'utf8');
+
+  assert.ok(VOICE.sapi && VOICE.piper, 'there is no longer a chain per engine');
+  assert.ok(VOICE.sapi.ring > 0, 'Microsoft David lost the thing that makes him bearable');
+  assert.strictEqual(VOICE.piper.ring, 0, 'the good voice is still run through a ring modulator');
+  // Still a small creature rather than an adult in the room: pitched up a
+  // little, and coming out of something the size of a mug.
+  assert.ok(VOICE.piper.speed > 1, 'the pet voice is not pitched up at all');
+  assert.ok(VOICE.piper.speed < SPEED, 'the pet voice is pitched up as hard as the robot is');
+  assert.ok(VOICE.piper.highCut > VOICE.sapi.highCut, 'the good voice is band limited like the bad one');
+
+  // Piper first, Windows second, and never silence: a voice that would not
+  // start should cost the good voice rather than the ability to speak.
+  // Asked for real rather than read out of the source: a branch can be present,
+  // in the right order, and dead. Both halves of piper are stood in for, so
+  // nothing is spawned and the only thing under test is which way voice.js goes.
+  const piperMod = require('../src/system/piper');
+  const wasInstalled = piperMod.installed;
+  const wasSay = piperMod.say;
+  piperMod.installed = () => true;
+  piperMod.say = () => Promise.resolve(Buffer.from('a wav, honestly'));
+  // Routed synchronously as far as the branch, so the stubs come off before
+  // anything else in this file can see them.
+  const routed = require('../src/system/voice').say('hello', 0, { userData: 'anywhere' });
+  piperMod.installed = wasInstalled;
+  piperMod.say = wasSay;
+  globalThis.pendingRejections.push(routed.then((said) => {
+    assert.ok(said, 'the voice you installed was skipped for the platform voice');
+    assert.strictEqual(said.engine, 'piper', `Windows was asked first: got ${said.engine}`);
+    assert.strictEqual(
+      said.wav, Buffer.from('a wav, honestly').toString('base64'),
+      'the audio did not survive the trip as base64'
+    );
+  }));
+
+  assert.ok(
+    rjs.indexOf('piper.say(') < rjs.indexOf('return sapi(line, rate);'),
+    'Windows is asked before the voice you installed'
+  );
+  assert.ok(
+    /piper\.say\([^)]*\)\.then\(\s*\([^)]*\) => \(\{[^}]*\}\),\s*\(\) => sapi\(/.test(rjs),
+    'a voice that fails to start now silences the pet instead of falling back'
+  );
+}
+
 // ===== settings ============================================================
 
 {

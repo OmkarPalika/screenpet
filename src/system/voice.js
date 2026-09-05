@@ -1,6 +1,7 @@
 'use strict';
 
 const host = require('./host');
+const piper = require('./piper');
 
 // The pet's voice, fetched as audio so the renderer can do something with it.
 // say.ps1 explains why that is worth a process at all; this is the request half.
@@ -81,16 +82,14 @@ function start() {
 }
 
 /**
- * A line of speech as a base64 WAV, or null to use the system voice.
+ * Windows' own voice, which is what this app has always used.
  *
- * @param {string} text
+ * @param {string} line
  * @param {number} rate  SAPI's -10..10. Slower than natural on purpose when the
  *   renderer is going to play it back faster - see robot.js, where that is what
  *   raises the pitch without turning the pet into a chipmunk.
  */
-function say(text, rate = 0) {
-  const line = String(text || '').trim();
-  if (!line) return Promise.resolve(null);
+function sapi(line, rate) {
   if (!start()) return Promise.resolve(null);
 
   // The previous line was interrupted by this one. It is not coming.
@@ -104,7 +103,38 @@ function say(text, rate = 0) {
     // JSON.stringify, never string concatenation: the text is a model's output
     // and a stray quote in it would otherwise be a line of PowerShell.
     child.stdin.write(`${JSON.stringify({ text: line, rate })}\n`);
-  });
+  }).then((wav) => (wav ? { wav, engine: 'sapi' } : null));
+}
+
+/**
+ * A line of speech as audio, or null to use the platform voice.
+ *
+ * Piper first when a voice has been installed, because the whole reason to
+ * install one is that it sounds better than the other branch. It falls back to
+ * Windows rather than to silence: a voice that could not be started should cost
+ * you the good voice, not the pet's ability to speak.
+ *
+ * The engine comes back with the audio because the two need different playback.
+ * robot.js is a rescue written for Microsoft David, and running a neural voice
+ * through a ring modulator would undo the thing that was paid for.
+ *
+ * @param {string} text
+ * @param {number} rate
+ * @param {{userData?: string}} opts
+ * @returns {Promise<{wav: string, engine: string}|null>} base64 WAV and which
+ *   engine made it, or null for the platform voice.
+ */
+function say(text, rate = 0, opts = {}) {
+  const line = String(text || '').trim();
+  if (!line) return Promise.resolve(null);
+
+  if (piper.installed(opts.userData)) {
+    return piper.say(line, opts).then(
+      (wav) => ({ wav: wav.toString('base64'), engine: 'piper' }),
+      () => sapi(line, rate)
+    );
+  }
+  return sapi(line, rate);
 }
 
 /** Shut the voice. Safe to call when nothing is running. */

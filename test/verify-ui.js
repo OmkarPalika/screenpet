@@ -1184,8 +1184,15 @@ app.whenReady().then(async () => {
   if (!spoken) {
     check(process.platform !== 'win32', 'the speech engine returned no audio on Windows');
   } else {
+    // Which engine made it comes back with it, because robot.js needs to know:
+    // the chain is a rescue written for Microsoft David and would undo a neural
+    // voice. This machine has whichever one is installed, and both are answers.
+    check(
+      spoken.engine === 'sapi' || spoken.engine === 'piper',
+      `the voice came back from an engine nothing knows how to play: ${spoken.engine}`
+    );
     const heard = await js(`(async () => {
-      const bytes = Uint8Array.from(atob(${JSON.stringify(spoken)}), (c) => c.charCodeAt(0));
+      const bytes = Uint8Array.from(atob(${JSON.stringify(spoken.wav)}), (c) => c.charCodeAt(0));
       // 44100 to match everything else here; the WAV itself is 22050 and
       // decodeAudioData resamples it.
       const measure = async (make, seconds) => {
@@ -1262,6 +1269,40 @@ app.whenReady().then(async () => {
     // Still a sentence, not a chipmunk: the line is synthesised slow and played
     // back fast, and the two together have to come out near the original length.
     check(heard.done.ms > 1000, `the voice lasts ${heard.done.ms}ms, which is not a sentence`);
+
+    // The other chain, on the same sentence. Installing a neural voice buys a
+    // voice with a throat in it, and running that through the ring modulator
+    // written to rescue Microsoft David would spend the whole of what was
+    // bought - so the two have to come out measurably different, and the good
+    // one has to keep more of the voice.
+    const pet = await js(`(async () => {
+      const bytes = Uint8Array.from(atob(${JSON.stringify(spoken.wav)}), (c) => c.charCodeAt(0));
+      const shape = async (chain) => {
+        const off = new OfflineAudioContext(1, Math.round(44100 * 8), 44100);
+        const buffer = await off.decodeAudioData(bytes.slice().buffer);
+        robot(off, buffer, off.destination, chain);
+        const d = (await off.startRendering()).getChannelData(0);
+        const N = 24, span = d.length / N, bins = new Array(N).fill(0);
+        let sum = 0;
+        for (let i = 0; i < d.length; i++) {
+          sum += d[i] * d[i];
+          bins[Math.min(N - 1, Math.floor(i / span))] += d[i] * d[i];
+        }
+        return {
+          rms: Math.sqrt(sum / d.length),
+          shape: bins.map((x) => Math.round(Math.sqrt(x / span) * 10000)).join(','),
+        };
+      };
+      return { sapi: await shape(VOICE.sapi), piper: await shape(VOICE.piper) };
+    })()`);
+    check(
+      pet.sapi.shape !== pet.piper.shape,
+      'both engines are played through the same chain, so installing a voice changes nothing'
+    );
+    check(
+      pet.piper.rms > 0,
+      'the chain for an installed voice renders silence'
+    );
   }
 
   // The two noises the pet's body makes rather than its voice. Measured the same

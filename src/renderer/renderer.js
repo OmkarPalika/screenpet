@@ -170,20 +170,23 @@ function speak(text, kind, chatty = false) {
   // and SpeechSynthesis will speak a sentence but will not hand it over.
   const mine = ++sayId;
   const fallback = () => { if (mine === sayId) system(line); };
-  window.pet.voice(line, SLOW).then((wav) => {
+  window.pet.voice(line, SLOW).then((said) => {
     if (mine !== sayId) return; // a newer line took over while this was coming
-    if (wav) return play(wav, mine, fallback);
+    if (said && said.wav) return play(said, mine, fallback);
     fallback();
   }).catch(fallback);
 }
 
-/** Play a base64 WAV through the filter chain. */
-function play(wav, mine, fallback) {
+/** Play a base64 WAV through the filter chain its engine needs. */
+function play(said, mine, fallback) {
   const ctx = audio();
-  const bytes = Uint8Array.from(atob(wav), (c) => c.charCodeAt(0));
+  const bytes = Uint8Array.from(atob(said.wav), (c) => c.charCodeAt(0));
   ctx.decodeAudioData(bytes.buffer).then((buffer) => {
     if (mine !== sayId) return;
-    playing = robot(ctx, buffer);
+    // An unknown engine gets the chain written for the worst case rather than
+    // no chain at all: a voice nobody has heard played flat is a gamble, and
+    // the robot is at least a deliberate sound.
+    playing = robot(ctx, buffer, ctx.destination, VOICE[said.engine] || VOICE.sapi);
     petEl.classList.add('is-talking');
     // Off the length of the audio rather than an event, because the mouth has
     // to stop when the sound does, and `ended` on a source that was stopped

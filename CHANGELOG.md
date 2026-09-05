@@ -23,7 +23,9 @@ What the app does is [README.md](README.md); why it behaves the way it does is
   answers to it, and says one line when you first choose it.
 - A house. The pet walks out of it when the app starts and back into it when
   you quit, rather than appearing and vanishing.
-- Timers, breaks, memory, skills, a voice, and dictation.
+- Timers, breaks, memory, skills, a voice, and dictation. The voice is a
+  Windows one by default; drop a Piper binary and a voice model in a folder
+  and the pet speaks with that instead, still entirely on your machine.
 - Two answering tiers, a settings window, and a Windows installer.
 - A `Download and install` button that replaces the app without the setup
   wizard.

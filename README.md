@@ -151,6 +151,65 @@ with the measurements behind the choices that look arbitrary from the outside.
 
 This file is the half you need to install it, run it, and know what it sends.
 
+## Giving it a voice
+
+Out of the box the pet speaks with a voice already on your machine — Microsoft
+David or Zira — put through the filter chain in `robot.js`, which exists because
+what Windows hands back sounds like a train station. Turning that into a
+deliberate robot is a rescue, not a preference.
+
+You can give it a better one. [Piper](https://github.com/OHF-Voice/piper1-gpl)
+is a neural text-to-speech engine that runs entirely on this machine, and the
+pet uses it the moment it finds one — no setting, the same way dictation works.
+With a voice installed the ring modulator comes off entirely and what is left is
+just the small body: pitched up a little, and coming out of something the size
+of a mug.
+
+Put two things in a `piper` folder next to `settings.json`:
+
+```
+%APPDATA%\screenpet\piper\
+  piper.exe                        the standalone Windows build
+  en_US-kristin-medium.onnx        a voice
+  en_US-kristin-medium.onnx.json   and its config, which is not optional
+```
+
+Both halves of the voice or it does not count as installed — piper reads the
+sample rate and the phoneme map out of the `.json` and refuses the model without
+it, and half an install that fails when the pet tries to speak is worse than one
+that never claimed to be there. Two voices in the folder and the first by name
+wins; delete the one you do not want. The settings window names the one it
+found.
+
+If anything about it fails — missing, wedged, a line it cannot pronounce — the
+pet falls back to the Windows voice for that sentence. Losing the good voice is
+the right cost; losing the ability to speak is not.
+
+### Which voice
+
+**[`en_US-kristin-medium`](https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/kristin/medium)**
+is the one to start with. It is light and unhurried rather than newsreaderly,
+which is most of what makes a voice work on something two inches tall, and it is
+the pet shaping in `robot.js` that does the rest — you are picking a voice to be
+turned into a pet, not a pet voice.
+
+Avoid the "high" quality tiers. They are trained for narration, they cost
+noticeably more per sentence, and a pet interrupting you with a beautifully
+read sentence is worse than one that squeaks.
+
+### The licences, since they differ
+
+| | Licence | Matters because |
+| --- | --- | --- |
+| `piper1-gpl` (current engine) | GPL-3.0 | screenpet spawns it as a separate process and does not link it, bundle it or ship it. That is what keeps GPL off this project's own [PolyForm Noncommercial](LICENSE) terms — and it stays true only while it is a binary **you** went and got, in a folder of your own. |
+| `rhasspy/piper` (the older standalone build) | MIT | The Windows `.exe` most people will use. |
+| `en_US-kristin-medium` | MIT | Trained on public-domain LibriVox recordings. |
+| Other Piper voices | **Varies — check each one** | Many are CC BY 4.0, which is fine but wants attribution. Some, `lessac` among them, carry Blizzard Challenge terms that are not free for every use. Each voice ships a `MODEL_CARD` next to it saying which. |
+
+Nothing here is bundled with screenpet and nothing is downloaded for you. That
+is deliberate on all three counts: licensing, code signing, and the rule that
+this app does not fetch executables.
+
 ## Settings
 
 Right-click the pet, or use the tray icon. The tray is also how you show, hide
