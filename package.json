@@ -24,7 +24,7 @@
     "build:helper": "swiftc -O -o src/system/mac/screenpet-helper src/system/mac/screenpet-helper.swift -framework Vision -framework CryptoKit -framework Security"
   },
   "devDependencies": {
-    "electron": "^43.4.0",
+    "electron": "^44.1.1",
     "electron-builder": "^26.15.3",
     "gifenc": "^1.0.3"
   },
