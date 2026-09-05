@@ -9,6 +9,7 @@ const skinsBox = el('skins');
 const wearSel = el('wear');
 const autostart = el('autostart');
 const voice = el('voice');
+const voiceHint = el('voice-hint');
 const sounds = el('sounds');
 const focus = el('focus');
 const watchBox = el('watch');
@@ -345,6 +346,27 @@ saveBtn.addEventListener('click', async () => {
   status.textContent = 'Saved.';
 });
 
+/**
+ * Which voice you are actually hearing.
+ *
+ * Named rather than described, because the two sound nothing like each other
+ * and "a voice installed on Windows" tells you neither which one you have nor
+ * that there is a better one to be had. The instructions are only shown to
+ * somebody who has not already followed them.
+ */
+function showVoice(name) {
+  if (name) {
+    voiceHint.textContent = `Speaking with ${name}, on this machine. Mute from the tray icon.`;
+    voiceHint.classList.remove('warn');
+    return;
+  }
+  voiceHint.textContent =
+    'Using a voice already installed on Windows, which sounds like one. For a '
+    + 'better one, put piper.exe and a .onnx voice with its .onnx.json in the '
+    + 'piper folder beside settings.json — it runs on this machine like '
+    + 'everything else. Mute from the tray icon.';
+}
+
 // Which checkbox depends on something the operating system has to provide. A
 // tick box for a capability this machine does not have is a promise the app
 // then breaks, so those are switched off, disabled, and say why on hover.
@@ -473,6 +495,7 @@ el('close').addEventListener('click', () => window.config.close());
   fillWear(data.wear || ['none'], current.wear);
   paintPreviews();
   showVision(data.visionModel);
+  showVoice(data.voiceName);
   showCapabilities(data.capabilities);
 
   // 'auto' and 'off' are the two built-in options; an explicit model name that

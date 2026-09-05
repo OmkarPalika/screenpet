@@ -19,6 +19,7 @@ const weather = require('./core/weather');
 const wake = require('./system/wake');
 const windows = require('./system/window');
 const voice = require('./system/voice');
+const piper = require('./system/piper');
 const faces = require('./system/faces');
 const memory = require('./core/memory');
 const net = require('./core/net');
@@ -1776,7 +1777,10 @@ ipcMain.on('pet:interactive', (_e, interactive) => {
 // say.ps1 both clamp it, so it is a preference here rather than a trusted value.
 ipcMain.handle('pet:voice', async (_e, text, rate) => {
   if (!settings.voice) return null;
-  return voice.say(String(text || ''), Number(rate) || 0);
+  // Where an installed voice would be. Read per call rather than resolved once:
+  // dropping a voice into the folder should take effect at the next sentence,
+  // not at the next launch, and the check is two stat calls.
+  return voice.say(String(text || ''), Number(rate) || 0, { userData: app.getPath('userData') });
 });
 
 ipcMain.on('pet:ask', answerScreen);
@@ -1804,6 +1808,10 @@ ipcMain.handle('config:get', async () => ({
   // not have is worse than no switch: it reads as a promise and then does
   // nothing. The settings window disables those and says why.
   capabilities: host.report(),
+  // The name of the installed neural voice, or null for Windows' own. Told to
+  // the settings window so the hint can say which one you are hearing rather
+  // than describing two possibilities and leaving you to guess.
+  voiceName: piper.installedName(app.getPath('userData')),
   providers: Object.entries(providers.PROVIDERS).map(([name, spec]) => ({
     name, label: spec.label, local: spec.local === true, model: spec.model || '', keys: spec.keys || '',
   })),

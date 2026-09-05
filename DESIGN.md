@@ -890,6 +890,40 @@ camera OFF   stream:false 0x0       "take a photo" -> my eyes are shut! switch t
                                     wrote nothing
 ```
 
+## The voice it was given
+
+`robot.js` is written about Microsoft David, and the first line of it says so.
+Windows will speak a sentence but it will not hand over the audio, so the pet
+was stuck with a voice that sounds like a train station — and the answer was to
+make it sound like a robot on purpose, which is at least a decision. Five
+effects, of which the ring modulator is the one doing the real work: it is what
+a vocoder does to a voice, and it is unmistakably not a human throat.
+
+Give the pet a Piper voice and the premise goes away. It already has a throat,
+so the ring modulator comes off entirely — leaving it on would spend the whole
+of what installing a voice bought. What stays is the part that was never about
+the robot at all:
+
+| | Windows | A voice you installed |
+| --- | --- | --- |
+| ring modulator | 0.3 of the signal | **none** |
+| playback | 1.22× — synthesised slow, played fast, which raises the pitch without shortening the line | 1.12×, which does shorten it, and a small creature talking slightly quickly is the right way to be wrong |
+| band | 170–5200 Hz | 140–7600 Hz |
+| soft clip | 2.2 | 1.15 |
+| case | 0.18 feedback | 0.10 |
+
+The second column is a pet rather than a person: pitched up a little, and coming
+out of something the size of a mug. That was always what the chain was for. The
+robot was only ever how it was reached from the voice Windows gives you.
+
+Which engine made the audio comes back with the audio, because nothing
+downstream can tell by listening — and a chain picked by guessing would sooner
+or later put a neural voice through a ring modulator, which is the one mistake
+here that undoes a deliberate purchase rather than merely sounding wrong.
+
+Nothing is bundled and nothing is downloaded. See [the README](README.md#giving-it-a-voice)
+for where the files go and why the licences differ per voice.
+
 ## Getting out of the way
 
 A desktop pet that talks over a game is not charming, it is a bug. Windows
