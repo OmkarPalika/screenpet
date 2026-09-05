@@ -1820,6 +1820,9 @@ app.whenReady().then(async () => {
   let saved = null;
   ipcMain.handle('config:get', async () => ({
     settings: {
+      // Spread first so every setting arrives with the value the app would
+      // really hand it. The overrides below are the ones the checks depend on.
+      ...require('../src/core/settings').DEFAULTS,
       model: 'llama3.1:8b', vision: 'auto', hotkey: 'CommandOrControl+Shift+Space',
       pet: 'cat', skin: 'butter', wear: 'none',
       autostart: false, ollama: 'http://127.0.0.1:11434',
@@ -2096,6 +2099,158 @@ app.whenReady().then(async () => {
   check(saved && saved.skin === 'blossom', `skin not saved: ${saved && saved.skin}`);
   check(saved && saved.pet === 'dragon', `pet not saved: ${saved && saved.pet}`);
   check(saved && saved.wear === 'hero', `outfit not saved: ${saved && saved.wear}`);
+
+  // --- every setting, saved -------------------------------------------------
+  //
+  // Four settings are proved to reach the main process above. There are
+  // thirty-two, and the ones that do not arrive are exactly the ones nobody
+  // would catch by using the app: a checkbox that saves nothing looks identical
+  // to one that works, right up until the next restart.
+
+  // First, that a control exists for each at all - read off the save handler
+  // rather than off the markup, because a control added to the window and never
+  // collected is the same bug as no control. It moves, and it saves nothing.
+  const collector = fs.readFileSync(path.join(SRC, 'renderer', 'settings-renderer.js'), 'utf8');
+  const callAt = collector.indexOf('await window.config.save({');
+  const call = collector.slice(callAt, collector.indexOf('  });', callAt));
+  const sent = new Set([...call.matchAll(/^    ([a-zA-Z]+)[,:]/gm)].map((m) => m[1]));
+  // The Ollama address is the one deliberate exception. It is for people running
+  // Ollama somewhere other than this machine, and it belongs in the file rather
+  // than in a window everybody else has to read past.
+  const FILE_ONLY = new Set(['ollama']);
+  const settable = Object.keys(require('../src/core/settings').DEFAULTS)
+    .filter((k) => !FILE_ONLY.has(k));
+  for (const k of settable) {
+    check(sent.has(k), `"${k}" is a setting the settings window never saves`);
+  }
+  for (const k of sent) {
+    check(settable.includes(k), `the settings window saves "${k}", which is not a setting`);
+  }
+
+  // Then that each one carries its own value rather than the one next to it.
+  // Two rounds, because the window cannot hold every setting at once: reading
+  // on a timer is local-only and a hosted model's name is not, so no single
+  // save can carry both.
+  const flip = (script) => sjs(`(() => {
+    const g = (id) => document.getElementById(id);
+    const set = (id, v) => {
+      const e = g(id);
+      if (e.type === 'checkbox') e.checked = v; else e.value = v;
+      e.dispatchEvent(new Event('change'));
+      e.dispatchEvent(new Event('input'));
+    };
+    ${script}
+    g('save').click();
+  })()`);
+
+  const savedAs = (round, want) => {
+    for (const [k, v] of Object.entries(want)) {
+      check(
+        saved && saved[k] === v,
+        `${round}: "${k}" saved as ${JSON.stringify(saved && saved[k])} rather than ${JSON.stringify(v)}`
+      );
+    }
+  };
+
+  // Everything on, and the local model. The four master switches go first:
+  // every box under them is disabled until they are, and a disabled control is
+  // one this cannot prove anything about.
+  //
+  // The tick boxes alternate down the order the save handler lists them in,
+  // rather than all going the same way, and round two inverts most of them.
+  // Setting them all off proves less than it looks like it does: two settings
+  // wired to each other's control - "voice: sounds.checked" - then saves the
+  // right answer by accident. Alternating means any two neighbours differ in at
+  // least one of the two rounds, and a copy-paste between adjacent lines is the
+  // way that bug actually happens.
+  saved = null;
+  await flip(`
+    set('network', true); set('mic', true); set('camera', true); set('memory', true);
+    set('model', 'mistral:7b');
+    set('vision', 'off');
+    set('hotkey', 'Alt+Shift+P');
+    set('pet-name', 'Nibbles');
+    document.querySelector('[data-skin="blossom"]').click();
+    document.querySelector('#pets [data-pet="dragon"]').click();
+    set('wear', 'hero');
+    set('voice', false);
+    set('sounds', true);
+    set('focus', false);
+    set('provider', 'ollama');
+    set('watch', true);
+    set('watch-every', 120);
+    set('breaks', false);
+    set('break-every', 25);
+    set('break-for', 45);
+    set('mischief', true);
+    set('dictation', 'sapi');
+    set('wake', false);
+    set('bop', true);
+    set('faces', false);
+    set('weather', true);
+    set('city', 'Kochi');
+    set('web', false);
+    set('cheek', false);
+  `);
+  await settle();
+  savedAs('everything on', {
+    model: 'mistral:7b', vision: 'off', hotkey: 'Alt+Shift+P', name: 'Nibbles',
+    pet: 'dragon', skin: 'blossom', wear: 'hero',
+    voice: false, sounds: true, focus: false,
+    watch: true, watchEvery: 120,
+    breaks: false, breakEvery: 25, breakFor: 45, mischief: true,
+    mic: true, dictation: 'sapi', camera: true, wake: false, bop: true, faces: false,
+    network: true, weather: true, city: 'Kochi', web: false,
+    provider: 'ollama', providerModel: '',
+    memory: true, cheek: false,
+    // Disabled in an unpackaged build - registering one would point Windows at
+    // electron.exe - so this is the value a control nobody can reach sends.
+    autostart: false,
+  });
+
+  // And back off again, onto a hosted provider. This is the half the first
+  // round cannot reach: a setting that is switched off has to save as off
+  // rather than keep the value it had while it was still reachable.
+  saved = null;
+  await flip(`
+    set('memory', false);
+    set('mic', false);
+    set('camera', true);
+    set('faces', true);
+    set('voice', true);
+    set('sounds', false);
+    set('focus', true);
+    set('breaks', true);
+    set('weather', false);
+    set('web', true);
+    set('provider', 'openai');
+    set('provider-model', 'gpt-4o-mini');
+  `);
+  await settle();
+  savedAs('gated off', {
+    memory: false, cheek: false,
+    // The microphone goes off and the camera stays on, so the two master
+    // switches do not carry the same answer in both rounds either.
+    mic: false, wake: false, bop: false,
+    camera: true, faces: true,
+    voice: true, sounds: false, focus: true, breaks: true,
+    weather: false, web: true,
+    network: true,
+    provider: 'openai', providerModel: 'gpt-4o-mini',
+    // Reading the screen on a timer never leaves the machine, so choosing a
+    // company switches it off rather than sending your screen there every
+    // sixty seconds.
+    watch: false,
+    // Two that are greyed out but keep what they had, because they are
+    // preferences rather than permissions: which recogniser, and which city.
+    dictation: 'sapi', city: 'Kochi',
+  });
+  // What this still cannot catch: two settings crossed that happen to carry the
+  // same answer in both rounds, and autostart, which is disabled in an
+  // unpackaged build and so has no value of its own to prove. Separating every
+  // pair would take five rounds and some pairs cannot differ at all - a box is
+  // forced off while the switch above it is off - so the static check above is
+  // what covers a setting going missing, and this covers it going astray.
 
   // --- report -------------------------------------------------------------
   const all = [...errors, ...problems];
