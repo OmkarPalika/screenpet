@@ -9,7 +9,8 @@ npm install
 npm run dist
 ```
 
-Produces `dist/screenpet-0.1.0-setup.exe` and a portable build. Nothing else is
+Produces `dist/screenpet-<version>-setup.exe` and a portable build, where the
+version is whatever `package.json` says. Nothing else is
 needed: the PowerShell scripts in `src/system/` are interpreted, not compiled.
 
 ## Publishing a release
