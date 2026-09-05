@@ -1644,11 +1644,91 @@ says off its own bat. That is deliberate: do not disturb silences our half of a
 playdate on exactly the rule it silences the hunger nag, rather than this feature
 having a quiet-hours rule of its own to get wrong.
 
+### A friend in another city, without becoming somebody's infrastructure
+
+Multicast with a TTL of 1 is a guarantee, and the price of a guarantee that
+strong is that it also rules out the thing a lot of people will want next: a
+friend who is not in the building.
+
+The three ways to have that are a relay, a rendezvous server, and an address you
+were given. The first two are the same answer wearing different hats - both mean
+a machine of mine in the middle that sees every IP address and every pairing,
+which is precisely the thing the front page of this project says does not exist.
+A dancing cartoon animal is not worth becoming a piece of infrastructure over,
+and "it only does signalling" is how every one of those starts.
+
+So: an address list. The user types where their friend is, the socket sends there
+as well, and screenpet learns nothing about how that address came to work. In
+practice it will usually be a personal mesh - Tailscale, ZeroTier, WireGuard,
+free at this size - and the deliberate decision is that the app does not know,
+check, require or mention any of them beyond a sentence of advice. It sends UDP
+to a string. Somebody who port-forwards gets the same feature; somebody who
+invents a fourth way in 2029 gets it too.
+
+Three things make this cost less than it looks:
+
+**The LAN guarantee is untouched.** `setMulticastTTL` and `setTTL` are separate
+options on the same socket, so group packets still die at the first router
+whatever the unicast one says. The far path was added without weakening the near
+one - which is worth noting because the obvious implementation, raising the one
+TTL there was, would have quietly converted the whole feature's guarantee into a
+policy.
+
+**Empty means empty.** The unicast TTL is raised only while the list has
+something in it. With nobody named, `setTTL(1)` too, so "no packet this socket
+can emit leaves the segment" is true of *every* packet rather than most of them.
+It changes no behaviour - with an empty list there is no unicast send to have a
+hop limit - and it makes the claim checkable instead of argued.
+
+**The list is symmetrical.** It decides who we send to *and* who we will read
+from, so the people you can play with are exactly the people who can play with
+you. That half closed a hole older than the feature: the socket binds `0.0.0.0`
+and therefore receives unicast as well as its group, so before the list existed
+anything that could reach port 41234 had its message parsed by the allowlist.
+Nothing leaked - the allowlist held - but a stranger could put a pet on your
+desk, and could fill the throttle table, which is why the check runs before that
+table is written to rather than after.
+
+What the address costs is the part no allowlist can help with, so the settings
+window says it in full rather than in a footnote. The far end learns your IP,
+which is roughly your city, and it learns when your machine is on, because a
+beacon every three seconds is exactly that log. Neither is in the message.
+Neither can be taken out of it. They are properties of having sent a packet at
+all, and the honest thing to do with a cost you cannot remove is to name it
+before somebody opts in rather than after.
+
+Hostnames are refused, which reads as pointless strictness and is not. Accepting
+`friend.example.com` would put the names of everybody you play with into a DNS
+query - the one thing in this feature that would leave the machine without
+anybody having chosen to send it. Leading zeros are refused for a smaller
+reason and the same shape of one: `0177.0.0.1` is 127.0.0.1 to a parser that
+reads octal and something else to one that does not, and an allowlist entry that
+means two things depending on who reads it is not an allowlist entry.
+
+### One message, two routes
+
+The first thing anybody will do is add the address of a machine on their own
+network, because that is how you test whether you typed it right. That machine
+is then reached twice - once through the group, once directly - and the two
+copies arrive from two different source addresses, so the throttle, which is
+keyed on the address, lets both through and the pet does the activity twice.
+
+The symptom is a stutter. The cause is that one message is being counted as two,
+so the fix is keyed on the payload rather than on either address, and windowed
+rather than remembered: two copies of one packet land milliseconds apart, while a
+real repeat is a beacon three seconds later or a button press held off for two.
+
+This was not found by a test. It was found by opening the socket and looking at
+what arrived, which was two things.
+
 ### What was left out
 
 - **Pairing.** There is nothing worth guarding in a message that can only be a
   mood, and a pairing code is a feature that has to be explained. The cost is
-  that anyone on the network can join in, which PRIVACY.md says plainly.
+  that anyone on the network can join in, which PRIVACY.md says plainly. An
+  address in the far list is closer to pairing than the LAN path has - you chose
+  them and only they can reach you - but it authenticates an address, not a
+  person, and anybody who can send from that address inherits it.
 - **Reliability.** UDP, no retries, no ordering. A dropped verb is a missed
   dance. Three missed beacons and the friend walks off, so one lost packet does
   not make a pet vanish.

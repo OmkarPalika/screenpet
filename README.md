@@ -182,11 +182,40 @@ in, so a field that is not in the table cannot survive the trip in either
 direction.
 
 There is also no server. No relay, no account, no pairing code, nothing of mine
-in the middle and nothing to switch off later. It is a UDP multicast group with a
-**hop limit of one**, which means the first router to see a packet decrements it
-to zero and drops it. Two copies on one network meet; two copies on different
-networks never will, and that is the design rather than a limitation waiting for
-a server to fix it.
+in the middle and nothing to switch off later. On your own network it is a UDP
+multicast group with a **hop limit of one**, which means the first router to see
+a packet decrements it to zero and drops it. It cannot leave, and that is a
+property of the packets rather than a promise about a policy.
+
+### A friend in another city
+
+Under the switch there is a box for addresses, one per line, up to eight. It is
+empty by default, and while it is empty the paragraph above is true of every
+packet the pet can send.
+
+Put an address in it and that pet is reached directly, wherever it is. Still no
+server: getting an address that works from another city usually means a personal
+network like [Tailscale](https://tailscale.com), ZeroTier or WireGuard, all free
+at this size — and screenpet does not use, need, bundle or check for any of them.
+It sends a UDP packet to whatever address you type.
+
+It is worth being exact about what that costs, because two of the three things
+are not in the message and cannot be:
+
+| | |
+| --- | --- |
+| What crosses | Unchanged. The same pet card, the same allowlist, the same ten verbs. Distance does not widen it. |
+| What they learn anyway | **Your IP address** — roughly your city and your provider. |
+| What they learn anyway | **When your machine is on**, because the pet says hello every three seconds. |
+
+The list works both ways and only both ways: those addresses are the only ones
+off your network that can reach your pet, so the people you can play with are
+exactly the people who can play with you.
+
+Addresses only — hostnames are refused deliberately, since resolving one would
+put the names of everyone you play with into a DNS query, and that would be the
+one part of this feature that leaves your machine without you choosing to send
+it.
 
 Two things worth knowing before you switch it on:
 
@@ -301,7 +330,8 @@ and quit it — the pet has no taskbar button by design.
 | Model name / API key | For a hosted provider. Whatever you type as the model wins, so a name newer than this app still works — OpenAI is sent the reply ceiling as `max_completion_tokens`, which its newer models require and its older ones accept. The key is wrapped with DPAPI and never shown again. |
 | Remember things between sessions | **On** by default. Writes only what you asked it to remember. Off deletes the file. See [What it remembers](DESIGN.md#what-it-remembers). |
 | Let it be cheeky about it | On by default, needs the above. The pet needling you with what it has. |
-| Let it meet other pets on this network | **Off** by default, and deliberately *not* under the internet switch, because it cannot reach the internet — a multicast group with a hop limit of one. What crosses is a species, a palette, a hat, your pet's name, a mood and one verb. See [Playdates](#playdates). |
+| Let it meet other pets on this network | **Off** by default, and deliberately *not* under the internet switch, because on its own it cannot reach the internet — a multicast group with a hop limit of one. What crosses is a species, a palette, a hat, your pet's name, a mood and one verb. See [Playdates](#playdates). |
+| Pets in other places | Empty by default. Addresses of friends' machines elsewhere, up to eight, each sent to directly and each the only addresses off your network allowed to reach yours. What crosses is identical; what they additionally learn is your IP and when your machine is on. See [A friend in another city](#a-friend-in-another-city). |
 | Start with Windows | Packaged builds only — in development this would register `electron.exe`. |
 
 **Every setting that opens something needs its own literal `true` plus whatever

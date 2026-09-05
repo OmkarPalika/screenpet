@@ -116,6 +116,39 @@
               <span id="nearby" class="hint-note"></span>
             </p>
           </div>
+
+          <div class="set" id="far-set">
+            <label for="playdate-with">Pets in other places</label>
+            <textarea
+              id="playdate-with"
+              rows="3"
+              spellcheck="false"
+              placeholder="100.64.0.7&#10;100.64.0.9"
+            ></textarea>
+            <p class="hint">
+              One address per line, up to eight. Leave it empty and everything above
+              stays true exactly as written &mdash; the hop limit of one applies to every
+              packet the pet can send, and nothing reaches past your own network.
+              <br />
+              An address here is a friend somewhere else, and it is worth knowing what
+              it costs, because these two things are not on the wire and cannot be put
+              there: <strong>they learn this machine's IP address</strong>, which is
+              roughly your city and your internet provider, and
+              <strong>they learn when it is switched on</strong>, because the pet says
+              hello every few seconds. What actually crosses is still only the pet card
+              &mdash; species, colour, hat, mood, name, one verb. That does not widen
+              with distance.
+              <br />
+              It works both ways and only both ways: these addresses are the only ones
+              off your network that can reach your pet, so the people you can play with
+              are exactly the people who can play with you.
+              <br />
+              There is still no server. Getting an address that works from another city
+              usually means a personal network like Tailscale, ZeroTier or WireGuard,
+              all free for this &mdash; the app does not use, need or check for any of
+              them, it sends to whatever address you type.
+            </p>
+          </div>
         </div>
 
         <div class="card">

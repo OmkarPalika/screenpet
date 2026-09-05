@@ -209,6 +209,48 @@ Two things worth saying plainly:
   If that is not something you want, the switch is off by default and belongs
   off.
 
+### Pets in other cities
+
+Under the playdate switch there is a box for addresses. It is **empty**, and
+while it is empty everything above stays true exactly as written: every packet
+this feature can send has a hop limit of one and cannot leave the network you
+are on.
+
+Putting an address in it is a decision, and it costs two things that are not on
+the wire and cannot be put there:
+
+- **They learn your IP address.** Which is roughly your city and your internet
+  provider. On a local network everyone already shares one; across the internet
+  this is new.
+- **They learn when your machine is on.** The pet says hello every three seconds,
+  so an address in this list receives a fairly precise log of when you are at
+  your computer. This is the most revealing part of the feature and it is not
+  something the allowlist can help with, because it is not *in* the message — it
+  *is* the message.
+
+What actually crosses does not widen with distance. It is the same pet card,
+built by the same allowlist, whether the friend is in the next room or another
+country.
+
+The list works in both directions and only in both directions. Those addresses
+are the only ones off your network that can reach your pet, so the people you
+can play with are exactly the people who can play with you. That check also
+closed something that predates the feature: the socket binds `0.0.0.0`, so
+before the list existed anything that could reach the port had its message
+parsed.
+
+There is still no server, and adding one is not planned. Having an address that
+works from another city usually means a personal network — Tailscale, ZeroTier,
+WireGuard, all free at this size. **The app does not use, require, bundle or
+check for any of them.** It sends a UDP packet to an address you typed; where
+that address came from is your business and the app never finds out.
+
+Addresses are validated in `src/core/peers.js` before anything is sent to them.
+Hostnames are refused on purpose: accepting `friend.example.com` would look like
+a kindness and would put the names of everyone you play with into a DNS query,
+which would be the one part of this feature that leaves your machine without
+anyone choosing to send it.
+
 ### Checking for updates
 
 `Check for updates` in Settings is the one request that is not behind the

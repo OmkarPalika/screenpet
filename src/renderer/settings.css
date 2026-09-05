@@ -105,7 +105,7 @@ label, .title {
   font-size: 12px;
 }
 
-select, input[type="text"], input[type="password"], input[type="number"] {
+select, textarea, input[type="text"], input[type="password"], input[type="number"] {
   width: 100%;
   padding: 7px 9px;
   border: 1px solid var(--line);
@@ -115,8 +115,18 @@ select, input[type="text"], input[type="password"], input[type="number"] {
   font: inherit;
 }
 
-select:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+select:focus, input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 input.bad { border-color: #d1604a; }
+
+/* Addresses, so a mistyped one is easier to spot against a column of correct
+   ones - and no resize handle, because the list has a ceiling of eight. */
+textarea {
+  resize: none;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
+textarea:disabled { opacity: 0.5; }
 
 /* ---- hints ---- */
 

@@ -34,10 +34,45 @@ the version was tagged.
   can join in, because there is nothing worth guarding in a message that can
   only be a mood.
 
+- **Pets in other places.** A list of addresses under the playdate switch, empty
+  by default, for playing with somebody who is not on your network. Each address
+  is sent to directly and is also the only address off your network permitted to
+  reach your pet, so the people you can play with are exactly the people who can
+  play with you.
+
+  Still no server, and adding one is not planned — having an address that works
+  across cities usually means a personal network like Tailscale or ZeroTier, none
+  of which the app uses, requires or checks for. It sends UDP to what you typed.
+
+  What crosses does not widen with distance: the same allowlist, the same ten
+  verbs. What an address does cost is two things that are not in the message and
+  cannot be put there — **the far end learns your IP address**, roughly your city
+  and provider, and **learns when your machine is on**, since the pet says hello
+  every three seconds. Both are in [PRIVACY.md](PRIVACY.md#pets-in-other-cities)
+  and in the settings window in full.
+
+  While the list is empty, the unicast hop limit is 1 as well, so "cannot leave
+  this network" stays true of every packet the socket can emit rather than most
+  of them. Hostnames are refused on purpose: resolving one would put the names of
+  everyone you play with into a DNS query.
+
 - `friends.json`: a random id for this install and the ids of up to 24 pets it
   has met, so the confetti happens once per friend rather than every time. No
   names, no addresses, no record of when anyone was online. Only written while
   playdates are on.
+
+### Fixed
+
+- A message reaching one pet by two routes — a friend who is both on your network
+  and in the address list — was acted on twice, so the pet did the same activity
+  twice. Identical payloads arriving within a tenth of a second are now collapsed
+  to one.
+
+- The playdate socket binds `0.0.0.0` and so received unicast as well as its
+  multicast group, which meant anything that could reach the port had its message
+  parsed. A source address must now be on one of this machine's own networks or
+  in the address list. This predates the address list; the list is what made it
+  worth fixing rather than what caused it.
 
 ### Changed
 

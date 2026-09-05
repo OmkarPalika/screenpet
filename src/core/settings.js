@@ -166,6 +166,22 @@ const DEFAULTS = {
   // no free-text field in it. Nothing you type, say or have on screen is
   // representable.
   playdate: false,
+  // Pets in other cities, by address. Empty, and empty is what makes the
+  // paragraph above true: with nobody named, every packet this feature sends
+  // still has a hop limit of one and cannot leave the network you are on.
+  //
+  // An address here costs two things that are not on the wire and cannot be, so
+  // the interface says both in full. The far end learns your IP - roughly your
+  // city and your internet provider - and, because a beacon goes every few
+  // seconds, when your machine is on. Nothing you read, type or say is
+  // representable either way; the allowlist in core/playdate.js is the same
+  // allowlist at any distance.
+  //
+  // No server exists for this, and adding one is not planned. The free way to
+  // have an address that works is a personal mesh - Tailscale, ZeroTier,
+  // WireGuard - which the app does not depend on, know about, or check for: it
+  // sends UDP to an address, and where that address came from is your business.
+  playdateWith: [],
   // Roaming further than the taskbar, and sitting on top of the window you are
   // working in. Movement only: it cannot touch your windows, and the section in
   // PRIVACY.md on why says exactly what it never gets told about them.
@@ -203,6 +219,10 @@ const str = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 // that is not part of a place name is stripped before it is ever put in a URL:
 // this is the only user-typed string in the app that reaches a server.
 const { cleanCity } = require('./weather');
+
+// Who, off this network, the pet may talk to. The file that validates an address
+// and the file that explains what naming one costs are the same file.
+const peers = require('./peers');
 
 // Which hosted providers exist at all. The table is in providers.js with the
 // URLs; nothing here or in a settings file can add one.
@@ -320,6 +340,11 @@ function load(raw) {
     // A literal true, like the microphone and the camera. This one opens a
     // socket, so a hand-edited "playdate": 1 must not be what does it.
     playdate: s.playdate === true,
+    // Validated in core/peers.js, which drops anything it does not recognise
+    // rather than repairing it - a half-understood address is not one we will
+    // send a packet to. Refused outright unless `playdate` is on, so the list
+    // cannot be what quietly opens the socket.
+    playdateWith: s.playdate === true ? peers.list(s.playdateWith) : [],
     autostart: typeof s.autostart === 'boolean' ? s.autostart : DEFAULTS.autostart,
     ollama: validEndpoint(s.ollama) ? s.ollama : DEFAULTS.ollama,
   };
