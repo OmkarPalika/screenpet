@@ -236,7 +236,7 @@ function audio() {
 
 function bark(expr) {
   if (!soundsOn) return;
-  sound(audio(), document.documentElement.dataset.pet || 'blob', expr);
+  sound(audio(), petEl.dataset.pet || 'blob', expr);
 }
 
 // Chirp speech: the pet's own lines, in its own voice. Shares the noises'
@@ -393,6 +393,7 @@ window.pet.onStats((s) => {
   // Where you left it last time. Applied once - after that the pet is where it
   // is, and a state push arriving mid-drag must not yank it back.
   applyPlace(s.place);
+  applyStart(s.start);
   for (const el of document.querySelectorAll('[data-bar]')) {
     el.style.width = `${Math.round(s[el.dataset.bar])}%`;
   }
@@ -412,6 +413,37 @@ function refreshMenu(s) {
   menu.querySelector('[data-act="feed"]').disabled = s.fullness >= 92;
   menu.querySelector('[data-act="play"]').disabled = s.energy < 20;
 }
+
+// ---- a friend ------------------------------------------------------------
+// Another pet on this network. Everything about what may arrive is decided
+// before this point - see core/playdate.js - so all that is left here is which
+// of four things happened and what to draw for it.
+//
+// 'mine' is our own pet joining in, which is the whole point: two pets doing the
+// same thing at the same time is the feature, and one pet doing it alone while
+// the other watches is a bug.
+
+window.pet.onFriend((m) => {
+  if (!m || typeof m !== 'object') return;
+  if (m.kind === 'gone') {
+    friend.hide(m.id);
+    menu.querySelector('[data-together]').hidden = true;
+    return;
+  }
+  if (m.kind === 'here' || m.kind === 'party') {
+    friend.show(m.card, m.kind === 'party');
+    menu.querySelector('[data-together]').hidden = false;
+    return;
+  }
+  // A shared activity on their pet. The movement and the face arrive with it
+  // rather than being looked up here: the main process is where the two pets'
+  // halves are kept in step, and a second table here is a second one to forget.
+  //
+  // Ours joins in through pet:say like everything else it does off its own bat,
+  // which is deliberate - it means do not disturb silences our half the same way
+  // it silences every other unprompted thing, rather than having its own rule.
+  if (m.kind === 'do') friend.act(m.act, m.move, MOVE_MS[m.move] || 0, m.expr);
+});
 
 // ---- hit testing ---------------------------------------------------------
 // The window covers the whole display, so main keeps it click-through and we
@@ -637,6 +669,7 @@ menu.addEventListener('click', (e) => {
   else if (btn.hasAttribute('data-listen')) window.pet.listen();
   else if (btn.hasAttribute('data-ask')) window.pet.ask();
   else if (btn.hasAttribute('data-settings')) window.pet.settings();
+  else if (btn.hasAttribute('data-together')) window.pet.together();
   else if (btn.hasAttribute('data-quit')) window.pet.quit();
 });
 
@@ -844,9 +877,12 @@ window.pet.onLook(({
   // The amber dot. Reading the screen on a timer is the one thing this app does
   // that you did not just ask for, so it says so on the pet's own face.
   document.getElementById('reading').hidden = !watching;
-  document.documentElement.dataset.pet = pet;
-  document.documentElement.dataset.skin = skin;
-  document.documentElement.dataset.wear = wear || 'none';
+  // On the pet rather than on <html>, so a second pet in this document can wear
+  // a different species and palette. Every rule that used to read these off the
+  // root reads them off the element now; pets.css was rewritten to match.
+  petEl.dataset.pet = pet;
+  petEl.dataset.skin = skin;
+  petEl.dataset.wear = wear || 'none';
   voiceOn = !!on;
   soundsOn = !!sounds;
   if (!voiceOn) hush();
@@ -1304,6 +1340,18 @@ function applyPlace(place) {
   if (!place || home) return;
   home = { x: place.x, y: place.y };
   snap(place.x * roomX(), place.y * roomY());
+}
+
+// A pet that has never been put anywhere still has to start somewhere, and the
+// left edge for everybody stopped working when two pets could share a screen -
+// see startX() in main.js. Deliberately not a `home`: this is where it happens
+// to begin, not somewhere you chose, so it still roams the whole width.
+let started = false;
+
+function applyStart(x) {
+  if (started || home || !Number.isFinite(x)) return;
+  started = true;
+  snap(x * roomX(), roomY());
 }
 
 // A resolution change, or the pet sent to a different monitor, resizes the

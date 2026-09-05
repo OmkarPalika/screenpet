@@ -52,6 +52,9 @@
         <button data-act="feed">Feed</button>
         <button data-act="play">Play</button>
         <button data-act="tickle">Tickle</button>
+        <!-- Hidden until another pet is actually on this network. An entry that
+             only tells you nobody is there is worse than no entry. -->
+        <button data-together hidden>Play together</button>
         <button data-talk>Talk…</button>
         <!-- Hidden until the microphone is switched on in settings. -->
         <button data-listen hidden>Listen…</button>
@@ -210,6 +213,21 @@
           <div class="bar"><i data-bar="energy"></i></div>
         </div>
       </div>
+
+      <!-- Another pet, on this network. A .pet like the one above, so it gets
+           every species, palette, hat, face and movement for free - but its SVG
+           is cloned from that one at startup rather than written out again here,
+           because two copies of eighty shapes is one copy that goes stale.
+
+           Outside #pet on purpose: a .pet inside a .pet would take the outer
+           one's mood and expression rules with it, and the friend has its own.
+           Absolutely positioned, so it is not a flex item of the stage - a
+           second item in that column would shove your pet up the screen the
+           moment somebody else opened a laptop. See friend.js. -->
+      <div id="friend" class="pet friend" data-mood="neutral" hidden aria-hidden="true">
+        <div id="friend-fx" class="fx"></div>
+        <b id="friend-name" class="friend-name" hidden></b>
+      </div>
     </div>
 
     <!-- The camera pipeline, off screen. The video is never shown and the
@@ -225,6 +243,7 @@
     <script src="voices.js"></script>
     <script src="robot.js"></script>
     <script src="singing.js"></script>
+    <script src="friend.js"></script>
     <script src="renderer.js"></script>
   </body>
 </html>

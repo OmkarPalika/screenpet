@@ -18,6 +18,23 @@ const breaksBox = el('breaks');
 const breakEvery = el('break-every');
 const breakFor = el('break-for');
 const mischief = el('mischief');
+const playdate = el('playdate');
+
+/**
+ * How many other pets are on this network right now.
+ *
+ * A count and nothing else - never a name, never an id. It is here because a
+ * switch that is on and shows nothing looks broken, and "nobody else is running
+ * it" and "it is not working" are two very different problems to be having.
+ */
+function showNearby(count) {
+  const out = el('nearby');
+  if (!out) return;
+  const n = Number.isFinite(count) ? count : 0;
+  if (!playdate.checked) out.textContent = '';
+  else if (n === 0) out.textContent = 'Nobody else on this network right now.';
+  else out.textContent = n === 1 ? 'One other pet is here.' : `${n} other pets are here.`;
+}
 const mic = el('mic');
 const dictationSel = el('dictation');
 const camera = el('camera');
@@ -314,6 +331,7 @@ saveBtn.addEventListener('click', async () => {
     breakEvery: Number(breakEvery.value),
     breakFor: Number(breakFor.value),
     mischief: mischief.checked,
+    playdate: playdate.checked,
     mic: mic.checked,
     dictation: dictationSel.value,
     camera: camera.checked,
@@ -353,6 +371,7 @@ saveBtn.addEventListener('click', async () => {
   breakEvery.value = current.breakEvery;
   breakFor.value = current.breakFor;
   mischief.checked = current.mischief;
+  playdate.checked = current.playdate;
   wearSel.value = current.wear;
   camera.checked = current.camera;
   mic.checked = current.mic;
@@ -524,6 +543,7 @@ el('close').addEventListener('click', () => window.config.close());
   showVision(data.visionModel);
   showVoice(data.voiceName);
   showCapabilities(data.capabilities);
+  showNearby(data.nearby);
 
   // 'auto' and 'off' are the two built-in options; an explicit model name that
   // is not one of them needs an option of its own or the select shows nothing.
@@ -553,6 +573,7 @@ el('close').addEventListener('click', () => window.config.close());
   breakEvery.value = current.breakEvery;
   breakFor.value = current.breakFor;
   mischief.checked = current.mischief;
+  playdate.checked = current.playdate;
   wearSel.value = current.wear;
   camera.checked = current.camera;
   mic.checked = current.mic;

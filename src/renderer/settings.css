@@ -292,3 +292,12 @@ button:disabled { opacity: 0.5; cursor: default; }
    knowing the pet could do this elsewhere is worth more than a shorter list,
    and the title attribute carries the reason. */
 label.unavailable { opacity: 0.45; cursor: help; }
+
+/* A line of live fact under a hint - how many pets are nearby, so far. Its own
+   line rather than part of the sentence above it, because it changes and the
+   sentence does not. */
+.hint-note {
+  display: block;
+  margin-top: 5px;
+  font-weight: 600;
+}

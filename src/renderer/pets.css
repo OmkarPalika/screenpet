@@ -174,8 +174,8 @@
 [data-pet="cat"] .ear-r    { d: path("M94 34l-6-27-19 19z"); }
 [data-pet="cat"] .whiskers { display: block; d: path("M10 58q12 -2 22 3M10 68q12 3 21 -2M110 58q-12 -2 -22 3M110 68q-12 3 -21 -2"); }
 [data-pet="cat"] .tail     { display: block; d: path("M88 94c20 2 26-10 24-22-1-7-9-9-11-3 4 1 6 4 5 9-2 9-9 12-18 11z"); }
-[data-pet="cat"] .pet.is-idling       { animation: stretch 1.6s ease-in-out; }
-[data-pet="cat"] .pet.is-idling .tail { animation: flick 900ms ease-in-out 2; }
+.pet[data-pet="cat"].is-idling       { animation: stretch 1.6s ease-in-out; }
+.pet[data-pet="cat"].is-idling .tail { animation: flick 900ms ease-in-out 2; }
 
 /* pup: ears hanging down the sides, and a tail mid-wag.
    They have to hang outside the body outline - kept inside it, the ears read as
@@ -183,30 +183,30 @@
 [data-pet="pup"] .ear-l { d: path("M32 24c-15 5-22 27-15 44 11 0 18-20 15-44z"); }
 [data-pet="pup"] .ear-r { d: path("M88 24c15 5 22 27 15 44-11 0-18-20-15-44z"); }
 [data-pet="pup"] .tail  { display: block; d: path("M90 92c14-1 21-9 20-19-3 8-9 13-20 13z"); }
-[data-pet="pup"] .pet.is-idling       { animation: hop-idle 620ms ease-in-out; }
-[data-pet="pup"] .pet.is-idling .tail { animation: wag 220ms ease-in-out 9; }
+.pet[data-pet="pup"].is-idling       { animation: hop-idle 620ms ease-in-out; }
+.pet[data-pet="pup"].is-idling .tail { animation: wag 220ms ease-in-out 9; }
 
 /* bun: the ears are the whole personality */
 [data-pet="bun"] .ear-l { d: path("M44 24c-7-22-3-30 3-26 5 4 6 16 4 26-1 5-6 4-7 0z"); }
 [data-pet="bun"] .ear-r { d: path("M76 24c7-22 3-30-3-26-5 4-6 16-4 26 1 5 6 4 7 0z"); }
 [data-pet="bun"] .ear-l, [data-pet="bun"] .ear-r { transform-origin: 60px 30px; }
-[data-pet="bun"] .pet.is-idling        { animation: hop-idle 700ms ease-in-out 2; }
-[data-pet="bun"] .pet.is-idling .ear-l { animation: twitch 800ms ease-in-out 2; }
+.pet[data-pet="bun"].is-idling        { animation: hop-idle 700ms ease-in-out 2; }
+.pet[data-pet="bun"].is-idling .ear-l { animation: twitch 800ms ease-in-out 2; }
 
 /* bird: no ears at all, a tuft instead */
 [data-pet="bird"] .ear   { display: none; }
 [data-pet="bird"] .crest { display: block; d: path("M52 20q-2-16 6-14 2 8 0 14zM60 18q0-18 8-14 0 9-4 14zM68 20q4-14 9-8 0 6-5 10z"); }
 [data-pet="bird"] .tail  { display: block; d: path("M94 90c14 2 20-2 24-10-8 2-12 2-16 0z"); }
-[data-pet="bird"] .pet.is-idling        { animation: peck 600ms ease-in-out 3; }
-[data-pet="bird"] .pet.is-idling .crest { animation: twitch 500ms ease-in-out 3; }
+.pet[data-pet="bird"].is-idling        { animation: peck 600ms ease-in-out 3; }
+.pet[data-pet="bird"].is-idling .crest { animation: twitch 500ms ease-in-out 3; }
 
 /* dragon: horns, a back ridge, and a tail with a barb */
 [data-pet="dragon"] .ear-l { d: path("M32 28l1-19 12 15z"); }
 [data-pet="dragon"] .ear-r { d: path("M88 28l-1-19-12 15z"); }
 [data-pet="dragon"] .crest { display: block; d: path("M54 16l6-9 6 9z"); }
 [data-pet="dragon"] .tail  { display: block; d: path("M88 94c16 0 22-8 22-18l6 4-2-11-9 7c1 8-5 14-17 14z"); }
-[data-pet="dragon"] .pet.is-idling       { animation: rumble 260ms ease-in-out 6; }
-[data-pet="dragon"] .pet.is-idling .tail { animation: sway 1.3s ease-in-out 2; }
+.pet[data-pet="dragon"].is-idling       { animation: rumble 260ms ease-in-out 6; }
+.pet[data-pet="dragon"].is-idling .tail { animation: sway 1.3s ease-in-out 2; }
 
 /* fox: wide low ears and a tail bigger than it is. No whiskers, deliberately -
    the first pass had them and read as a cat with a good tail. The cat is
@@ -214,8 +214,8 @@
 [data-pet="fox"] .ear-l    { d: path("M14 44l5-32 34 21z"); }
 [data-pet="fox"] .ear-r    { d: path("M106 44l-5-32-34 21z"); }
 [data-pet="fox"] .tail     { display: block; d: path("M84 94c27 4 35-13 30-29-3-12-17-14-20-4 7 1 12 6 11 14-2 12-12 19-23 17z"); }
-[data-pet="fox"] .pet.is-idling       { animation: pounce 900ms ease-in-out; }
-[data-pet="fox"] .pet.is-idling .tail { animation: sway 700ms ease-in-out 3; }
+.pet[data-pet="fox"].is-idling       { animation: pounce 900ms ease-in-out; }
+.pet[data-pet="fox"].is-idling .tail { animation: sway 700ms ease-in-out 3; }
 
 /* axolotl: the gills are the whole pet. Three lobes a side, as one path each -
    a subpath per lobe, which is why they can be circles and still be an "ear". */
@@ -226,8 +226,8 @@
   d: path("M89 34a7 7 0 1 0 14 0a7 7 0 1 0-14 0M99 46a6 6 0 1 0 12 0a6 6 0 1 0-12 0M91 57a6 6 0 1 0 12 0a6 6 0 1 0-12 0");
 }
 [data-pet="axolotl"] .tail { display: block; d: path("M86 88q22-8 28 4t-28 12z"); }
-[data-pet="axolotl"] .pet.is-idling       { animation: paddle 1.5s ease-in-out 2; }
-[data-pet="axolotl"] .pet.is-idling .tail { animation: sway 750ms ease-in-out 3; }
+.pet[data-pet="axolotl"].is-idling       { animation: paddle 1.5s ease-in-out 2; }
+.pet[data-pet="axolotl"].is-idling .tail { animation: sway 750ms ease-in-out 3; }
 
 /* ghost: the only species that swaps the body outline rather than hanging
    things off it, and the only one that floats - so its shadow all but goes. */
@@ -237,8 +237,8 @@
   opacity: 0.88;
 }
 [data-pet="ghost"] .shadow          { opacity: 0.07; }
-[data-pet="ghost"] .pet.is-idling   { animation: haunt 2.2s ease-in-out; }
-[data-pet="ghost"] .pet.is-idling .gaze { animation: glance 2.4s ease-in-out; }
+.pet[data-pet="ghost"].is-idling   { animation: haunt 2.2s ease-in-out; }
+.pet[data-pet="ghost"].is-idling .gaze { animation: glance 2.4s ease-in-out; }
 
 /* robot: a box with side panels and an aerial. No whiskers, no tail - a robot
    with a wagging tail is a dog in a costume. */
@@ -246,9 +246,9 @@
 [data-pet="robot"] .ear-l { d: path("M17 44h-9v24h9z"); }
 [data-pet="robot"] .ear-r { d: path("M103 44h9v24h-9z"); }
 [data-pet="robot"] .crest { display: block; d: path("M58 20h4v-11h-4zM60 3a5 5 0 1 0 0.1 0"); }
-[data-pet="robot"] .pet.is-idling        { animation: glitch 420ms steps(4, end) 3; }
-[data-pet="robot"] .pet.is-idling .crest { animation: twitch 500ms ease-in-out 3; }
+.pet[data-pet="robot"].is-idling        { animation: glitch 420ms steps(4, end) 3; }
+.pet[data-pet="robot"].is-idling .crest { animation: twitch 500ms ease-in-out 3; }
 
 /* blob has no shape rules of its own, but it does get an idle of its own so the
    default squish is a fallback rather than "the pet nobody wrote a quirk for". */
-[data-pet="blob"] .pet.is-idling { animation: squish 900ms ease-in-out 2; }
+.pet[data-pet="blob"].is-idling { animation: squish 900ms ease-in-out 2; }

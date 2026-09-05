@@ -157,6 +157,49 @@ Unprompted talk is throttled twice over: nagging at most once every three hours,
 and idle small talk at most once every 45 minutes and only when the pet has
 nothing to complain about. A pet that talks more than that gets uninstalled.
 
+## Playdates
+
+Two people running screenpet on the same network get two pets that know about
+each other. Switch on **Let it meet other pets on this network** — it is off by
+default — and another copy of the app on your Wi-Fi turns up next to yours.
+
+![two pets meeting](pet-friend.png)
+
+The first time two pets ever meet, there is confetti. After that they wave,
+bounce, dance, cheer each other on, hug, spin, share a snack, sing badly, and sit
+about together doing nothing, which is also an activity. `Play together` in the
+pet's menu picks one at random and both pets do it at the same time on both
+screens.
+
+**The pets talk. The people do not.** There is no chat here and nowhere to put
+one. A message is a species, a palette, a hat, the name you gave your pet, a
+mood word, a bond number, and one verb from a list of ten. That is the whole
+language — [`src/core/playdate.js`](src/core/playdate.js) is 200 lines and you can
+read all of it. Nothing off your screen, nothing you typed, nothing you said and
+nothing about your machine is representable, and that is enforced by rebuilding
+every message field by field from a fixed table on the way out *and* on the way
+in, so a field that is not in the table cannot survive the trip in either
+direction.
+
+There is also no server. No relay, no account, no pairing code, nothing of mine
+in the middle and nothing to switch off later. It is a UDP multicast group with a
+**hop limit of one**, which means the first router to see a packet decrements it
+to zero and drops it. Two copies on one network meet; two copies on different
+networks never will, and that is the design rather than a limitation waiting for
+a server to fix it.
+
+Two things worth knowing before you switch it on:
+
+- **The name you gave your pet crosses.** Anyone on that network running the app
+  can read it. It is the one thing here a person wrote.
+- **Anyone on that network can join in**, because there is nothing worth guarding
+  in a message that can only be a mood. On a café network, a stranger's pet can
+  turn up and ask yours to dance. If that is not what you want, the switch is off
+  by default and belongs off.
+
+[PRIVACY.md](PRIVACY.md#pets-on-your-own-network) says the same thing at greater
+length and with the table of exactly what leaves.
+
 ## The rest of it
 
 Everything the pet does when it is not answering a question — the forty faces,
@@ -258,6 +301,7 @@ and quit it — the pet has no taskbar button by design.
 | Model name / API key | For a hosted provider. Whatever you type as the model wins, so a name newer than this app still works — OpenAI is sent the reply ceiling as `max_completion_tokens`, which its newer models require and its older ones accept. The key is wrapped with DPAPI and never shown again. |
 | Remember things between sessions | **On** by default. Writes only what you asked it to remember. Off deletes the file. See [What it remembers](DESIGN.md#what-it-remembers). |
 | Let it be cheeky about it | On by default, needs the above. The pet needling you with what it has. |
+| Let it meet other pets on this network | **Off** by default, and deliberately *not* under the internet switch, because it cannot reach the internet — a multicast group with a hop limit of one. What crosses is a species, a palette, a hat, your pet's name, a mood and one verb. See [Playdates](#playdates). |
 | Start with Windows | Packaged builds only — in development this would register `electron.exe`. |
 
 **Every setting that opens something needs its own literal `true` plus whatever

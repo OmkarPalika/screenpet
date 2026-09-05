@@ -1451,3 +1451,120 @@ html, body {
 .stage.is-leaving .menu,
 .stage.is-leaving .chat,
 .stage.is-leaving .thought { display: none; }
+
+/* ---- a friend ---------------------------------------------------------------
+
+   Another pet, on the same network. Drawing only: what may arrive is decided by
+   core/playdate.js, which is a fixed allowlist with no free-text field in it.
+
+   The element is a .pet, so every rule above about moods, faces and movements
+   applies to it unchanged. These are the four things that make it a guest rather
+   than a second pet you own: where it stands, how it arrives, how it leaves, and
+   the little name tag under its feet. */
+
+.friend {
+  position: absolute;
+  bottom: 0;
+  /* The stage is 340 wide and centres its column, so the pet occupies the middle
+     120. Half the stage plus half the pet plus a gap puts the friend just to its
+     right, on the same floor. */
+  left: 50%;
+  margin-left: 64px;
+  width: 120px;
+  height: 110px;
+  /* Under the bubble, which has z-index 1 and is the thing you are reading. */
+  z-index: 0;
+}
+
+/* Pinned to the other edge along with everything else when the pet is near the
+   top of the screen and the column has flipped. */
+.stage[data-flip="down"] .friend { bottom: auto; top: 0; }
+
+/* Walking in from off to the right. The last few pixels take most of the time,
+   which is the difference between arriving and sliding. */
+.friend.is-arriving { animation: friend-in 900ms cubic-bezier(0.25, 0.9, 0.3, 1); }
+
+@keyframes friend-in {
+  from { opacity: 0; transform: translateX(90px) scale(0.92); }
+  55%  { opacity: 1; }
+  to   { opacity: 1; transform: none; }
+}
+
+.friend.is-leaving { animation: friend-out 700ms ease-in forwards; }
+
+@keyframes friend-out {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateX(70px) scale(0.92); }
+}
+
+/* What they called theirs, if they called it anything. Above the head: the
+   bubble and the emoji rain are over your pet, and the friend stands to the
+   right of it, so that space is free - whereas under the feet the tag sits on
+   the shadow and reads as a sticker on the pet rather than a label for it.
+   Clipped rather than wrapped: the name is capped at 24 characters upstream and
+   this is the second guard, not the first. */
+.friend-name {
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 132px;
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: rgba(28, 30, 36, 0.74);
+  color: #fff;
+  font: 500 10px/1.6 system-ui, "Segoe UI", sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* ---- the party --------------------------------------------------------------
+
+   The first time two pets have ever met, and only then. The pet already has
+   emoji rain for its feelings; this is deliberately not that - it is wider than
+   the pet, it lasts longer, and it is paper rather than faces, because it is the
+   one thing here that happens once per friend and never again. */
+
+.confetti {
+  position: absolute;
+  /* Above both heads and centred between the two of them rather than on the
+     stage: the stage centres on your pet, and confetti aimed there falls past
+     one pet and misses the other. Half the gap to the friend puts the burst
+     between them, which is where the meeting is happening. */
+  left: 50%;
+  margin-left: 60px;
+  bottom: 128px;
+  /* A point, not a box: every piece is placed relative to that spot, so the
+     spread belongs to the animation rather than to the element. */
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.confetti i {
+  position: absolute;
+  display: block;
+  width: 7px;
+  height: 11px;
+  border-radius: 2px;
+  opacity: 0;
+  animation: confetti-fall var(--for, 2200ms) cubic-bezier(0.25, 0.6, 0.45, 1) forwards;
+}
+
+@keyframes confetti-fall {
+  0%   { opacity: 0; transform: translate(0, 0) rotate(0deg); }
+  12%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx, 0), var(--dy, 220px)) rotate(var(--spin, 540deg)); }
+}
+
+/* Somebody who would rather nothing moved. The pet honours this everywhere else,
+   and a party is exactly the kind of thing the setting is about. */
+@media (prefers-reduced-motion: reduce) {
+  .friend.is-arriving,
+  .friend.is-leaving { animation: none; }
+  .confetti { display: none; }
+}

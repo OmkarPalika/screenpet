@@ -33,6 +33,8 @@ const pets = require('./core/pet-state');
 const skills = require('./core/skills');
 const config = require('./core/settings');
 const { advise } = require('./core/advise');
+const playdate = require('./core/playdate');
+const lan = require('./system/lan');
 
 // One pet. Launching it again - from the Start menu, or the installer's "run
 // when finished" landing on top of a copy already in the tray - shows the one
@@ -586,6 +588,9 @@ function farewell() {
 function pushState(extra = {}) {
   send('pet:stats', {
     ...state,
+    // Only while it has never been placed by hand - after that, place wins and
+    // this is not sent at all.
+    start: state.place ? null : playdate.startX(petId),
     mood: pets.mood(state, { asleep: asleep() }),
     asleep: asleep(),
     ...extra,
@@ -1523,6 +1528,219 @@ async function listenAndReply(opts = {}) {
   }
 }
 
+// ---- playdates --------------------------------------------------------------
+// Two pets on the same network noticing each other.
+//
+// The pets talk; the people do not. There is no chat here and there is nowhere
+// to put one: what crosses is core/playdate.js's allowlist - a species, a
+// palette, a hat, the name you gave your pet, a mood word, a bond number, and
+// one verb from a list of ten - over system/lan.js's multicast socket, whose
+// TTL of 1 means the packets are dropped by the first router they meet.
+//
+// So the feature is local by construction rather than by policy. There is no
+// server to run, no account to make, no relay to trust and nothing to switch off
+// later. Two copies of the app on one network find each other; two copies on
+// different networks never will, and that is the design rather than a limitation
+// waiting to be fixed.
+//
+// All of it is off unless settings.playdate is a literal true.
+
+// How often this pet says it is here. Fast enough that opening a laptop in the
+// same room feels immediate; slow enough that a dozen pets in an office are a
+// rounding error on the wire.
+const BEACON_MS = 3000;
+
+// Three missed beacons and a bit. One dropped multicast packet is ordinary and
+// must not make a friend vanish off the desk.
+const PEER_GONE_MS = BEACON_MS * 3 + 1000;
+
+// The pause between shared activities. The button is a button, and without this
+// a held mouse is a strobe on somebody else's screen as well as your own.
+const TOGETHER_MS = 2400;
+
+// An id is a claim; the source address is the network's. lan.js caps distinct
+// addresses, and this caps distinct claims, so neither one alone has to hold.
+const MAX_PEERS = 8;
+
+let petId = null;
+let friendBook = {};
+let link = null;
+let beaconTimer = null;
+let lastTogetherAt = 0;
+/** id -> { card, seen }. Who is on the network right now. */
+const peers = new Map();
+
+/**
+ * This install's id, and who it has met.
+ *
+ * The id is random and derived from nothing about the machine - not the
+ * hostname, not a MAC address, not your name. It exists so two pets can be told
+ * apart and so the first meeting can be a bigger deal than the fiftieth, and it
+ * is the only stable thing about you that a peer ever sees.
+ */
+function loadFriends() {
+  const raw = readJson('friends.json') || {};
+  petId = typeof raw.id === 'string' && playdate.ID.test(raw.id) ? raw.id : playdate.newId();
+  friendBook = playdate.friends(raw.met);
+}
+
+function saveFriends() {
+  writeJson('friends.json', { id: petId, met: friendBook });
+}
+
+/** Say we are here. The only thing that leaves on a timer. */
+function beacon() {
+  if (!link) return;
+  const mood = pets.mood(state, { asleep: asleep() });
+  link.send(playdate.encode(playdate.card(petId, settings, state, mood)));
+}
+
+/** A friend stopped beaconing. Same path as an explicit goodbye. */
+function partedFrom(id) {
+  if (!peers.delete(id)) return;
+  send('pet:friend', { kind: 'gone', id });
+  talk('parted', { event: 'parted' });
+}
+
+/** Somebody is here. New to this session, or new to this pet's whole life. */
+function sawPeer(card) {
+  // A game, a presentation, a call. The window is hidden and talk() would drop
+  // the line anyway - but the first meeting is the one event here that happens
+  // once per friend and never again, and firing it into a window nobody can see
+  // spends it. Nothing is recorded either, so the meeting happens properly the
+  // moment the machine is free: the next beacon arrives to an empty peer table
+  // and reads as an arrival, which is what it is.
+  if (quiet && !quietOverride) return;
+  const known = peers.has(card.id);
+  if (!known && peers.size >= MAX_PEERS) return;
+  peers.set(card.id, { card, seen: Date.now() });
+  if (known) return; // still here; a heartbeat is not an arrival
+
+  const { book, first } = playdate.meet(friendBook, card.id, Date.now());
+  friendBook = book;
+  saveFriends();
+
+  // The renderer draws them either way; the difference is the confetti.
+  send('pet:friend', { kind: first ? 'party' : 'here', card });
+  // Meeting somebody is good for you. Small, and only on arrival rather than per
+  // heartbeat - a pet left next to a friend all afternoon should not end the day
+  // at a hundred on everything.
+  state = { ...state, happiness: Math.min(100, state.happiness + (first ? 6 : 3)) };
+  savePet();
+  pushState();
+  talk(first ? 'metfirst' : 'metagain', {
+    event: first ? 'metfirst' : 'metagain',
+    move: first ? 'dance' : 'jump',
+  });
+  // The party is a two-sided thing or it is one pet celebrating alone, so the
+  // first meeting also throws the verb back across.
+  if (first && link) link.send(playdate.encode(playdate.does(petId, 'party')));
+}
+
+/** They did something. Ours joins in, which is the whole point of the feature. */
+function theyDid(id, act) {
+  // A verb from a pet that never introduced itself is not a playdate.
+  if (!peers.has(id)) return;
+  // The movement and the face go with the verb rather than being looked up in
+  // the renderer: this is where the two pets' halves are kept in step, and a
+  // second copy of these tables over there is a second one to forget.
+  send('pet:friend', { kind: 'do', id, act, move: MOVE_FOR[act], expr: pets.expressionFor(act) });
+  joinIn(act);
+}
+
+/**
+ * Our own half of a shared activity, whoever started it.
+ *
+ * Through talk() like everything else the pet does off its own bat, which is the
+ * point: do not disturb silences our half of a playdate on exactly the same rule
+ * it silences the hunger nag, rather than this feature having its own.
+ */
+function joinIn(act) {
+  if (busy || asleep()) return;
+  talk(act, { event: act, move: MOVE_FOR[act] || 'jump' });
+}
+
+// Which body movement goes with each verb. The verbs are playdate.js's; the
+// movements are the renderer's MOVE_MS, and the test suite checks both ends,
+// because a verb that maps to a movement neither file has is a pet standing
+// still while the other one dances.
+const MOVE_FOR = {
+  wave: 'jump',
+  bounce: 'jump',
+  dance: 'dance',
+  cheer: 'jump',
+  hug: 'walk',
+  spin: 'spin',
+  nap: 'sit',
+  snack: 'sit',
+  sing: 'dance',
+  party: 'dance',
+};
+
+/** One raw payload off the wire. Everything is refused until it validates. */
+function onWire(text) {
+  const msg = playdate.decode(text);
+  // Our own beacon, heard back through multicast loopback. Not an error: the
+  // loopback is deliberately on so two copies on one machine can meet.
+  if (!msg || msg.id === petId) return;
+  if (msg.t === 'bye') partedFrom(msg.id);
+  else if (msg.t === 'hi') sawPeer(msg);
+  else if (msg.t === 'do') theyDid(msg.id, msg.act);
+}
+
+/** Open or close the socket to match the setting. Called on every save. */
+function applyPlaydate() {
+  clearInterval(beaconTimer);
+  beaconTimer = null;
+  if (link) {
+    // Tell the room before going, so a friend's pet waves goodbye rather than
+    // waiting out the timeout looking at nobody.
+    link.send(playdate.encode(playdate.leaves(petId)));
+    link.close();
+    link = null;
+  }
+  for (const id of [...peers.keys()]) {
+    peers.delete(id);
+    send('pet:friend', { kind: 'gone', id });
+  }
+  if (!settings.playdate) return;
+
+  link = lan.open({
+    maxBytes: playdate.MAX_BYTES,
+    onMessage: onWire,
+    // A network that will not carry this is not an error worth a red bubble -
+    // the pet works exactly as well without a friend on it.
+    onError: (err) => console.error('playdate:', err.message),
+  });
+  beacon();
+  beaconTimer = setInterval(() => {
+    beacon();
+    const now = Date.now();
+    for (const [id, p] of peers) if (now - p.seen > PEER_GONE_MS) partedFrom(id);
+  }, BEACON_MS);
+}
+
+/**
+ * You pressed "Play together".
+ *
+ * One button and a random verb rather than a menu of ten: choosing what two
+ * cartoon animals should do next is a decision nobody wants to make, and being
+ * surprised is most of the charm.
+ */
+function playTogether() {
+  if (!link || !peers.size) return;
+  const now = Date.now();
+  if (now - lastTogetherAt < TOGETHER_MS) return;
+  lastTogetherAt = now;
+  // 'party' is reserved for a first meeting and is not in the shuffle.
+  const choices = playdate.ACTS.filter((a) => a !== 'party');
+  const act = choices[Math.floor(Math.random() * choices.length)];
+  link.send(playdate.encode(playdate.does(petId, act)));
+  joinIn(act);
+}
+
+ipcMain.on('pet:together', playTogether);
+
 // ---- settings application ---------------------------------------------------
 
 function applyHotkey() {
@@ -1601,6 +1819,7 @@ async function applySettings() {
   applyHotkey();
   applyAutostart();
   applyWake();
+  applyPlaydate();
   sendLook();
   refreshTray(); // the mute state is shown there
   visionModel = await resolveVision();
@@ -1654,6 +1873,9 @@ app.whenReady().then(async () => {
   // Wrapped blobs only. Nothing is unwrapped until something actually needs a
   // key, and never at all on the default local-only settings.
   keyStore = readJson('keys.json') || {};
+  // This install's id and who it has met. Read even when playdates are off, so
+  // switching them on does not turn every friend you have made into a stranger.
+  loadFriends();
 
   // Before any window exists, so nothing can ask for anything in the gap.
   lockPermissions();
@@ -1960,6 +2182,10 @@ ipcMain.handle('config:get', async () => {
   // what it thinks and leaves the select alone.
   advice: advise(survey),
   visionModel,
+  // Whether the friend switch has anyone to find. A count, never an id and never
+  // a card: the settings window says "1 pet nearby", which is all a switch needs
+  // to stop looking broken on an empty network.
+  nearby: peers.size,
   packaged: app.isPackaged,
   version: app.getVersion(),
   // Whether anything can answer at all. The settings window says which of "no
@@ -2050,6 +2276,10 @@ ipcMain.on('config:close', () => {
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   wake.stop(); // the microphone closes before anything else happens
+  // Says goodbye and closes the socket. Same function that runs when the setting
+  // is switched off, so quitting and switching off are the same shutdown.
+  settings = { ...settings, playdate: false };
+  applyPlaydate();
   windows.unwatch();
   voice.stop();
   endBreak();

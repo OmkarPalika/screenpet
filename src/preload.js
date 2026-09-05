@@ -56,6 +56,14 @@ contextBridge.exposeInMainWorld('pet', {
   onRecord: (fn) => ipcRenderer.on('pet:record', () => fn()),
   audio: (buf) => ipcRenderer.send('pet:audio', buf),
   battery: (level) => ipcRenderer.send('pet:battery', level),
+  // Another pet on this network turning up, going away, or doing something.
+  // Never a person: what crosses the machine boundary is core/playdate.js's
+  // allowlist, and what crosses this bridge is what survived it plus the face
+  // and movement the main process chose to go with it.
+  onFriend: (fn) => ipcRenderer.on('pet:friend', (_e, m) => fn(m)),
+  // "Play together". No argument - which activity is the main process's to pick,
+  // because it is also the thing that has to send it to the other machine.
+  together: () => ipcRenderer.send('pet:together'),
   // Breaks. The pet has a thought about water or about sitting still; you click
   // it, or you do not. Four messages, none of which carry anything about the
   // machine: think about this, I clicked it, here is how long, it is over.

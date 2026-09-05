@@ -1537,3 +1537,123 @@ every answer after the first feel instant.
 Neither of these is a quantization problem. The models were already quantized
 (`q4_K_M`, `q5_K_M`, and llama3.1:8b is `Q4_0`) and Ollama was already using the
 GPU. It was allocating a 128k-token cache for a 400-character prompt.
+
+## Two pets
+
+The feature is two people on one network getting two pets that know about each
+other. The design problem is not the animation - the pet already has ten
+movements and forty faces, and a second one on screen is a clone of an SVG. The
+design problem is that this is the first thing in the app that opens a socket
+nobody asked a question through, in an app whose entire proposition is that
+nothing about your screen leaves the machine.
+
+So the rule came first and the feature was built inside it: **the pets talk, the
+people do not.**
+
+### A channel that can only carry a mood cannot leak a screen
+
+Nothing about the wire is a general-purpose transport. There is no message
+envelope, no free-text field, no key-value bag, no pass-through of anything. A
+message is one of three shapes, and every field in each of them is an enum from a
+list this repository owns, a number clamped to 0-100, or the pet's name through
+the same cleaner the pet's own name goes through.
+
+That is not enforced by review, because review is a thing that stops happening.
+`build()` in [playdate.js](src/core/playdate.js) starts from an empty object and
+copies in only the keys in `FIELDS`, each through its own validator. Encoding
+goes through it, so this process cannot leak a field by accident; decoding goes
+through the same function, so a peer cannot introduce one. The test suite hands
+it a message carrying screen text, a hostname, a username, an IP and an API key,
+and asserts none of them appear in the bytes - in both directions.
+
+The reason it is one function rather than two is that two would eventually
+disagree, and the direction they would disagree in is the one that matters.
+
+### No server, and no way to add one later by accident
+
+There is no relay. Discovery and messaging are the same UDP multicast socket:
+both copies join `239.255.42.99:41234`, each says what its pet is every three
+seconds, and that is the whole of the mechanism. No account, no pairing code, no
+infrastructure of mine in the middle, nothing to log and nothing to shut down.
+
+The packets go out with `setMulticastTTL(1)`. A router that sees one decrements
+the TTL to zero and drops it. "This cannot reach the internet" is therefore a
+property of the packets rather than a sentence in a policy - and the test suite
+reads every TTL in the file and fails on any that is not 1, which it does
+because the first version of that check read the *comment* explaining the TTL
+and passed happily while the code said 8.
+
+The transport file is also asserted not to contain `http`, `fetch(`,
+`net.connect` or `WebSocket`. If this feature ever grows a relay, it does not
+grow one quietly.
+
+### Why it is not under the internet switch
+
+`Let it out on the internet` is the master switch for everything that reaches a
+server. Playdates reach no server, and cannot leave the local segment. Putting
+them behind that switch would mean turning the internet on for a feature that
+cannot use it, which makes the master switch mean less rather than more. So this
+is its own switch, off by default, and the settings window says in full what
+crosses and who can hear it.
+
+### Two pets in one document, which cost a rewrite
+
+The pet's species, palette and outfit used to live on `<html>` - one pet, one
+document, so the root was as good a place as any. A second pet made that wrong
+in a way that would not have shown up until two people actually tried it: both
+pets would have read the same root and worn the same species, and every test
+would have passed.
+
+They live on the pet element now, and the nineteen rules in `pets.css` shaped
+like `[data-pet="cat"] .pet.is-idling` became `.pet[data-pet="cat"].is-idling`.
+The friend is a `.pet` with its own attributes, so every mood, face, species and
+movement applies to it unchanged and a new one is new for both. Its SVG is
+cloned from the pet at startup rather than written out twice, for the same
+reason.
+
+The check that would have caught the old arrangement is in `verify-ui.js`: it
+renders both pets and asserts the computed `fill` of their bodies differs.
+
+### The confetti is once per friend, ever
+
+The first time two pets meet is the moment worth decorating, and the fiftieth is
+not. `friends.json` holds a random id for this install and the ids of up to 24
+pets it has met, with a date and a count each - no names, no addresses, no record
+of when anyone was online. `meet()` returns whether this is the first time, and
+the confetti is on that latch rather than on arrival.
+
+The id is random and derived from nothing about the machine: not the hostname,
+not a MAC address, not the user's name. It exists so two pets can be told apart
+and so the party happens once. It is the only stable thing about you a peer ever
+sees, and `newId()` takes its randomness as an argument so the test suite can
+prove it is not derived from anything else.
+
+### Both pets do the same thing at the same time
+
+A shared activity is one verb on the wire. Both ends map it to a movement, a face
+and a line of speech - and the lines are different on the two machines, because
+the words are not on the wire and each pet says something of its own about the
+same act. One pet dancing while the other watches would be the bug; the check for
+it is that every verb in `ACTS` has lines in `pet-state.js`, a face in
+`EXPRESSIONS`, a movement in `main.js` that exists in the renderer's `MOVE_MS`,
+and something to throw in the air in `friend.js`. A verb missing any of those
+fails the suite.
+
+Our own half goes out through `talk()`, the same door as everything else the pet
+says off its own bat. That is deliberate: do not disturb silences our half of a
+playdate on exactly the rule it silences the hunger nag, rather than this feature
+having a quiet-hours rule of its own to get wrong.
+
+### What was left out
+
+- **Pairing.** There is nothing worth guarding in a message that can only be a
+  mood, and a pairing code is a feature that has to be explained. The cost is
+  that anyone on the network can join in, which PRIVACY.md says plainly.
+- **Reliability.** UDP, no retries, no ordering. A dropped verb is a missed
+  dance. Three missed beacons and the friend walks off, so one lost packet does
+  not make a pet vanish.
+- **Sending on every interface.** A Windows laptop has five, and membership is
+  joined on all of them so the pets are *heard*; sending still goes out of
+  whichever one the OS prefers. A machine whose default route is a VPN can hear
+  the pets on the LAN without being heard back. Marked in `lan.js` and worth
+  fixing when somebody reports it, not before.
