@@ -910,6 +910,16 @@ answering brings the pet back for thirty seconds before it puts itself away
 again. Reminders still fire; you set those on purpose. Showing the pet from the
 tray while it is hiding overrides the whole thing until the quiet spell ends.
 
+**And opening the app is asking for it.** Five of the six states above are
+quiet, and Windows 11 ships Do Not Disturb switched on for a full screen app —
+so "not now" is the ordinary answer, not the rare one. A launch that obeys it
+is a pet that never appears, with nothing on screen to say why, and the only
+way out is a tray icon Windows has filed under *Show hidden icons*. So the
+Start menu gets the rule the tray click has always had: it shows, and the
+override lapses with the quiet spell rather than for good. Being started at
+login is not you asking, and that one still keeps out of the way — the login
+item is registered with `--hidden` so the two can be told apart.
+
 Nothing about the foreground application comes back from that call — not its
 name, not its title, not its window. One integer describing the machine's mood,
 which is both all the pet needs and the least it could ask for.
