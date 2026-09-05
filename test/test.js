@@ -4565,6 +4565,200 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       assert.ok(!lanjs.includes(forbidden), `lan.js reaches for "${forbidden}"`);
     }
 
+    // --- a friend in another city -------------------------------------------
+    //
+    // The LAN half above cannot leave the segment and needs no permission to
+    // exist. This half can leave it, so everything here is about the two rules
+    // that decide when: nothing routable is sent unless somebody was named, and
+    // nothing from off this network is read unless they were.
+    const peers = require('../src/core/peers');
+
+    // No name resolution, ever. Accepting "friend.example.com" would look like a
+    // kindness and would put the names of everybody you play with into a DNS
+    // query, which is the one piece of this feature that would leave the machine
+    // without anybody choosing to send it. IP literals only, and the check is
+    // here so that a later kindness has to delete a test to happen.
+    const peersjs = fs.readFileSync('./src/core/peers.js', 'utf8');
+    for (const forbidden of ['dns', 'lookup', 'http', 'fetch(', 'net.connect']) {
+      assert.ok(!peersjs.includes(forbidden), `peers.js reaches for "${forbidden}"`);
+    }
+
+    // Off by default, and off means the paragraph above is true of every packet.
+    assert.deepStrictEqual(cfg.DEFAULTS.playdateWith, [], 'somebody is named by default');
+    assert.deepStrictEqual(peers.list(undefined), [], 'a missing list is not empty');
+    assert.deepStrictEqual(peers.list('1.2.3.4'), [], 'a bare string is read as a list');
+    assert.deepStrictEqual(peers.list({ 0: '1.2.3.4' }), [], 'an object is read as a list');
+
+    // The list cannot be what opens the socket. A hand-edited settings file with
+    // addresses in it and the switch off must send nothing at all.
+    assert.deepStrictEqual(
+      cfg.load({ playdate: false, playdateWith: ['1.2.3.4'] }).playdateWith, [],
+      'an address list is honoured with playdates switched off'
+    );
+    assert.deepStrictEqual(
+      cfg.load({ playdate: true, playdateWith: ['1.2.3.4'] }).playdateWith, ['1.2.3.4'],
+      'the address list is dropped when playdates are on'
+    );
+
+    // What may be typed in. The bound at 224 is doing four jobs at once, so each
+    // is named: a group address, the reserved range, the broadcast address, and
+    // our own multicast group, which would otherwise be a way to spray the LAN
+    // through the unicast path that has the higher hop limit.
+    for (const bad of [
+      '224.0.0.1', '239.255.42.99', '255.255.255.255', '240.0.0.1',
+      '0.0.0.0', '0.1.2.3',
+      '1.2.3', '1.2.3.4.5', '1.2.3.256', '1.2.3.-1', '', '   ',
+      'localhost', 'friend.example.com', '::1', '2001:db8::1',
+      '1.2.3.4:41234', '1.2.3.4/24', '1.2.3.4 ; rm -rf /',
+    ]) {
+      assert.strictEqual(peers.cleanAddr(bad), null, `"${bad}" was accepted as an address`);
+    }
+    // Leading zeros are the interesting one: octal to some parsers, decimal to
+    // others, so "0177.0.0.1" means two different machines depending on who is
+    // asked. An allowlist entry that means two things is not an allowlist entry.
+    for (const bad of ['0177.0.0.1', '010.1.1.1', '1.2.3.04']) {
+      assert.strictEqual(peers.cleanAddr(bad), null, `"${bad}" was read as a number`);
+    }
+    // And what may. 100.64/10 is the range Tailscale hands out, which is the way
+    // most people will have an address for a friend at all.
+    for (const good of ['100.64.0.7', '1.2.3.4', '127.0.0.1', '192.168.1.9', '223.255.255.255']) {
+      assert.strictEqual(peers.cleanAddr(good), good, `"${good}" was refused`);
+    }
+    assert.strictEqual(peers.cleanAddr('  100.64.0.7  '), '100.64.0.7', 'surrounding space is not trimmed');
+
+    // A ceiling, and duplicates collapsed, because both of them end up as one
+    // send each per beacon.
+    assert.ok(peers.MAX_LIST > 0 && peers.MAX_LIST <= 32, 'the address list has no useful ceiling');
+    const many = Array.from({ length: peers.MAX_LIST + 20 }, (_, i) => `10.0.0.${i + 1}`);
+    assert.strictEqual(peers.list(many).length, peers.MAX_LIST, 'the address list grows without limit');
+    assert.deepStrictEqual(
+      peers.list(['1.2.3.4', '1.2.3.4', '1.2.3.4']), ['1.2.3.4'],
+      'a repeated address is sent to more than once'
+    );
+    // A bad line in the middle drops that line and keeps the rest, rather than
+    // failing the lot: one typo must not silently unfriend everybody.
+    assert.deepStrictEqual(
+      peers.list(['1.2.3.4', 'nonsense', '5.6.7.8']), ['1.2.3.4', '5.6.7.8'],
+      'one bad address discards the good ones'
+    );
+
+    // --- who may talk to us ---
+    //
+    // The socket binds 0.0.0.0, so it receives unicast as well as the group.
+    // Before the list existed, any host that could reach the port had its
+    // message parsed; these are the two ways in, and there is no third.
+    const IFACES = [
+      { address: '192.168.1.20', netmask: '255.255.255.0' },
+      { address: '127.0.0.1', netmask: '255.0.0.0' },
+    ];
+    assert.ok(peers.sameNetwork('192.168.1.99', IFACES), 'a machine on our own subnet is a stranger');
+    assert.ok(peers.sameNetwork('127.0.0.1', IFACES), 'a second copy on this machine is a stranger');
+    assert.ok(!peers.sameNetwork('192.168.2.99', IFACES), 'a different subnet counts as ours');
+    assert.ok(!peers.sameNetwork('8.8.8.8', IFACES), 'the whole internet counts as our network');
+    assert.ok(!peers.sameNetwork('192.168.1.99', []), 'an interfaceless machine still has a network');
+
+    assert.ok(peers.allows('192.168.1.99', [], IFACES), 'the LAN is refused with an empty list');
+    assert.ok(peers.allows('100.64.0.7', ['100.64.0.7'], IFACES), 'a named friend is refused');
+    assert.ok(!peers.allows('100.64.0.8', ['100.64.0.7'], IFACES), 'an unnamed address is read');
+    assert.ok(!peers.allows('8.8.8.8', [], IFACES), 'a stranger off the network is read');
+    assert.ok(!peers.allows('0177.0.0.1', ['127.0.0.1'], IFACES), 'an octal address matched the list');
+    // The list is validated by whoever built it, and validated again here. Both,
+    // because this function is exported and the second caller to use it will not
+    // be the one that was reviewed - so a list that was never cleaned must not be
+    // able to admit an address that cleanAddr would have refused.
+    assert.ok(
+      !peers.allows('0177.0.0.1', ['0177.0.0.1'], IFACES),
+      'an address refused by the validator is admitted by matching the list verbatim'
+    );
+    assert.ok(
+      !peers.allows('239.255.42.99', ['239.255.42.99'], IFACES),
+      'the multicast group is admitted as a named friend'
+    );
+    assert.ok(!peers.allows('?', ['1.2.3.4'], IFACES), 'an unknown source address is read');
+
+    // --- the hop limit, in both directions ---
+    //
+    // setMulticastTTL and setTTL are separate options on the same socket, which
+    // is the whole reason the far-friend path costs the LAN path nothing: the
+    // group packets still die at the first router whatever the unicast one says.
+    // The block above already asserts every setMulticastTTL is 1. This asserts
+    // the unicast one is only raised when the list is not empty, so with nobody
+    // named there is no packet this socket can emit that leaves the segment.
+    const unicastTtl = [...lanjs.matchAll(/setTTL\(([^)]*)\)/g)].map((m) => m[1]);
+    assert.strictEqual(unicastTtl.length, 1, 'the unicast hop limit is set in more than one place');
+    assert.ok(
+      /far\.length\s*\?/.test(unicastTtl[0]) && /:\s*1\b/.test(unicastTtl[0]),
+      `the unicast hop limit is not gated on the address list: setTTL(${unicastTtl[0]})`
+    );
+    // Sending to a named address at all has to be the only routable send, and it
+    // has to iterate the validated list rather than the caller's argument.
+    assert.ok(
+      lanjs.includes('for (const addr of far)'),
+      'lan.js does not send to the validated list'
+    );
+    assert.ok(
+      lanjs.includes('peerRules.list(peers)'),
+      'lan.js trusts the address list it was handed'
+    );
+    // The inbound check has to happen before the throttle table is written to,
+    // or a stranger can fill a table that has a ceiling on it and lock the LAN
+    // out of the feature entirely.
+    // Both indexes checked for existence first. `indexOf` of something absent is
+    // -1, which is less than every real index, so the ordering assertion on its
+    // own passed happily with the whole check deleted - the same shape of hole
+    // that let a multicast TTL of 8 through while a comment said 1.
+    const guardAt = lanjs.indexOf('peerRules.allows(');
+    const tableAt = lanjs.indexOf('seen.set(from, now)');
+    assert.ok(guardAt > -1, 'lan.js never checks who a message came from');
+    assert.ok(tableAt > -1, 'lan.js no longer has the throttle table this is ordered against');
+    assert.ok(
+      guardAt < tableAt,
+      'a stranger can take a slot in the throttle table before being refused'
+    );
+    // One message that arrives by two routes is one message. A friend who is both
+    // on this network and in the address list is reached twice, from two source
+    // addresses, so the per-address throttle lets both copies through and the pet
+    // does the activity twice. Keyed on the payload, and after the address check
+    // so that a stranger cannot reach the table at all.
+    const echoAt = lanjs.indexOf('echoes.get(text)');
+    assert.ok(echoAt > -1, 'lan.js does not collapse a message delivered by two routes');
+    assert.ok(guardAt < echoAt, 'a stranger can reach the duplicate table before being refused');
+    assert.ok(
+      lanjs.includes('if (echoes.size >= MAX_SEEN) echoes.clear();'),
+      'the duplicate table has no ceiling'
+    );
+    assert.ok(
+      lanjs.includes('echoes.clear();') && lanjs.indexOf('echoes.clear();', lanjs.indexOf('seen.clear();')) > -1,
+      'the duplicate table survives the socket closing'
+    );
+
+    // The neighbour check runs before the throttle, so it is on the path a flood
+    // reaches. Asking the operating system for its interface list per packet
+    // would turn every unwanted packet into a syscall - which is a multiplier
+    // this file handed out by accident when the check was first put in the right
+    // place. Cached, with a window short enough to notice a cable.
+    assert.ok(
+      !/allows\([^)]*networkInterfaces\(\)/.test(lanjs),
+      'the interface list is fetched fresh on every inbound packet'
+    );
+    assert.ok(
+      /IFACE_TTL_MS/.test(lanjs) && lanjs.includes('now - ifacesAt >= IFACE_TTL_MS'),
+      'the interface list is never refreshed, so a new network is never noticed'
+    );
+    // And the window has to be moved on, or the comparison above is always true
+    // and the cache is a cache that never hits - which is the syscall per packet
+    // again, wearing the clothes of the fix for it.
+    assert.ok(
+      lanjs.includes('ifacesAt = now;'),
+      'the interface cache never records when it was filled, so it never hits'
+    );
+
+    // main.js has to hand the list over, or the box in settings does nothing.
+    assert.ok(
+      mjs.includes('peers: settings.playdateWith'),
+      'main.js never passes the address list to the transport'
+    );
+
     // --- the switch ---
     assert.strictEqual(cfg.DEFAULTS.playdate, false, 'playdates are on by default');
     assert.strictEqual(cfg.load({ playdate: 1 }).playdate, false, 'a truthy value opens the socket');

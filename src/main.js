@@ -1708,6 +1708,12 @@ function applyPlaydate() {
   link = lan.open({
     maxBytes: playdate.MAX_BYTES,
     onMessage: onWire,
+    // Empty unless you named somebody. With it empty this is the LAN-only
+    // feature it was, hop limit and all; with an address in it those addresses
+    // are both the only ones we send to and the only ones off this network we
+    // will read. settings.js has already validated the list, and lan.js
+    // validates it again rather than trusting the caller.
+    peers: settings.playdateWith,
     // A network that will not carry this is not an error worth a red bubble -
     // the pet works exactly as well without a friend on it.
     onError: (err) => console.error('playdate:', err.message),

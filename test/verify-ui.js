@@ -2157,6 +2157,63 @@ app.whenReady().then(async () => {
   for (const c of swatches) {
     check(/^rgba?\(/.test(c) && !c.startsWith('rgba(0, 0, 0, 0'), `a swatch has no colour (${c})`);
   }
+  // --- the address list ----------------------------------------------------
+  //
+  // The box for playing with somebody in another city. Everything about it that
+  // matters is a promise made in prose two paragraphs above it in the window, so
+  // the checks are that the box exists, that it belongs to the switch it sits
+  // under, and that what comes back from the main process is what is shown -
+  // a line the validator dropped has to visibly disappear rather than sit there
+  // looking saved.
+  check(await sjs(`!!document.getElementById('playdate-with')`), 'there is no address box');
+  // Hidden with the switch off, because the main process refuses the list
+  // outright in that state and a box you can type into would be lying.
+  check(
+    await sjs(`document.getElementById('playdate').checked === false
+      && document.getElementById('far-set').hidden === true
+      && document.getElementById('playdate-with').disabled === true`),
+    'the address box is offered with playdates switched off'
+  );
+  await sjs(`(() => {
+    const b = document.getElementById('playdate');
+    b.checked = true;
+    b.dispatchEvent(new Event('change'));
+  })()`);
+  await settle();
+  check(
+    await sjs(`document.getElementById('far-set').hidden === false
+      && document.getElementById('playdate-with').disabled === false`),
+    'switching playdates on did not offer the address box'
+  );
+  // What is typed is split into lines and handed over. The validating is the
+  // main process's job - this side only has to not mangle it on the way.
+  await sjs(`(() => {
+    document.getElementById('playdate-with').value = '100.64.0.7\\n  100.64.0.9  \\n\\nrubbish\\n';
+    document.getElementById('save').click();
+  })()`);
+  await settle();
+  check(
+    Array.isArray(saved && saved.playdateWith)
+      && saved.playdateWith.join('|') === '100.64.0.7|100.64.0.9|rubbish',
+    `the address box sent ${JSON.stringify(saved && saved.playdateWith)}`
+  );
+  // And what comes back is what is shown. The main process drops 'rubbish', so
+  // it has to leave the box - a validator whose result is invisible is one
+  // nobody finds out about.
+  const cleaned = require('../src/core/settings')
+    .load({ playdate: true, playdateWith: saved.playdateWith }).playdateWith;
+  check(
+    cleaned.join('|') === '100.64.0.7|100.64.0.9',
+    `the main process kept ${JSON.stringify(cleaned)}`
+  );
+  await sw.webContents.executeJavaScript(
+    `(() => { document.getElementById('playdate-with').value = ${JSON.stringify(cleaned.join('\n'))}; })()`
+  );
+  check(
+    (await sjs(`document.getElementById('playdate-with').value.split('\\n').length`)) === 2,
+    'a rejected address stayed in the box'
+  );
+
   // And the wardrobe is offered in full, with something readable in each row.
   const wear = await sjs(`(() => [...document.getElementById('wear').options]
     .map((o) => [o.value, o.textContent]))()`);

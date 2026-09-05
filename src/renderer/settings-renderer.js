@@ -19,6 +19,7 @@ const breakEvery = el('break-every');
 const breakFor = el('break-for');
 const mischief = el('mischief');
 const playdate = el('playdate');
+const playdateWith = el('playdate-with');
 
 /**
  * How many other pets are on this network right now.
@@ -270,6 +271,11 @@ function gateDevices() {
   // otherwise the select shows something the main process has already refused.
   providerSel.disabled = !network.checked;
   if (!network.checked) providerSel.value = 'ollama';
+  // The address list belongs to the switch above it and does nothing without it -
+  // the main process refuses the list outright when playdates are off, so a box
+  // you can type into while it is off would be a box that lies to you.
+  playdateWith.disabled = !playdate.checked;
+  el('far-set').hidden = !playdate.checked;
   showProvider();
 }
 
@@ -285,7 +291,7 @@ hotkeyInput.addEventListener('input', () => {
   status.textContent = '';
 });
 
-for (const box of [mic, camera, weather, memoryBox, network]) {
+for (const box of [mic, camera, weather, memoryBox, network, playdate]) {
   box.addEventListener('change', gateDevices);
 }
 providerSel.addEventListener('change', showProvider);
@@ -332,6 +338,9 @@ saveBtn.addEventListener('click', async () => {
     breakFor: Number(breakFor.value),
     mischief: mischief.checked,
     playdate: playdate.checked,
+    // Split here and validated in the main process, which is where a bad address
+    // has to be caught anyway - this side only decides that a line is a line.
+    playdateWith: playdateWith.value.split('\n').map((l) => l.trim()).filter(Boolean),
     mic: mic.checked,
     dictation: dictationSel.value,
     camera: camera.checked,
@@ -372,6 +381,9 @@ saveBtn.addEventListener('click', async () => {
   breakFor.value = current.breakFor;
   mischief.checked = current.mischief;
   playdate.checked = current.playdate;
+  // Joined from what came back rather than from what was typed, so a line the
+  // main process dropped visibly disappears instead of sitting there looking saved.
+  playdateWith.value = (current.playdateWith || []).join('\n');
   wearSel.value = current.wear;
   camera.checked = current.camera;
   mic.checked = current.mic;
@@ -574,6 +586,9 @@ el('close').addEventListener('click', () => window.config.close());
   breakFor.value = current.breakFor;
   mischief.checked = current.mischief;
   playdate.checked = current.playdate;
+  // Joined from what came back rather than from what was typed, so a line the
+  // main process dropped visibly disappears instead of sitting there looking saved.
+  playdateWith.value = (current.playdateWith || []).join('\n');
   wearSel.value = current.wear;
   camera.checked = current.camera;
   mic.checked = current.mic;
