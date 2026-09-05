@@ -142,7 +142,7 @@ turns all three off in the same pass.
 | --- | --- | --- |
 | Weather | A town name you typed into Settings, and coordinates rounded to about 1 km | open-meteo.com |
 | Look things up | The words you typed after `look up`, cleaned and redacted, capped at 120 characters | DuckDuckGo, Wikipedia |
-| A hosted model | **The text read off your screen**, redacted — and your typed messages | Whichever company you selected |
+| A hosted model | **The text read off your screen**, redacted — your typed messages, and the name you gave the pet if you gave it one, because it is part of the prompt rather than a field beside it | Whichever company you selected |
 
 Notes that matter:
 

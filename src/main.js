@@ -1204,6 +1204,10 @@ async function replyTo(message) {
       // word with what you just said. On the default settings that goes to
       // Ollama on loopback; with a hosted provider chosen, it goes there.
       memory: settings.memory ? memory.brief(mem, text, Date.now()) : [],
+      // What you called it, if you called it anything. Never leaves the machine
+      // on the default settings, and goes wherever the question goes on a
+      // hosted provider - it is in the prompt, not a separate field.
+      name: settings.name,
     });
     history.push({ you: text, pet: reply });
     if (history.length > HISTORY_TURNS) history.shift();
@@ -1390,6 +1394,7 @@ async function applySettings() {
 async function saveSettings(patch) {
   const remembered = settings.memory;
   const watched = settings.watch;
+  const named = settings.name;
   settings = config.merge(settings, patch);
   // Switching it off drops what it read. Nothing here was ever written down, but
   // "off" has to mean the process is not still holding the last screen it took
@@ -1408,6 +1413,13 @@ async function saveSettings(patch) {
     // Same rule as forgetting everything: switching memory off must not leave
     // the last screen sitting in this process ready to be quoted back.
     lastScreen = null;
+  }
+  // Named, or renamed. Worth one line out loud: a name typed into a settings
+  // window and silently accepted is a form field, and a pet that answers to it a
+  // second later is a pet. Goes through talk() like everything else it says off
+  // its own bat, so do not disturb still silences it.
+  if (settings.name && settings.name !== named) {
+    talk(null, { text: `${settings.name}. I like that.`, event: 'chat' });
   }
   writeJson('settings.json', settings);
   await applySettings();

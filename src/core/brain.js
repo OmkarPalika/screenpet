@@ -225,13 +225,18 @@ const SCREEN_MEMORY = 700;
 const screenText = (screen) =>
   (screen ? String(screen.text || '').trim() : '').slice(0, SCREEN_MEMORY);
 
-function buildChatPrompt(message, { mood = 'neutral', history = [], memory = [], screen = null } = {}) {
+function buildChatPrompt(message, { mood = 'neutral', history = [], memory = [], screen = null, name = '' } = {}) {
   const tone = TONE[mood] || '';
   const notes = Array.isArray(memory) ? memory.filter((l) => typeof l === 'string') : [];
   // Redacted before it got here, and it goes stale on its own - see main.js.
   const seen = screenText(screen);
   return [
     PERSONA,
+    // Only when they gave it one, and one line rather than a paragraph: a small
+    // model handed a sentence about its own identity starts performing it. The
+    // instruction not to open with its own name is already three lines below,
+    // and it is what stops every reply becoming "Rex here!".
+    ...(name ? [`Your name is ${name}. They chose it. Answer to it if they use it.`] : []),
     'Talk the way a person talks out loud: contractions, plain words, nothing stiff.',
     'At most two short sentences. If you have written a third, cut it.',
     'Lead with the answer itself rather than a sentence built around it, and never',

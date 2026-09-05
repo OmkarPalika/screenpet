@@ -161,6 +161,7 @@ and quit it — the pet has no taskbar button by design.
 | Model | Picked from what Ollama actually has installed. |
 | Diagrams and images | `Auto` uses a vision model if one exists, `Off` forces text-only. |
 | Hotkey | Validated before saving; a malformed accelerator would crash the app on launch. |
+| Name | What you call it, up to 24 characters, any script. Empty means unnamed, which is the default — a name the app picked for you is not a name you gave it. It answers to it and says it when asked, and never opens a reply with it. |
 | Pet | Blob, cat, pup, bun, bird, dragon, fox, axolotl, ghost or robot. Previews are the real thing. |
 | Skin | Ten palettes — butter, mint, blossom, slate, coal, cream, moss, plum, sky, coral. Applies to whichever pet you picked. |
 | Wearing | Nothing, bow, shades, halo, masked hero, party hat, wizard hat, crown or headphones. See [The wardrobe](DESIGN.md#the-wardrobe). |

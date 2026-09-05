@@ -19,6 +19,8 @@ What the app does is [README.md](README.md); why it behaves the way it does is
   Ollama model. The screen text never leaves the machine.
 - The care loop: ten pets, ten skins, a wardrobe, hunger, sleep, wandering,
   petting, moods and mischief.
+- A name, if you give it one. Up to 24 characters in any script; the pet
+  answers to it, and says one line when you first choose it.
 - Timers, breaks, memory, skills, a voice, and dictation.
 - Two answering tiers, a settings window, and a Windows installer.
 - A `Download and install` button that replaces the app without the setup
