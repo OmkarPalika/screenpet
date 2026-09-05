@@ -33,6 +33,21 @@ into a Windows installer.
 
 ## Install
 
+Prebuilt Windows binaries are on the [releases
+page](https://github.com/OmkarPalika/screenpet/releases/latest) — an installer
+and a portable executable.
+
+**They are not code signed**, so Windows SmartScreen will warn you that the
+publisher is unrecognised. That warning is accurate: nobody has vouched for
+these binaries yet. An application is going in with the [SignPath
+Foundation](https://signpath.org), who provide free code signing certificates
+to open source projects; once it is granted, releases will be signed by them
+and this paragraph will say so instead. Until then, **More info → Run anyway**,
+or build it yourself from source below — which is the better answer if the
+warning bothers you, and is why the source is here.
+
+### From source
+
 ```bash
 npm install
 ```
