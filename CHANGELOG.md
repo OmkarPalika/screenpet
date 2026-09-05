@@ -8,60 +8,44 @@ credited in them. Those notes are here.
 Versions are [semantic](https://semver.org/spec/v2.0.0.html). Dates are the day
 the version was tagged.
 
-## Unreleased
+## [0.1.0] — unreleased
 
-### Added
+The first release. Everything in the repository is part of it, so there is no
+list of changes against a previous version — there is no previous version.
+What the app does is [README.md](README.md); why it behaves the way it does is
+[DESIGN.md](DESIGN.md). The short form:
 
-- The pet runs with no model installed at all. It wanders, naps, eats, is
-  petted, wears hats, sets timers and pulls faces without Ollama anywhere;
-  reading the screen is the one thing gated on a model, and until one is there
-  the pet says so in its own words instead of showing a failed request.
-- A `ci` workflow running the unit tests on every push and pull request.
-- `DESIGN.md` — the behaviour and the measurements behind it, moved out of the
-  README so that installing the app does not mean scrolling past two thousand
-  lines first.
+- A desktop pet that reads the screen with local OCR and answers with a local
+  Ollama model. The screen text never leaves the machine.
+- The care loop: ten pets, ten skins, a wardrobe, hunger, sleep, wandering,
+  petting, moods and mischief.
+- Timers, breaks, memory, skills, a voice, and dictation.
+- Two answering tiers, a settings window, and a Windows installer.
+- A `Download and install` button that replaces the app without the setup
+  wizard.
 
-### Fixed
-
-- A model that could not be reached returned its error as though it were an
-  answer, so `npm run smoke` exited 0 with Ollama switched off and the pet
-  spoke a failure in the voice it uses for facts. All four failure paths now
-  throw.
-- `npm run verify:ui` failed roughly one run in five, in two unrelated ways:
-  `capturePage` dropping the first frame a window ever composites, and a
-  randomised check that drew too few samples to tell a real regression from a
-  bad afternoon.
-- `npm run doctor` said the pet "cannot think" without Ollama, which stopped
-  being true with the change above.
+The pet runs with no model installed at all — it wanders, naps, eats, is
+petted, wears hats, sets timers and pulls faces without Ollama anywhere.
+Reading the screen is the one thing gated on a model, and until one is there
+the pet says so in its own words rather than showing a failed request.
 
 ### Security
 
-- Nothing new leaves the machine. This release changes no network behaviour.
-- [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) said the app had no runtime
-  dependencies. Adding the update button in 0.1.1 put sixteen packages inside
-  `app.asar`, two of them under licences that require their notice to travel
-  with the software. All sixteen are now credited, and a test fails if a
+- On the default settings nothing leaves the machine: no screen text, no
+  image, no telemetry, and the only socket opened is to loopback. Blocking the
+  app in Windows Defender Firewall changes nothing about how it works, which is
+  how to check the claim from outside the code. The internet switch and a
+  hosted provider are opt-in and off.
+- The update feed is baked in at build time and nothing in the settings can
+  redirect it. This is the one path in the app that downloads an executable
+  and then runs it, so a field pointing it elsewhere would be arbitrary code
+  execution.
+- **The binaries are not signed.** The download is checked against a hash
+  served from the same release as the installer, so the trust boundary is the
+  GitHub account rather than the binary itself, and Windows SmartScreen will
+  warn on first run. [SECURITY.md](SECURITY.md) has the detail.
+- `electron-updater` puts sixteen packages inside `app.asar`, two of them
+  under licences that require their notice to travel with the software. All
+  sixteen are credited in
+  [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), and a test fails if a
   seventeenth arrives without a row.
-- [SECURITY.md](SECURITY.md) never described the update channel, which is the
-  one path in the app that downloads an executable and then runs it. It now
-  states where the feed comes from, that nothing may redirect it, and what
-  being unsigned actually costs: the download is checked against a hash served
-  from the same release as the installer, so the trust boundary is the GitHub
-  account rather than the binary.
-- [PRIVACY.md](PRIVACY.md) said everything stored is in one folder. Pressing
-  `Download and install` writes the installer to `%LOCALAPPDATA%\screenpet-updater\`,
-  which is now documented along with how to remove it.
-- Two advisories cleared in build-only dependencies: `fast-uri` (four SSRF and
-  host-confusion issues) and `@xmldom/xmldom`. Neither ships in the app.
-
-## [0.1.2] — 2026-09-03
-
-A version bump and nothing else. Tagged to exercise the release flow.
-
-## [0.1.1] — 2026-09-03
-
-The first tagged build, and everything up to it — the care loop, ten pets, ten
-skins, the wardrobe, the voice, dictation, the skills, memory, breaks, the two
-answering tiers, the settings window, the Windows installer, and the button
-that replaces the app without the setup wizard. The commit history before this
-tag is the detail.
