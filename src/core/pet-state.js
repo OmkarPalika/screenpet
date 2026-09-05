@@ -362,6 +362,10 @@ const LINES = {
   justplayed: ['catching my breath', 'give me a second', 'one more round in a minute'],
   tickled: ['hehe, stop', 'that tickles', 'no fair'],
   dragged: ['wheee', 'put me down gently', 'I liked it over there'],
+  // You were singing. About you rather than about itself: the pet is the
+  // audience here, and an audience that makes it about their own dancing is not
+  // an audience.
+  sung: ['more of that', 'you are good at this', 'do the next bit', 'I know this one'],
 
   // Asked for something while the last thing you asked for is still being
   // written. Deliberately about the pet being mid-task rather than about you
@@ -677,6 +681,8 @@ const EXPRESSIONS = {
   think: 'hmm',
   chat: 'smile',
   greet: 'grin',
+  // Delighted rather than proud - proud is the face for something the pet did.
+  sung: 'joy',
   wake: 'oh',
   praise: 'proud',
   bashful: 'shy',

@@ -1007,6 +1007,9 @@ let beatRaf = 0;
 let beatAvg = 0;
 let lastBeatAt = 0;
 let beatUntil = 0; // 0 means "for as long as the setting is on"
+// Reset with the microphone rather than kept across it, so a dance that ended
+// twenty minutes ago is not still half way through a note.
+let heardSinging = null;
 
 function stopBeat() {
   cancelAnimationFrame(beatRaf);
@@ -1016,6 +1019,7 @@ function stopBeat() {
   if (audioCtx) audioCtx.close();
   audioCtx = null;
   beatAvg = 0;
+  heardSinging = null;
   if (!camStream) camEl.hidden = true; // the dot is shared with the camera
 }
 
@@ -1036,6 +1040,11 @@ async function listenForBeat(on, forMs = 0) {
   analyser.fftSize = FFT;
   audioCtx.createMediaStreamSource(audioStream).connect(analyser);
   const bins = new Uint8Array(analyser.frequencyBinCount);
+  // Which frequency each bin covers. Read off the context rather than assumed:
+  // a 44.1kHz machine and a 48kHz one put the voice in different bins, and
+  // singing.js works in Hz because that is the thing that does not move.
+  const hzPerBin = audioCtx.sampleRate / 2 / bins.length;
+  heardSinging = singing.tracker();
   camEl.hidden = false; // same green dot: something is listening
 
   const sample = () => {
@@ -1058,6 +1067,14 @@ async function listenForBeat(on, forMs = 0) {
       // Beats arriving mid-move are skipped rather than restarting it.
       if (!petEl.dataset.move) move('jump');
     }
+    // ...and whether that was you rather than the record. Reported rather than
+    // acted on here, which is the one place this differs from the beat above:
+    // a beat is a movement and main has no use for it, but singing is answered
+    // with a line, and every line the pet says comes out of one door in main so
+    // the bank and the face cannot drift apart. Quiet hours and a half-written
+    // answer both get to refuse it there, which is the right place for both.
+    if (heardSinging(bins, hzPerBin, now)) window.pet.sang();
+
     // Rolling average, weighted towards the past so one loud moment does not
     // become the new normal.
     beatAvg = beatAvg ? beatAvg * 0.9 + energy * 0.1 : energy;

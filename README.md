@@ -231,7 +231,7 @@ and quit it — the pet has no taskbar button by design.
 | Little noises | On by default. A woof, a meow, a chirp — synthesised, not played from a file. Muted separately from the voice. |
 | Let me talk to it | Off by default. Adds `Listen…` to the pet's menu. |
 | Answer to “hey pet” | Off by default, needs the above. **Holds the microphone open.** See [The wake word](DESIGN.md#the-wake-word). |
-| Bop along to music | Off by default, needs the microphone. **Holds it open.** See [Dancing](DESIGN.md#dancing). |
+| Bop along to music | Off by default, needs the microphone. **Holds it open.** The pet moves on the beat — and dances and says something nice if the noise turns out to be you singing. See [Dancing](DESIGN.md#dancing). |
 | Notice when I am at the desk | Off by default. Motion only — see [Noticing you](DESIGN.md#noticing-you). |
 | Tell a face from a curtain | Off by default, needs the camera. A count, never a name — see [Counting faces](DESIGN.md#counting-faces). |
 | Let it out on the internet | **Off** by default. The master switch — see "Going outside". Unlocks the next four; switching it off switches them all off. |

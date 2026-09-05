@@ -1444,6 +1444,36 @@ app.whenReady().then(async () => {
     'the pet does not blink when its eyes come back open'
   );
 
+  // --- singing at it --------------------------------------------------------
+  // The detector is its own classic script, and the failure this whole file was
+  // written for is a top level const in one of those colliding with another and
+  // taking the renderer down at parse time. So: prove it is there, and prove it
+  // works, on a spectrum built in the page rather than on one from a microphone
+  // this machine may not have.
+  const sang = await js(`(() => { try {
+    if (typeof singing !== 'object') return { loaded: false, why: typeof singing };
+    const HZ = 93.75; // 48kHz through the beat listener's 512 point FFT
+    const vowel = new Uint8Array(256).fill(14);
+    for (const [hz, level] of [[220, 250], [440, 170], [660, 110], [880, 70]]) {
+      vowel[Math.round(hz / HZ)] = level;
+    }
+    const hiss = new Uint8Array(256).fill(70);
+    const heard = singing.tracker();
+    let fired = 0;
+    for (let t = 0; t < 4000; t += 25) if (heard(vowel, HZ, t)) fired += 1;
+    return {
+      loaded: true,
+      vowel: singing.voiced(vowel, HZ),
+      hiss: singing.voiced(hiss, HZ),
+      fired,
+    };
+  } catch (e) { return { loaded: false, why: String(e && e.message || e) }; } })()`);
+  console.error("DBG", JSON.stringify(sang));
+  check(sang.loaded, 'singing.js did not survive being loaded beside the other scripts');
+  check(sang.vowel, 'a held vowel is not heard as singing in the real renderer');
+  check(!sang.hiss, 'a flat hiss is heard as singing in the real renderer');
+  check(sang.fired === 1, `four seconds of one held note fired ${sang.fired} times rather than once`);
+
   // --- body movements -------------------------------------------------------
   // The face and the body are separate axes, and the point of separating them is
   // that both can run at once. If a movement ever lands on .pet instead of the
