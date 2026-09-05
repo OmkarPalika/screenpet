@@ -2763,6 +2763,35 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       assert.ok(!seen.url.includes(KEY), `${name} leaked the key into the URL`);
       assert.ok(!seen.init.body.includes(KEY), `${name} leaked the key into the body`);
       assert.ok(seen.init.body.includes('a prompt'), `${name} lost the prompt`);
+
+      // Every one of them has to be told to stop somewhere. An unbounded reply
+      // from a hosted model is somebody else's idea of how long an answer
+      // should be, charged to you.
+      const body = JSON.parse(seen.init.body);
+      const cap = body.max_tokens ?? body.max_completion_tokens
+        ?? (body.generationConfig || {}).maxOutputTokens;
+      assert.strictEqual(cap, providers.MAX_TOKENS, `${name} sent no ceiling on the reply`);
+    }
+
+    // ...and OpenAI's own endpoint wants that ceiling under a different name.
+    // It refuses max_tokens outright on its newer models, and the model field
+    // is free text where whatever you type wins - so with the old spelling,
+    // typing a current model name is a request that cannot succeed. The newer
+    // name is accepted by the older models too, which is what makes it safe to
+    // send always rather than guessing from the model name.
+    await providers.generate('a prompt', { provider: 'openai', key: KEY, fetch: spy });
+    const openaiBody = JSON.parse(seen.init.body);
+    assert.strictEqual(openaiBody.max_completion_tokens, providers.MAX_TOKENS, 'OpenAI got the deprecated name');
+    assert.strictEqual(openaiBody.max_tokens, undefined, 'OpenAI got both names, which it also refuses');
+
+    // Only OpenAI. NVIDIA and Mistral speak the same shape but are their own
+    // implementations of the older spec, and sending them a parameter OpenAI
+    // invented breaks two providers to fix one.
+    for (const other of ['nvidia', 'mistral']) {
+      await providers.generate('a prompt', { provider: other, key: KEY, fetch: spy });
+      const b = JSON.parse(seen.init.body);
+      assert.strictEqual(b.max_tokens, providers.MAX_TOKENS, `${other} lost its ceiling`);
+      assert.strictEqual(b.max_completion_tokens, undefined, `${other} was sent OpenAI's spelling`);
     }
 
     // No key, no request at all.
