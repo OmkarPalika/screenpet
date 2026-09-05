@@ -3307,6 +3307,26 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       assert.ok(fs.existsSync(`./${f}`), `${f} is listed in the build but is not in the repository`);
     }
 
+    // The privacy policy prints a table of every file the app writes and then
+    // says deleting that folder removes everything. A sixth file added without
+    // a row makes both of those sentences false, and a privacy policy that
+    // undercounts what is on disk is the kind of wrong that matters.
+    const written = new Set();
+    (function walk(dir) {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = `${dir}/${e.name}`;
+        if (e.isDirectory()) walk(p);
+        else if (e.name.endsWith('.js')) {
+          for (const m of fs.readFileSync(p, 'utf8').matchAll(/'([a-z-]+\.json)'/g)) written.add(m[1]);
+        }
+      }
+    })('./src');
+    const policy = fs.readFileSync('./PRIVACY.md', 'utf8');
+    assert.ok(written.size >= 5, `only found ${written.size} data files, so this check has stopped working`);
+    for (const f of written) {
+      assert.ok(policy.includes(`\`${f}\``), `the app writes ${f} and PRIVACY.md does not say so`);
+    }
+
     // The licence page is generated from TERMS.md at package time. If the
     // generator stops running, the installer keeps showing whatever terms
     // happened to be on disk the last time somebody ran it by hand.
