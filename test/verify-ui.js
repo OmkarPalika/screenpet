@@ -20,6 +20,25 @@ const ROOT = path.join(__dirname, '..');
 const problems = [];
 const check = (cond, msg) => { if (!cond) problems.push(msg); };
 
+// capturePage occasionally rejects with UnknownVizError, roughly one run in six,
+// always on the first capture a window ever takes: the compositor has not
+// produced a frame for that surface yet and the request is dropped rather than
+// queued. Nothing about the page is wrong, so ask again. One retry is enough -
+// the second attempt has never been the failing one - and a real GPU failure
+// still fails, just a beat later. The name is in the message because
+// capturePage's own error says only that something went wrong, not what.
+async function capture(webContents, name) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      fs.writeFileSync(path.join(ROOT, name), (await webContents.capturePage()).toPNG());
+      return;
+    } catch (err) {
+      if (attempt > 0) throw new Error(`capturePage failed writing ${name}: ${err.message}`);
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+}
+
 // A rejected executeJavaScript - a selector that matched nothing, usually -
 // otherwise aborts the run silently and the app just sits there forever with a
 // window open. Fail loudly instead; a hang tells you nothing.
@@ -74,14 +93,7 @@ app.whenReady().then(async () => {
 
   await win.loadFile(path.join(SRC, 'renderer', 'index.html'));
   const js = (src) => win.webContents.executeJavaScript(src);
-  const shot = async (name) => {
-    try {
-      fs.writeFileSync(path.join(ROOT, name), (await win.webContents.capturePage()).toPNG());
-    } catch (err) {
-      // capturePage reports GPU failures with no clue which capture it was.
-      throw new Error(`capturePage failed writing ${name}: ${err.message}`);
-    }
-  };
+  const shot = (name) => capture(win.webContents, name);
   const settle = () => new Promise((r) => setTimeout(r, 250));
   const shownOnScreen = async (id) =>
     (await js(`getComputedStyle(document.getElementById('${id}')).display`)) !== 'none';
@@ -638,20 +650,28 @@ app.whenReady().then(async () => {
     'a parked pet never comes back to the spot you chose'
   );
 
-  // ...and with mischief on it does not only pace the bottom of the screen. The
-  // same forty wanders, counting how many different heights it stood at: one or
+  // ...and with mischief on it does not only pace the bottom of the screen.
+  // Wanders in bulk, counting how many different heights it stood at: one or
   // two means the floor and home, which is what it did before.
+  //
+  // Two hundred rather than forty, because only a climb that is not also a trip
+  // home leaves a new height behind - CLIMB * half the trips, so roughly one
+  // wander in seven. Forty of them cleared the bar of five by an average of two,
+  // and the run below it came up about once in nine: a real failure was
+  // indistinguishable from a bad afternoon. This is a loop with no timers in it,
+  // so the extra samples cost nothing.
+  const WANDERS = 200;
   const heights = (on) => js(`(() => {
     mischief = ${on};
     const tops = new Set();
-    for (let i = 0; i < 40; i++) { wanderTo(); tops.add(Math.round(stageTop)); }
+    for (let i = 0; i < ${WANDERS}; i++) { wanderTo(); tops.add(Math.round(stageTop)); }
     return { tops: [...tops], floor: Math.round(roomY()) };
   })()`);
 
   const roaming = await heights(true);
   check(
     roaming.tops.length >= 5,
-    `mischief on and the pet stood at ${roaming.tops.length} height(s) in forty wanders`
+    `mischief on and the pet stood at ${roaming.tops.length} height(s) in ${WANDERS} wanders`
   );
   check(
     roaming.tops.some((t) => t < roaming.floor - 1),
@@ -1300,11 +1320,7 @@ app.whenReady().then(async () => {
          document.body.append(box); })()`
     );
     await settle();
-    try {
-      fs.writeFileSync(path.join(ROOT, name), (await sw.webContents.capturePage()).toPNG());
-    } catch (err) {
-      throw new Error(`capturePage failed writing ${name}: ${err.message}`);
-    }
+    await capture(sw.webContents, name);
     sw.destroy();
   }
 
@@ -1704,7 +1720,7 @@ app.whenReady().then(async () => {
     'the update button is reachable in a build that cannot update, or the version is missing'
   );
   await sjs(`document.querySelector('.tab[data-tab="pet"]').click()`);
-  fs.writeFileSync(path.join(ROOT, 'pet-settings.png'), (await sw.webContents.capturePage()).toPNG());
+  await capture(sw.webContents, 'pet-settings.png');
 
   // A malformed accelerator must not be savable - registering one throws.
   await sjs(
