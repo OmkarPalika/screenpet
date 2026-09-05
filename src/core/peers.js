@@ -36,6 +36,15 @@
 // silently does nothing.
 const MAX_LIST = 8;
 
+// How long a port we learned from an arriving packet is trusted.
+//
+// A friend behind a router is not reachable on the port we send to; they are
+// reachable on whichever port their router rewrote it to, and only for as long
+// as that router keeps the mapping. Beacons every three seconds hold one open,
+// so this only has to outlast an ordinary gap - ten missed beacons - and then
+// fall back rather than keep aiming at a hole that has closed.
+const PORT_TTL_MS = 30000;
+
 const QUAD = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
 
 /**
@@ -132,4 +141,34 @@ function allows(from, peerList, ifaces) {
   return sameNetwork(a, ifaces);
 }
 
-module.exports = { list, cleanAddr, sameNetwork, allows, MAX_LIST };
+/** A port number as it may appear in a datagram, or null. */
+function cleanPort(v) {
+  return Number.isInteger(v) && v > 0 && v <= 65535 ? v : null;
+}
+
+/**
+ * Which port to send this friend's next message to.
+ *
+ * The one we last heard them on, while that is recent enough to still be open,
+ * and the well-known one otherwise. This is what lets a friend behind a router
+ * be reached at all without both ends forwarding a port: their packet to us
+ * opens a mapping, we notice which port it came out of, and we aim at that.
+ *
+ * It cannot redirect anything anywhere. The port is stored against the address
+ * it arrived from and only ever used for that same address, so the most a peer
+ * can do with it is change which port on their own machine we talk to.
+ *
+ * @param {{port: number, at: number}|undefined} entry  what we last heard
+ * @param {number} now
+ * @param {number} fallback  the well-known port
+ */
+function backPort(entry, now, fallback) {
+  if (!entry || typeof entry !== 'object') return fallback;
+  const port = cleanPort(entry.port);
+  if (port === null || !Number.isFinite(entry.at)) return fallback;
+  return now - entry.at < PORT_TTL_MS ? port : fallback;
+}
+
+module.exports = {
+  list, cleanAddr, sameNetwork, allows, cleanPort, backPort, MAX_LIST, PORT_TTL_MS,
+};

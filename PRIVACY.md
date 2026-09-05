@@ -245,6 +245,13 @@ WireGuard, all free at this size. **The app does not use, require, bundle or
 check for any of them.** It sends a UDP packet to an address you typed; where
 that address came from is your business and the app never finds out.
 
+When a friend's message arrives, the port it came from is noted in memory for
+half a minute, so the reply can go back through the hole their router opened
+rather than to a port nothing is listening on. It is never written to disk, it
+is only kept for addresses already in your list, and it is only ever used to
+talk to that same address — the most a friend can do with it is change which
+port on their own machine the pet talks to.
+
 Addresses are validated in `src/core/peers.js` before anything is sent to them.
 Hostnames are refused on purpose: accepting `friend.example.com` would look like
 a kindness and would put the names of everyone you play with into a DNS query,

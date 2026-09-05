@@ -4780,6 +4780,79 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
       'the socket is still marked usable after being closed'
     );
 
+    // --- answering on the port they actually came from ----------------------
+    //
+    // A machine behind a router is not reachable on the port we send to. Its
+    // router rewrote the source port on the way out, and that rewritten port is
+    // the only way back in, for as long as the mapping lasts. Sending to the
+    // well-known port instead meant both ends had to forward one; noticing where
+    // a packet came from means one end is enough.
+    assert.strictEqual(peers.backPort(undefined, 1000, 41234), 41234, 'an unknown friend has no default port');
+    assert.strictEqual(peers.backPort(null, 1000, 41234), 41234, 'a null entry is read as a port');
+    assert.strictEqual(peers.backPort({ port: 52341, at: 1000 }, 2000, 41234), 52341,
+      'a freshly learned port is ignored');
+    // And it lapses. A mapping a router has already closed is a hole we would go
+    // on aiming at forever, so an old one falls back rather than being trusted.
+    assert.strictEqual(
+      peers.backPort({ port: 52341, at: 1000 }, 1000 + peers.PORT_TTL_MS, 41234), 41234,
+      'a port learned long ago is still trusted'
+    );
+    assert.strictEqual(
+      peers.backPort({ port: 52341, at: 1000 }, 1000 + peers.PORT_TTL_MS - 1, 41234), 52341,
+      'a port that is still inside its window was thrown away'
+    );
+    assert.ok(peers.PORT_TTL_MS >= 10000, 'the learned port lapses faster than an ordinary gap in beacons');
+    // Rubbish in a datagram is not a port. 0 and 65536 are the two that a naive
+    // range check gets wrong, and a float is what a hand-built packet offers.
+    for (const bad of [0, -1, 65536, 1.5, NaN, Infinity, '41234', null, undefined, {}]) {
+      assert.strictEqual(peers.cleanPort(bad), null, `${JSON.stringify(bad)} was accepted as a port`);
+      assert.strictEqual(peers.backPort({ port: bad, at: 1000 }, 1000, 41234), 41234,
+        `${JSON.stringify(bad)} was sent to as a port`);
+    }
+    for (const good of [1, 41234, 65535]) {
+      assert.strictEqual(peers.cleanPort(good), good, `${good} was refused as a port`);
+    }
+    // A malformed timestamp must not read as "recent".
+    //
+    // 'soon' is the obvious test and the useless one: it subtracts to NaN, every
+    // comparison against it is false, and the entry is refused whether the check
+    // is there or not. null is the input that tells the two apart - it coerces to
+    // zero, so an entry with no timestamp at all reads as milliseconds old.
+    for (const at of [null, true, [], '']) {
+      assert.strictEqual(
+        peers.backPort({ port: 52341, at }, 2000, 41234), 41234,
+        `an entry timestamped ${JSON.stringify(at)} was trusted`
+      );
+    }
+    assert.strictEqual(peers.backPort({ port: 52341, at: 'soon' }, 2000, 41234), 41234,
+      'an unreadable timestamp was trusted');
+
+    // In the transport: learned only for addresses already in the list, only
+    // after the source has been allowed, and used only for the address it was
+    // learned from - so the most a peer can do with this is move which port on
+    // its own machine we talk to.
+    const learnAt = lanjs.indexOf('backTo.set(from,');
+    assert.ok(learnAt > -1, 'lan.js never notices which port a friend came from');
+    assert.ok(guardAt < learnAt, 'a stranger can teach us a port before being refused');
+    assert.ok(
+      lanjs.includes('if (far.includes(from)) {'),
+      'a port is learned for addresses that are not on the list'
+    );
+    assert.ok(
+      lanjs.includes('sock.send(text, peerRules.backPort(backTo.get(addr), now, PORT), addr)'),
+      'the transport does not answer on the port a friend came from'
+    );
+    // The group send must not follow a learned port: it goes to the group, on
+    // the well-known port, or the pets on this network stop hearing each other.
+    assert.ok(
+      lanjs.includes('sock.send(text, PORT, GROUP);'),
+      'the multicast send no longer goes to the well-known port'
+    );
+    assert.ok(
+      /backTo\.clear\(\);/.test(lanjs),
+      'the learned ports outlive the socket'
+    );
+
     // main.js has to hand the list over, or the box in settings does nothing.
     assert.ok(
       mjs.includes('peers: settings.playdateWith'),
