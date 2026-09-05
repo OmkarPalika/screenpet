@@ -353,11 +353,20 @@ const LINES = {
 
   fed: ['mmm, thank you', 'that hit the spot', 'more later?'],
   full: ['could not eat another bite', 'genuinely stuffed', 'saving room, thanks'],
+  // Not full, just fed a moment ago. A separate bank from 'full' because it is a
+  // different answer: one is "no more today", this is "in a minute".
+  justfed: ['still finishing the last one', 'one snack at a time', 'let me chew first'],
   patted: ['*happy wiggle*', 'again, please', 'best part of my day'],
   played: ['that was fun', 'again! again!', 'okay, one more round'],
   tired: ['too sleepy to play', 'my legs are made of jelly', 'nap first, play after'],
+  justplayed: ['catching my breath', 'give me a second', 'one more round in a minute'],
   tickled: ['hehe, stop', 'that tickles', 'no fair'],
   dragged: ['wheee', 'put me down gently', 'I liked it over there'],
+
+  // Asked for something while the last thing you asked for is still being
+  // written. Deliberately about the pet being mid-task rather than about you
+  // clicking twice: the second one is a telling-off, and this is a queue.
+  later: ['one thing at a time', 'let me finish this one first', 'still on the last one'],
 
   woke: ['oh, you are back', 'I was resting my eyes', 'hello again'],
   // Going the other way. The pet used to nod off in silence and just look grey,
@@ -660,6 +669,10 @@ const EXPRESSIONS = {
   tickle: 'giggle',
   drag: 'dizzy',
   refuse: 'sulk',
+  // Turning something down for now rather than for good, so neither of these is
+  // the sulk: mildly caught out, and visibly mid-thought.
+  soon: 'oh',
+  later: 'hmm',
   answer: 'smile',
   think: 'hmm',
   chat: 'smile',

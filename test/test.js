@@ -335,10 +335,43 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
   for (const kind of [
     'hungry', 'sad', 'morning', 'afternoon', 'evening', 'night',
     'fed', 'full', 'patted', 'played', 'tired', 'tickled', 'dragged',
+    'justfed', 'justplayed', 'later',
     'woke', 'idle',
   ]) {
     assert.ok(pets.line(kind, 0).length > 0, `no lines for ${kind}`);
   }
+  for (const event of ['soon', 'later']) {
+    assert.ok(pets.expressionFor(event), `"${event}" has no face`);
+  }
+  // Turning something down for now is not turning it down for good, so neither
+  // of those wears the face that means no.
+  assert.notStrictEqual(pets.expressionFor('soon'), pets.expressionFor('refuse'));
+
+  // ---- nothing you click may do nothing ----
+  //
+  // A button that is not greyed out and produces no reaction at all is what a
+  // broken button looks like, and the pet had four of them.
+  const mjs = require('fs').readFileSync('./src/main.js', 'utf8');
+
+  // Feed and Play are menu items, so their cooldown answers. Headpats and pokes
+  // are done by touching the pet, and those stay quiet - a pet that complains
+  // about a fourth headpat is worse than one that ignores it.
+  const soon = mjs.slice(mjs.indexOf('const SOON = {'), mjs.indexOf('};', mjs.indexOf('const SOON = {')));
+  assert.ok(soon.includes('feed:') && soon.includes('play:'), 'a menu button went back to silence on its cooldown');
+  assert.ok(!soon.includes('pet:') && !soon.includes('tickle:'), 'the pet complains about a fourth headpat');
+  assert.ok(
+    mjs.includes("} else if (result.reason === 'not yet') {"),
+    'a cooldown is not told apart from being too full to eat'
+  );
+
+  // And the three doors you can knock on mid-answer. The chat box matters most:
+  // it clears itself as you press enter, so a message dropped there is gone.
+  for (const fn of ['async function readScreen(', 'async function replyTo(', 'async function listenAndReply(']) {
+    const head = mjs.slice(mjs.indexOf(fn), mjs.indexOf(fn) + 700);
+    assert.ok(head.includes('tooBusy()'), `${fn.slice(15, -1)} drops what you asked for without a word`);
+  }
+  // ...but a read nobody asked for still waits for the next tick in silence.
+  assert.ok(mjs.includes('if (!unprompted) tooBusy();'), 'a timed read talks over an answer being written');
 
   // Asked to read with no model installed. This is the whole of what somebody
   // who has not installed Ollama ever sees from the reading half of the app, so
