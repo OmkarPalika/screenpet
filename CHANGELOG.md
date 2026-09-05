@@ -8,7 +8,7 @@ credited in them. Those notes are here.
 Versions are [semantic](https://semver.org/spec/v2.0.0.html). Dates are the day
 the version was tagged.
 
-## [0.1.0] — unreleased
+## [0.1.0] — 2026-09-05
 
 The first release. Everything in the repository is part of it, so there is no
 list of changes against a previous version — there is no previous version.
