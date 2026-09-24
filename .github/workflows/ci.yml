@@ -30,6 +30,53 @@ jobs:
       # A runner has no Ollama, so it is here for its output, not its verdict.
       - run: node test/doctor.js || true
 
+  # The macOS helper. It is Swift, so nothing above this can tell whether it
+  # still builds - and until this job existed nothing anywhere could: it had
+  # never been compiled on any machine, which made src/system/mac a directory of
+  # hopeful text that three JavaScript files already call as if it worked.
+  mac-helper:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # No `npm ci`. build:helper is one swiftc call over one file and reaches
+      # for nothing in node_modules - and running the documented command rather
+      # than the compiler directly means BUILDING.md is under test too.
+      - run: npm run build:helper
+
+      # Compiling proves it parses. This proves it answers on the contract
+      # ocr.js, faces.js and keys.js already speak - base64 in on stdin, the
+      # documented bytes back out - which is the half a compiler cannot check.
+      - name: it answers on the contract the JavaScript expects
+        run: |
+          set -euo pipefail
+          h=src/system/mac/screenpet-helper
+          # No line breaks: stdinImage decodes strictly and would refuse them.
+          png="$(base64 -i assets/icon.png | tr -d '\n')"
+
+          # A count and nothing else, which is the whole of what faces.js
+          # parses: `Number.isInteger(n) && n >= 0` on the trimmed stdout. Not
+          # asserted as 0 - the icon is a smiley, and whether Vision counts a
+          # drawn face as a face is its business and may change between OS
+          # releases. A red light for that would say nothing about this code.
+          printf %s "$png" | "$h" faces | grep -Eq '^[0-9]+$'
+
+          # And no text in it either - but an empty result is still JSON, and
+          # json.tool refuses anything that is not, which is what ocr.js parses.
+          printf %s "$png" | "$h" ocr | python3 -m json.tool > /dev/null
+
+          # The keychain half, round trip: written and read by the same binary
+          # on the same machine, which is the only case keys.js ever asks for.
+          secret='a key that has to survive the trip'
+          wrapped="$(printf %s "$secret" | "$h" keychain protect)"
+          test "$(printf %s "$wrapped" | "$h" keychain unprotect)" = "$secret"
+
+          # Rubbish in is a refusal. A helper that returns something
+          # plausible-looking here would hand keys.js a corrupt key silently.
+          ! printf %s 'not base64 at all' | "$h" keychain unprotect 2>/dev/null
+
+          echo "helper answers on all three"
+
 # Not here: npm run verify:ui. It launches real Electron windows and captures
 # them, so it needs a compositor that will hand back a frame - xvfb with a
 # software GL stack on a Linux runner, or a Windows runner's non-interactive
