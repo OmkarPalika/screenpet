@@ -73,7 +73,7 @@ choice is a USB token that has to be plugged in, or a cloud signing service.
 | Route | Rough cost | Notes |
 | --- | --- | --- |
 | Azure Trusted Signing | ~$10/month | Cheapest, no hardware, signs in CI. Organisations need three years of verifiable trading history; there is an individual tier |
-| SignPath Foundation | Free | For open-source projects under an OSI licence with no commercial dual-licensing — which is why this project is MIT. Their certificate on their HSM, so there is nothing to install and no key to hold; the build hands the artefact over and takes the signed one back |
+| SignPath Foundation | Free | For open-source projects under an OSI licence with no commercial dual-licensing — which is why this project is MIT. Their certificate on their HSM, so there is nothing to install and no key to hold; the build hands the artefact over and takes the signed one back. The licence is necessary and not sufficient: they also want public evidence that the project is used, and refused this one in September 2026 for want of it |
 | Certum open-source certificate | ~€60–100/year | Aimed at open-source authors, cheapest one-off. Physical USB token, so signing happens on your machine |
 | SSL.com / DigiCert / Sectigo OV | ~$200–400/year | Token or the CA's own cloud signer |
 | Any of the above, EV | ~2–3× the OV price | The only reason to pay it: EV gets SmartScreen reputation immediately. OV builds it over downloads and time |
@@ -107,7 +107,12 @@ Timestamping is not optional. Without it every signature you have ever made
 stops verifying the day the certificate expires.
 
 None of that shape applies to the SignPath route, which is the one this project
-has applied for. There is no certificate on this machine and no `.pfx` to point
+applied for and did not get — refused on public visibility, not on anything in
+the build, so it stays the route and the answer is to ask again later rather
+than to pick a different one. The mechanics are worth writing down now, because
+they are what will have been forgotten by then.
+
+There is no certificate on this machine and no `.pfx` to point
 electron-builder at — the signing happens in their service, so what changes is
 the *order* of the release, not a field in `package.json`. `npm run release`
 builds and publishes in one call, and `latest.yml` carries the SHA-512 the

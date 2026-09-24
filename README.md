@@ -39,10 +39,13 @@ and a portable executable.
 
 **They are not code signed**, so Windows SmartScreen will warn you that the
 publisher is unrecognised. That warning is accurate: nobody has vouched for
-these binaries yet. An application is going in with the [SignPath
-Foundation](https://signpath.org), who provide free code signing certificates
-to open source projects; once it is granted, releases will be signed by them
-and this paragraph will say so instead. Until then, **More info → Run anyway**,
+these binaries yet. The [SignPath Foundation](https://signpath.org) gives free
+certificates to open source projects and turned this one down in September
+2026 — not on the code, on the audience. What they look for is public evidence
+that a project is used: stars, forks, other people writing about it. This one
+was a day old when it asked. They invited a second application once that exists,
+so the honest version is that signing waits on the project earning it rather
+than on anything being wired up. Until then, **More info → Run anyway**,
 or build it yourself from source below — which is the better answer if the
 warning bothers you, and is why the source is here.
 
