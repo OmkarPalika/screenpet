@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-**screenpet** · version 0.1.0
+**screenpet** · version 0.2.0
 
 screenpet has **one runtime npm dependency**, `electron-updater`, which brings
 fifteen of its own. Everything below is either bundled by the packaging step,

@@ -1,6 +1,6 @@
 # Terms and Conditions
 
-**screenpet** · version 0.1.0 · effective 14 August 2026
+**screenpet** · version 0.2.0 · effective 14 August 2026
 
 These terms are the agreement between you and Omkar Palika ("we", "us") covering
 your use of the screenpet software ("the app"). Installing or using the app means

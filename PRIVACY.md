@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**screenpet** · version 0.1.0 · effective 5 September 2026
+**screenpet** · version 0.2.0 · effective 25 September 2026
 
 ## The short version
 

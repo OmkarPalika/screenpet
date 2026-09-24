@@ -8,7 +8,7 @@ credited in them. Those notes are here.
 Versions are [semantic](https://semver.org/spec/v2.0.0.html). Dates are the day
 the version was tagged.
 
-## [Unreleased]
+## [0.2.0] — 2026-09-25
 
 ### Added
 
@@ -71,6 +71,10 @@ the version was tagged.
   playdates are on.
 
 ### Fixed
+
+- A friend's name tag was painted underneath its own body, so any species with
+  something tall on its head — a bun's ears, a dragon's crest — covered up the
+  name you had just been told. The tag now sits above.
 
 - A message reaching one pet by two routes — a friend who is both on your network
   and in the address list — was acted on twice, so the pet did the same activity
