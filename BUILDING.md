@@ -19,8 +19,8 @@ needed: the PowerShell scripts in `src/system/` are interpreted, not compiled.
 `OmkarPalika/screenpet`, which is the `publish` block in `package.json`. Two
 things have to be true for it to find anything:
 
-1. That repository has to exist and have a release. It does not yet — there is
-   no git remote on this checkout.
+1. That repository has to exist and have a release. It does, and v0.1.0 is on
+   it.
 2. The release has to carry `latest.yml` next to the installer. That file is
    what electron-updater reads, and it holds the SHA-512 the download is checked
    against. `npm run dist` does not produce it; publishing does.
@@ -32,18 +32,12 @@ for, so this is checked rather than remembered. The privacy policy undertakes to
 announce anything that widens what leaves the machine in the notes for the
 version that introduces it; that promise is kept here or not at all.
 
-For the first release there is nothing to bump: `package.json` already says
-`0.1.0` and the changelog already has its section. Replace `— unreleased` with
-the date, commit, and tag it by hand.
+The first release was tagged by hand, because `package.json` already said
+`0.1.0`. Every release after it gets the bump instead, which writes the tag
+itself — `minor` when something was added, `patch` when nothing was:
 
 ```bash
-git tag v0.1.0
-```
-
-Every release after that gets the bump instead, which writes the tag itself:
-
-```bash
-npm version patch
+npm version minor
 ```
 ```bash
 npm run release
