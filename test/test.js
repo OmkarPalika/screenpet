@@ -4913,6 +4913,82 @@ const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 0.001, `${msg}: ${a} != 
     assert.ok(!/nearby: \[\.\.\.peers/.test(mjs), 'the settings window is handed the peer list');
   }
 
+  // ===== the far-friend transport, over a real socket ======================
+  //
+  // Everything above this point is pure: peers.js decides who may be spoken to,
+  // playdate.js decides what may be said, and no check in this file has ever
+  // opened a socket. That leaves the one part of a playdate with a distant pet
+  // that is not a decision at all - send() has to aim at the port the friend's
+  // packets actually came out of, not the port we send to, because a machine
+  // behind a router is never on the second one. lan.js says reuseAddr is "how
+  // this gets tested at all without two computers"; this is that test.
+  //
+  // Loopback stands in for the distance, and it is a fair stand-in for the part
+  // being checked: 127.0.0.1 in the address list travels the far path - unicast,
+  // no group membership involved - which is also the path that has to work on a
+  // network where multicast does not, and the reason this passes on a runner.
+  //
+  // What it is still not: two machines, two routers and a real NAT mapping that
+  // can expire. PORT_TTL_MS is a guess until somebody watches one expire.
+  {
+    const dgram = require('dgram');
+    const lan = require('../src/system/lan');
+
+    const until = async (done, what, ms = 4000) => {
+      const deadline = Date.now() + ms;
+      while (Date.now() < deadline) {
+        if (done()) return;
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      assert.fail(what);
+    };
+
+    const heard = [];
+    const errors = [];
+    const link = lan.open({
+      peers: ['127.0.0.1'],
+      onMessage: (text, from) => heard.push({ text, from }),
+      onError: (err) => errors.push(err),
+    });
+
+    // The distant pet. An ephemeral port on purpose - a router would have
+    // rewritten it to one, and nothing about this end knows which.
+    const friend = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+    const friendHeard = [];
+    friend.on('message', (buf) => friendHeard.push(buf.toString('utf8')));
+    await new Promise((resolve, reject) => {
+      friend.once('error', reject);
+      friend.bind(0, '127.0.0.1', resolve);
+    });
+
+    try {
+      await until(
+        () => link.ready(),
+        `the socket never came up: ${errors.map(String).join('; ') || 'no error either'}`
+      );
+
+      // Matched rather than indexed: a copy of the app running on this machine
+      // while the test does would put its own beacons in the same list.
+      friend.send('hello', lan.PORT, '127.0.0.1');
+      await until(
+        () => heard.some((h) => h.text === 'hello' && h.from === '127.0.0.1'),
+        'a packet addressed straight at the port was never delivered'
+      );
+
+      // The whole point. Without the learned port this goes to lan.PORT, which
+      // is this socket's own, and the friend waits forever - which is exactly
+      // what happens to two people behind two routers.
+      assert.ok(link.send('back'), 'send() reported that it reached nobody');
+      await until(
+        () => friendHeard.includes('back'),
+        'the reply went to the port we send to rather than the one it was heard on'
+      );
+    } finally {
+      link.close();
+      friend.close();
+    }
+  }
+
   // The rejections parked by the synchronous sections above. Awaited before the
   // success line, so a failure cannot arrive after it.
   await Promise.all(globalThis.pendingRejections || []);
