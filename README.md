@@ -163,7 +163,10 @@ Two people running screenpet on the same network get two pets that know about
 each other. Switch on **Let it meet other pets on this network** — it is off by
 default — and another copy of the app on your Wi-Fi turns up next to yours.
 
-![two pets meeting](pet-friend.png)
+![A cat pet standing on a desktop. A fox pet with a bow walks in from the right
+under a burst of confetti, a name tag reading Biscuit above it, and the two of
+them wave, dance, share a snack and hug — each movement happening on both pets
+at the same moment](demo/screenpet-playdate.gif)
 
 The first time two pets ever meet, there is confetti. After that they wave,
 bounce, dance, cheer each other on, hug, spin, share a snack, sing badly, and sit
@@ -594,6 +597,25 @@ the clip.
 the middle of the stage puts the reply straight across the question it is
 answering — which the first take did, and which is only visible by looking at the
 frame rather than at the code.
+
+```bash
+npm run demo:playdate
+```
+
+Rebuilds `demo/screenpet-playdate.gif` — the clip in [Playdates](#playdates) — and
+a still.
+
+This one needs no OCR and no model, because the half of the app it shows is the
+half that never looks at anything. The guest is drawn by `src/renderer/friend.js`
+itself rather than a stand-in, so the walk-in, the confetti, the name tag and the
+emoji for each activity are the code that runs when somebody else actually opens
+a laptop on your network. The verbs come from `core/playdate.js` and the body
+movement paired with each one from `main.js`, so a pairing that drifts shows up
+as a pet standing still in the clip.
+
+Beats: one pet alone → a friend arrives with confetti, because it is the first
+time these two have ever met → wave → dance → snack → hug. The desktop behind
+them is left empty: the quiz card belongs to the reading clip.
 
 ## Build
 

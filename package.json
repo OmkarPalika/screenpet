@@ -16,6 +16,7 @@
     "verify:ui": "electron test/verify-ui.js",
     "smoke": "set SCREENPET_SMOKE=1&& electron .",
     "demo": "electron demo/record.js",
+    "demo:playdate": "electron demo/record-playdate.js",
     "license": "node build/license.js",
     "dist": "npm run license && electron-builder",
     "release": "npm run license && electron-builder --publish always",
