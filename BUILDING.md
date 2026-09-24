@@ -79,6 +79,7 @@ choice is a USB token that has to be plugged in, or a cloud signing service.
 | Route | Rough cost | Notes |
 | --- | --- | --- |
 | Azure Trusted Signing | ~$10/month | Cheapest, no hardware, signs in CI. Organisations need three years of verifiable trading history; there is an individual tier |
+| SignPath Foundation | Free | For open-source projects under an OSI licence with no commercial dual-licensing — which is why this project is MIT. Their certificate on their HSM, so there is nothing to install and no key to hold; the build hands the artefact over and takes the signed one back |
 | Certum open-source certificate | ~€60–100/year | Aimed at open-source authors, cheapest one-off. Physical USB token, so signing happens on your machine |
 | SSL.com / DigiCert / Sectigo OV | ~$200–400/year | Token or the CA's own cloud signer |
 | Any of the above, EV | ~2–3× the OV price | The only reason to pay it: EV gets SmartScreen reputation immediately. OV builds it over downloads and time |
@@ -111,6 +112,17 @@ Signing use `azureSignOptions` instead and put the credentials in
 Timestamping is not optional. Without it every signature you have ever made
 stops verifying the day the certificate expires.
 
+None of that shape applies to the SignPath route, which is the one this project
+has applied for. There is no certificate on this machine and no `.pfx` to point
+electron-builder at — the signing happens in their service, so what changes is
+the *order* of the release, not a field in `package.json`. `npm run release`
+builds and publishes in one call, and `latest.yml` carries the SHA-512 the
+updater checks the download against; signing after that leaves the hash
+describing a file nobody receives. Build without publishing, sign, regenerate
+`latest.yml` over the signed installer, then upload. The note at the bottom of
+`.github/workflows/release.yml` says the same thing where someone wiring it up
+will actually be looking.
+
 ## macOS
 
 macOS needs one thing Windows does not — a small compiled helper. Vision (text
@@ -132,6 +144,12 @@ needs Xcode's command line tools (`xcode-select --install`). It produces
 `src/system/mac/screenpet-helper`, which is git-ignored — **the binary is not
 committed on purpose.** A compiled artefact in a repository is a thing nobody
 can review, in the one part of this app that holds your API keys.
+
+`.github/workflows/ci.yml` builds it on a macOS runner on every push and then
+feeds it a PNG and a secret, so "it still compiles" and "it still answers on the
+contract `ocr.js`, `faces.js` and `keys.js` expect" are both under test. What
+that does not tell you is whether the app around it behaves — no one has run
+screenpet on a real Mac yet.
 
 Check what the machine can do before running anything:
 

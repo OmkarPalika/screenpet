@@ -46,10 +46,28 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-# Not here: macOS. src/system/mac/screenpet-helper is Swift and has never been
-# compiled on any machine, so a macos-latest job would be publishing a build
-# nobody has ever run. Add it after the first one is built and used by hand.
+# Not here: macOS. src/system/mac/screenpet-helper now compiles and answers on
+# its contract in ci.yml on every push, which is not the same as being ready to
+# ship: nobody has run the app around it on a real Mac, and a .dmg built here
+# would be unsigned and unnotarized, which Gatekeeper refuses outright rather
+# than warns about. Add the job once the first hand-built one has been used.
 #
 # Not here: signing. The binaries go out unsigned - see SECURITY.md for what
-# that costs. When a certificate exists it belongs in this job as
-# CSC_LINK/CSC_KEY_PASSWORD secrets, not in the repository.
+# that costs and BUILDING.md for the routes.
+#
+# When it arrives it will not look like CSC_LINK/CSC_KEY_PASSWORD. Those carry a
+# .pfx, and since June 2023 no CA issues one: the private key has to live on
+# FIPS 140-2 Level 2 hardware. The application in front of the SignPath
+# Foundation is for exactly that arrangement - their certificate, their HSM, a
+# key this repository never holds and that no secret here could carry even if it
+# wanted to. So the step is an exchange, not an environment variable: submit the
+# built artefact, wait, take the signed one back.
+#
+# Which breaks the job above in a way worth writing down before somebody meets
+# it at two in the morning. The release script builds and publishes in one call,
+# and latest.yml carries the SHA-512 the in-app updater checks a download
+# against. Sign after that and the hash describes a file nobody will ever
+# receive, so every update fails its integrity check and the feature looks
+# compromised rather than misordered. The order has to become: build without
+# publishing, sign, regenerate latest.yml over the signed installer, then
+# upload. Not --publish always with a signing step bolted onto the end.
