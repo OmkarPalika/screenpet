@@ -11,7 +11,12 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned rather than -latest. `ubuntu-latest` moves to Ubuntu 26 on 19
+    # October 2026, and a runner image that changes under a green pipeline is a
+    # red build on a morning nobody changed anything. Nothing here needs the new
+    # one - this job runs node and nothing else - so take the move deliberately,
+    # on a day somebody can read the failure.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
