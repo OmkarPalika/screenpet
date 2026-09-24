@@ -1,0 +1,26 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "demo/stage.html"
+        ],
+        "createdAt": "2026-09-24T21:09:20.216Z",
+        "reason": "Claude: surfaced only through the demo recording fixture, which loads the app stylesheet. The pulses are .cam and .reading in src/renderer/style.css - the camera-on and screen-being-read privacy indicators, tied to genuinely live state, which is the carve-out the rule names. style.css scans clean on its own."
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "demo/stage.html"
+        ],
+        "createdAt": "2026-09-24T21:09:31.087Z",
+        "reason": "Claude: two sources, both intentional. demo/stage.css .card is an offset elevation shadow (0 10px 34px rgb(30 40 60 / 0.13)) on a light page, not a zero-offset halo on dark. src/renderer/style.css .house.is-shut .house-window is a lit window - literal light, the rule's own carve-out. style.css scans clean on its own; these appear only through the recording fixture."
+      }
+    ]
+  }
+}
