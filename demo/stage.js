@@ -8,7 +8,7 @@ const bubbleText = document.getElementById('bubble-text');
 const badge = document.getElementById('badge');
 const fx = document.getElementById('fx');
 const petEl = document.getElementById('pet');
-const petLayer = document.getElementById('pet-layer');
+const petLayer = document.getElementById('stage');
 
 window.demo = {
   hidePet() { petLayer.hidden = true; },
@@ -92,4 +92,29 @@ window.demo = {
   },
 
   headpat() { window.demo.rain(['💕', '💖', '💗']); },
+
+  // ---- the guest -----------------------------------------------------------
+  //
+  // Driven through the app's own friend.js, loaded by stage.html, rather than
+  // reimplemented here: the walk-in, the confetti, the name tag and the emoji
+  // for each shared activity in the clip are the same code the app runs. These
+  // only hand it the card shape the main process would, already validated - see
+  // core/playdate.js for what may actually arrive.
+
+  friendArrives(card, first = false) { friend.show(card, first); },
+
+  // `act` is one of playdate.js's verbs, which picks the emoji; `movement` is
+  // the body animation and `expr` the face, both chosen by the main process in
+  // the app and passed straight through to the same stylesheet here.
+  friendActs(act, movement, ms = 2400, expr) { friend.act(act, movement, ms, expr); },
+
+  friendLeaves() { friend.hide(); },
+
+  // Both bodies at once, which is what a shared activity actually looks like:
+  // the app tells each end to do the same thing at the same moment.
+  together(act, movement, ms = 2400, expr) {
+    window.demo.move(movement, ms);
+    if (expr) window.demo.expr(expr);
+    friend.act(act, movement, ms, expr);
+  },
 };

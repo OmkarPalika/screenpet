@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <title>screenpet demo stage</title>
     <!-- The real pet stylesheets, so the demo shows the actual UI. -->
-    <link rel="stylesheet" href="../renderer/pets.css" />
-    <link rel="stylesheet" href="../renderer/style.css" />
+    <link rel="stylesheet" href="../src/renderer/pets.css" />
+    <link rel="stylesheet" href="../src/renderer/style.css" />
     <link rel="stylesheet" href="stage.css" />
   </head>
   <body>
@@ -20,7 +20,11 @@
 
     <div class="badge" id="badge">Ctrl + Shift + Space</div>
 
-    <div class="pet-layer" id="pet-layer">
+    <!-- id="stage" because friend.js drops its confetti into #stage by default,
+         exactly as it does in the app. The class stays .pet-layer: this column is
+         positioned, 340 wide and centred, which is what .friend and .confetti
+         measure their offsets against. -->
+    <div class="pet-layer" id="stage">
       <div id="bubble" class="bubble" hidden><span id="bubble-text"></span></div>
 
       <div id="pet" class="pet" data-mood="neutral">
@@ -73,9 +77,21 @@
           </g>
         </svg>
       </div>
+
+      <!-- The guest. Outside #pet on purpose - a .pet inside a .pet would take
+           the outer one's mood and expression rules with it - and empty, because
+           friend.js clones the body out of the pet above at startup rather than
+           this file carrying a second copy of eighty shapes that can go stale. -->
+      <div id="friend" class="pet friend" data-mood="neutral" hidden aria-hidden="true">
+        <div id="friend-fx" class="fx"></div>
+        <b id="friend-name" class="friend-name" hidden></b>
+      </div>
     </div>
 
-    <script src="../renderer/lighting.js"></script>
+    <script src="../src/renderer/lighting.js"></script>
+    <!-- The real friend renderer, not a copy of it: the arrival, the confetti and
+         the shared activities in the clip are the same code the app runs. -->
+    <script src="../src/renderer/friend.js"></script>
     <script src="stage.js"></script>
   </body>
 </html>
