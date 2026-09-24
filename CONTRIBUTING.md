@@ -91,6 +91,11 @@ OSI-approved licence with no commercial dual-licensing. An unsigned Windows
 download is a SmartScreen warning, and a warning costs more users than a
 commercial tier would ever have earned.
 
+The licence cleared that bar and the application was refused anyway, on how few
+people had heard of the project rather than on its terms. MIT stays regardless:
+the arithmetic about the warning has not changed, and the licence is what makes
+a second application possible at all.
+
 The licences of the things screenpet talks to are a different question, and some
 of them are stricter — see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)
 before you ship anything built on this.

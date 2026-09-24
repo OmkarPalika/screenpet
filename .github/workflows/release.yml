@@ -57,11 +57,16 @@ jobs:
 #
 # When it arrives it will not look like CSC_LINK/CSC_KEY_PASSWORD. Those carry a
 # .pfx, and since June 2023 no CA issues one: the private key has to live on
-# FIPS 140-2 Level 2 hardware. The application in front of the SignPath
-# Foundation is for exactly that arrangement - their certificate, their HSM, a
-# key this repository never holds and that no secret here could carry even if it
-# wanted to. So the step is an exchange, not an environment variable: submit the
-# built artefact, wait, take the signed one back.
+# FIPS 140-2 Level 2 hardware. The SignPath Foundation is exactly that
+# arrangement - their certificate, their HSM, a key this repository never holds
+# and that no secret here could carry even if it wanted to. So the step is an
+# exchange, not an environment variable: submit the built artefact, wait, take
+# the signed one back.
+#
+# They refused this project in September 2026, for want of public visibility
+# rather than for anything in this file, and invited a second application later.
+# So this stays the intended route and the order below is what to build when it
+# lands - not a plan for a certificate that turned up.
 #
 # Which breaks the job above in a way worth writing down before somebody meets
 # it at two in the morning. The release script builds and publishes in one call,
