@@ -1518,6 +1518,11 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: none;
+  /* Over the body, not under it. friend.js appends the cloned SVG after this
+     element, so without a z-index the tag is painted first and any species with
+     something tall on its head - a bun's ears, a dragon's crest - covers up its
+     own name. .friend is the stacking context, so 1 is enough. */
+  z-index: 1;
 }
 
 /* ---- the party --------------------------------------------------------------
