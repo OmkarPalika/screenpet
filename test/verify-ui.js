@@ -1951,6 +1951,22 @@ app.whenReady().then(async () => {
         move: f.dataset.move || null, expr: f.dataset.expr || null,
         name: document.getElementById('friend-name').textContent,
         nameHidden: document.getElementById('friend-name').hidden,
+        // friend.js appends the cloned SVG after this element, so a species with
+        // something tall on its head - a dragon's crest, a bun's ears - paints
+        // over its own name unless the tag is lifted above the body.
+        //
+        // Paint order rather than a hit test: the tag is pointer-events:none, so
+        // elementFromPoint looks straight through it and can never report it,
+        // whether it is covered or not.
+        tagOnTop: (() => {
+          const t = document.getElementById('friend-name');
+          const svg = document.querySelector('#friend svg');
+          if (!t || !svg) return null;
+          const z = parseInt(getComputedStyle(t).zIndex, 10);
+          const under = getComputedStyle(svg).zIndex;
+          return Number.isFinite(z) && z > 0
+            && (under === 'auto' || parseInt(under, 10) < z);
+        })(),
         svgs: f.querySelectorAll('svg').length,
         drops: document.getElementById('friend-fx').children.length,
         confetti: document.querySelectorAll('.confetti i').length,
@@ -1986,6 +2002,10 @@ app.whenReady().then(async () => {
       `the friend is wearing ${f.pet}/${f.skin}/${f.wear} rather than its own`);
     check(f.mood === 'happy', `the friend's mood is ${f.mood}`);
     check(f.name === 'Bella' && !f.nameHidden, `the name tag says ${JSON.stringify(f.name)}`);
+    // This friend is a dragon in a crown, which is exactly the case that breaks:
+    // the crest and the crown sit where the tag does, and the body is painted
+    // after it. A name you cannot read is the same as no name.
+    check(f.tagOnTop, "the friend's own head is covering its name tag");
     // The load-bearing one for the whole two-pets-in-one-document rearrangement:
     // if the species and palette still lived on the root element, these two
     // would be the same colour and nobody would notice until two people tried it.
